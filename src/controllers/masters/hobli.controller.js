@@ -15,17 +15,15 @@ async function getHobli(id) {
   return ok(data);
 }
 
-async function listHoblis(talukaIdOrName, districtName, filters) {
+async function listHoblis(talukaIdOrName, districtName, filters, pagination) {
   const mongoose = require("mongoose");
-  let data;
+  const { paginationMeta } = require("../../utils/pagination");
+  let result;
   if (talukaIdOrName && mongoose.Types.ObjectId.isValid(talukaIdOrName)) {
-    // Use talukaId
-    data = await hobliService.listByTaluka(talukaIdOrName, filters || {});
+    result = await hobliService.listByTaluka(talukaIdOrName, filters || {}, pagination);
   } else if (talukaIdOrName) {
-    // Look up taluka by name first
     const talukaService = require("../../services/masters/taluka.service");
     const districtService = require("../../services/masters/district.service");
-    
     let districtId = null;
     if (districtName) {
       const district = await districtService.findByName(districtName);
@@ -35,18 +33,19 @@ async function listHoblis(talukaIdOrName, districtName, filters) {
       }
       districtId = district._id;
     }
-    
     const taluka = await talukaService.findByName(talukaIdOrName, districtId);
     if (!taluka) {
       const { NotFoundError } = require("../../utils/errors");
       throw new NotFoundError(`Taluka not found: ${talukaIdOrName}`, { code: "TALUKA_NOT_FOUND" });
     }
-    data = await hobliService.listByTaluka(taluka._id, filters || {});
+    result = await hobliService.listByTaluka(taluka._id, filters || {}, pagination);
   } else {
-    // List all hoblis
-    data = await hobliService.list(filters || {});
+    result = await hobliService.list(filters || {}, pagination);
   }
-  return ok(data);
+  if (!pagination) {
+    return ok(result);
+  }
+  return ok(result.data, { pagination: paginationMeta(pagination, result.total) });
 }
 
 async function updateHobli(id, updates) {

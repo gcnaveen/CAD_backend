@@ -99,19 +99,36 @@ async function getByName(name, talukaName, districtName) {
   return hobli;
 }
 
-async function listByTaluka(talukaId, filters = {}) {
+async function listByTaluka(talukaId, filters = {}, pagination = null) {
   const query = { talukaId };
   if (filters.status) query.status = filters.status;
-  return Hobli.find(query).sort({ name: 1 }).lean();
+  const sort = { name: 1 };
+  if (!pagination) {
+    return Hobli.find(query).sort(sort).lean();
+  }
+  const { skip, limit } = pagination;
+  const [data, total] = await Promise.all([
+    Hobli.find(query).sort(sort).skip(skip).limit(limit).lean(),
+    Hobli.countDocuments(query),
+  ]);
+  return { data, total };
 }
 
-async function list(filters = {}) {
+async function list(filters = {}, pagination = null) {
   const query = {};
-  if (filters.talukaId) {
-    query.talukaId = filters.talukaId;
-  }
+  if (filters.talukaId) query.talukaId = filters.talukaId;
   if (filters.status) query.status = filters.status;
-  return Hobli.find(query).populate("talukaId", "code name districtId").sort({ name: 1 }).lean();
+  const sort = { name: 1 };
+  const baseQuery = () => Hobli.find(query).populate("talukaId", "code name districtId").sort(sort);
+  if (!pagination) {
+    return baseQuery().lean();
+  }
+  const { skip, limit } = pagination;
+  const [data, total] = await Promise.all([
+    baseQuery().skip(skip).limit(limit).lean(),
+    Hobli.countDocuments(query),
+  ]);
+  return { data, total };
 }
 
 async function update(id, updates) {

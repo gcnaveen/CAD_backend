@@ -15,9 +15,13 @@ async function getCadCenter(id) {
   return ok(data);
 }
 
-async function listCadCenters(filters) {
-  const data = await cadCenterService.list(filters);
-  return ok(data);
+async function listCadCenters(filters, pagination) {
+  const result = await cadCenterService.list(filters, pagination);
+  if (!pagination) {
+    return ok(result);
+  }
+  const { paginationMeta } = require("../../utils/pagination");
+  return ok(result.data, { pagination: paginationMeta(pagination, result.total) });
 }
 
 async function updateCadCenter(id, payload) {

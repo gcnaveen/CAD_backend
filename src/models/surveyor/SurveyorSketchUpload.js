@@ -132,12 +132,12 @@ const SurveyorSketchUploadSchema = new mongoose.Schema(
   }
 );
 
-// -------- Indexes --------
+// -------- Indexes (production: list by surveyor/status, location lookup, applicationId) --------
 SurveyorSketchUploadSchema.index({ surveyor: 1, createdAt: -1 });
+SurveyorSketchUploadSchema.index({ surveyor: 1, status: 1, createdAt: -1 });
 SurveyorSketchUploadSchema.index({ status: 1, createdAt: -1 });
 SurveyorSketchUploadSchema.index({ district: 1, taluka: 1, hobli: 1, village: 1 });
 SurveyorSketchUploadSchema.index({ surveyNo: 1, village: 1 });
-SurveyorSketchUploadSchema.index({ applicationId: 1 });
 
 // -------- Validation: at least one document required --------
 SurveyorSketchUploadSchema.pre("validate", function (next) {
@@ -186,30 +186,19 @@ SurveyorSketchUploadSchema.pre("save", async function (next) {
     const prefix = `${districtCode}/${talukaCode}/${year}/`;
     const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-    // Find all applicationIds with this prefix and extract the maximum number
-    const matchingDocs = await this.constructor
-      .find({ applicationId: new RegExp(`^${escapedPrefix}\\d+$`) })
+    // Single query: find the doc with highest number for this prefix (index-friendly)
+    const lastDoc = await this.constructor
+      .findOne({ applicationId: new RegExp(`^${escapedPrefix}\\d+$`) })
+      .sort({ applicationId: -1 })
       .select("applicationId")
       .lean();
 
     let maxNumber = 0;
-
-    if (matchingDocs && matchingDocs.length > 0) {
-      // Extract numbers from all matching applicationIds and find the maximum
-      for (const doc of matchingDocs) {
-        if (doc.applicationId) {
-          const match = doc.applicationId.match(new RegExp(`^${escapedPrefix}(\\d+)$`));
-          if (match && match[1]) {
-            const num = parseInt(match[1], 10);
-            if (num > maxNumber) {
-              maxNumber = num;
-            }
-          }
-        }
-      }
+    if (lastDoc?.applicationId) {
+      const match = lastDoc.applicationId.match(new RegExp(`^${escapedPrefix}(\\d+)$`));
+      if (match?.[1]) maxNumber = parseInt(match[1], 10);
     }
 
-    // Next number is max + 1 (or 1 if no matches found)
     const nextNumber = maxNumber + 1;
 
     // Generate applicationId: DISTRICT_CODE/TALUKA_CODE/YY/N

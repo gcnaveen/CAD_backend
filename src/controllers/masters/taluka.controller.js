@@ -15,26 +15,27 @@ async function getTaluka(id) {
   return ok(data);
 }
 
-async function listTalukas(districtIdOrName, filters) {
+async function listTalukas(districtIdOrName, filters, pagination) {
   const mongoose = require("mongoose");
-  let data;
+  const { paginationMeta } = require("../../utils/pagination");
+  let result;
   if (districtIdOrName && mongoose.Types.ObjectId.isValid(districtIdOrName)) {
-    // Use districtId
-    data = await talukaService.listByDistrict(districtIdOrName, filters || {});
+    result = await talukaService.listByDistrict(districtIdOrName, filters || {}, pagination);
   } else if (districtIdOrName) {
-    // Look up district by name first
     const districtService = require("../../services/masters/district.service");
     const district = await districtService.findByName(districtIdOrName);
     if (!district) {
       const { NotFoundError } = require("../../utils/errors");
       throw new NotFoundError(`District not found: ${districtIdOrName}`, { code: "DISTRICT_NOT_FOUND" });
     }
-    data = await talukaService.listByDistrict(district._id, filters || {});
+    result = await talukaService.listByDistrict(district._id, filters || {}, pagination);
   } else {
-    // List all talukas
-    data = await talukaService.list(filters || {});
+    result = await talukaService.list(filters || {}, pagination);
   }
-  return ok(data);
+  if (!pagination) {
+    return ok(result);
+  }
+  return ok(result.data, { pagination: paginationMeta(pagination, result.total) });
 }
 
 async function updateTaluka(id, updates) {

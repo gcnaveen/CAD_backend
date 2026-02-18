@@ -12,7 +12,11 @@ const { USER_STATUS } = require("../config/constants");
 const { UnauthorizedError, ForbiddenError } = require("../utils/errors");
 const logger = require("../utils/logger");
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-super-secret-jwt-key-change-in-production";
+const defaultSecret = "your-super-secret-jwt-key-change-in-production";
+const JWT_SECRET = process.env.JWT_SECRET || defaultSecret;
+if (process.env.NODE_ENV === "production" && JWT_SECRET === defaultSecret) {
+  logger.warn("JWT_SECRET is using default value; set JWT_SECRET in production", { hint: "Use AWS SSM or env var" });
+}
 
 /**
  * Extract Bearer token from request headers

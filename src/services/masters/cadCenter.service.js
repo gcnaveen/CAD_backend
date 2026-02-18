@@ -100,13 +100,24 @@ async function getById(id) {
   return doc;
 }
 
-async function list(filters = {}) {
+async function list(filters = {}, pagination = null) {
   const query = { ...notDeleted };
   if (filters.status) {
     const s = String(filters.status).toUpperCase();
     if (["ACTIVE", "INACTIVE"].includes(s)) query.status = s;
   }
-  return CadCenter.find(query).sort({ name: 1 }).lean();
+
+  const sort = { name: 1 };
+  if (!pagination) {
+    return CadCenter.find(query).sort(sort).lean();
+  }
+
+  const { skip, limit } = pagination;
+  const [data, total] = await Promise.all([
+    CadCenter.find(query).sort(sort).skip(skip).limit(limit).lean(),
+    CadCenter.countDocuments(query),
+  ]);
+  return { data, total };
 }
 
 async function update(id, updates) {

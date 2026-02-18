@@ -14,6 +14,7 @@ const hobliController = require("../controllers/masters/hobli.controller");
 const cadCenterController = require("../controllers/masters/cadCenter.controller");
 const { BadRequestError } = require("../utils/errors");
 const asyncHandler = require("../utils/asyncHandler");
+const { parsePagination } = require("../utils/pagination");
 
 let dbConnected = false;
 
@@ -32,14 +33,17 @@ function getQueryParams(event) {
   const q = event.queryStringParameters || {};
   const status = q.status ? String(q.status).toUpperCase() : null;
   const filters = { status: status && ["ACTIVE", "INACTIVE"].includes(status) ? status : null };
-  
-  // Extract parent filters for listing (district for talukas, taluka/district for hoblis)
+
   if (q.district) filters.district = String(q.district).trim();
   if (q.taluka) filters.taluka = String(q.taluka).trim();
   if (q.districtId) filters.districtId = String(q.districtId).trim();
   if (q.talukaId) filters.talukaId = String(q.talukaId).trim();
-  
+
   return filters;
+}
+
+function getPagination(event) {
+  return parsePagination(event.queryStringParameters || {});
 }
 
 // -------- District --------
@@ -52,7 +56,8 @@ exports.createDistrict = asyncHandler(async (event) => {
 exports.listDistricts = asyncHandler(async (event) => {
   await ensureDb();
   const filters = getQueryParams(event);
-  return await districtController.listDistricts(filters);
+  const pagination = getPagination(event);
+  return await districtController.listDistricts(filters, pagination);
 });
 
 exports.getDistrict = asyncHandler(async (event) => {
@@ -85,7 +90,8 @@ exports.listTalukas = asyncHandler(async (event) => {
   const q = event.queryStringParameters || {};
   const districtIdentifier = q.district || q.districtId || null;
   const filters = getQueryParams(event);
-  return await talukaController.listTalukas(districtIdentifier, filters);
+  const pagination = getPagination(event);
+  return await talukaController.listTalukas(districtIdentifier, filters, pagination);
 });
 
 exports.getTaluka = asyncHandler(async (event) => {
@@ -119,7 +125,8 @@ exports.listHoblis = asyncHandler(async (event) => {
   const talukaIdentifier = q.taluka || q.talukaId || null;
   const districtName = q.district || null;
   const filters = getQueryParams(event);
-  return await hobliController.listHoblis(talukaIdentifier, districtName, filters);
+  const pagination = getPagination(event);
+  return await hobliController.listHoblis(talukaIdentifier, districtName, filters, pagination);
 });
 
 exports.getHobli = asyncHandler(async (event) => {
@@ -152,7 +159,8 @@ exports.listCadCenters = asyncHandler(async (event) => {
   await ensureDb();
   await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
   const filters = getQueryParams(event);
-  return await cadCenterController.listCadCenters(filters);
+  const pagination = getPagination(event);
+  return await cadCenterController.listCadCenters(filters, pagination);
 });
 
 exports.getCadCenter = asyncHandler(async (event) => {
