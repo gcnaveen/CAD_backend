@@ -15,18 +15,19 @@ provider:
   runtime: nodejs20.x
   region: ${opt:region, 'ap-south-1'}
   stage: ${opt:stage, 'dev'}
+  # DB + JSON parsing: 60s avoids cold start + query timeouts
+  # Note: API Gateway HTTP API max timeout is 30s, but Lambda can be higher for internal processing
   timeout: 60
+  # 512MB gives more CPU; increase to 1024 for list endpoints with large result sets
   memorySize: 512
 
   environment:
     NODE_ENV: ${self:custom.nodeEnv.${self:provider.stage}, 'development'}
     STAGE: ${self:provider.stage}
-    # For Lambda: Prefer MONGODB_URI (SRV connection string) - works better in serverless
-    # If MONGODB_URI is not set, will fallback to MONGODB_URI_STANDARD
     MONGODB_URI: ${env:MONGODB_URI, ''}
     MONGODB_URI_STANDARD: ${env:MONGODB_URI_STANDARD, ''}
-    # Disable primary discovery in Lambda (causes timeouts)
     MONGODB_DISCOVER_PRIMARY: 'false'
+    # Production: set JWT_SECRET via env or SSM; do not use default in prod
     JWT_SECRET: ${env:JWT_SECRET, 'change-me'}
     JWT_EXPIRES_IN: ${env:JWT_EXPIRES_IN, '24h'}
 

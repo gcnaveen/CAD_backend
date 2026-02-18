@@ -8,9 +8,10 @@ const asyncHandler = require("../utils/asyncHandler");
 const mastersHandler = require("./masters.handler");
 
 exports.handler = asyncHandler(async (event) => {
+  const path = event.rawPath ?? event.requestContext?.http?.path ?? "";
   const routeKey =
     event.routeKey ||
-    `${(event.requestContext?.http?.method || "").toUpperCase()} ${event.rawPath || event.requestContext?.http?.path || ""}`.trim();
+    `${(event.requestContext?.http?.method || "").toUpperCase()} ${path}`.trim();
 
   switch (routeKey) {
     case "POST /api/masters/districts":

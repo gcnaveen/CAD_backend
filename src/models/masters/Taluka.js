@@ -1,5 +1,9 @@
-// models/Taluka.js
+/**
+ * Taluka model – belongs to District (District → Taluka → Hobli → Village).
+ * Production: compound indexes for list by district and unique (districtId + code).
+ */
 const mongoose = require("mongoose");
+const { MASTER_STATUS } = require("../../config/constants");
 
 const TalukaSchema = new mongoose.Schema(
   {
@@ -10,13 +14,18 @@ const TalukaSchema = new mongoose.Schema(
       index: true,
     },
     code: { type: String, required: true, trim: true },
-    name: { type: String, required: true, trim: true },
-    status: { type: String, enum: ["ACTIVE", "INACTIVE"], default: "ACTIVE", index: true },
+    name: { type: String, required: true, trim: true, index: true },
+    status: {
+      type: String,
+      enum: Object.values(MASTER_STATUS),
+      default: MASTER_STATUS.ACTIVE,
+      index: true,
+    },
   },
   { timestamps: true }
 );
 
-// No duplicate taluka code under same district
 TalukaSchema.index({ districtId: 1, code: 1 }, { unique: true });
+TalukaSchema.index({ districtId: 1, status: 1, name: 1 });
 
 module.exports = mongoose.models.Taluka || mongoose.model("Taluka", TalukaSchema);

@@ -71,19 +71,36 @@ async function getByName(name, districtName) {
   return taluka;
 }
 
-async function listByDistrict(districtId, filters = {}) {
+async function listByDistrict(districtId, filters = {}, pagination = null) {
   const query = { districtId };
   if (filters.status) query.status = filters.status;
-  return Taluka.find(query).sort({ name: 1 }).lean();
+  const sort = { name: 1 };
+  if (!pagination) {
+    return Taluka.find(query).sort(sort).lean();
+  }
+  const { skip, limit } = pagination;
+  const [data, total] = await Promise.all([
+    Taluka.find(query).sort(sort).skip(skip).limit(limit).lean(),
+    Taluka.countDocuments(query),
+  ]);
+  return { data, total };
 }
 
-async function list(filters = {}) {
+async function list(filters = {}, pagination = null) {
   const query = {};
-  if (filters.districtId) {
-    query.districtId = filters.districtId;
-  }
+  if (filters.districtId) query.districtId = filters.districtId;
   if (filters.status) query.status = filters.status;
-  return Taluka.find(query).populate("districtId", "code name").sort({ name: 1 }).lean();
+  const sort = { name: 1 };
+  const baseQuery = () => Taluka.find(query).populate("districtId", "code name").sort(sort);
+  if (!pagination) {
+    return baseQuery().lean();
+  }
+  const { skip, limit } = pagination;
+  const [data, total] = await Promise.all([
+    baseQuery().skip(skip).limit(limit).lean(),
+    Taluka.countDocuments(query),
+  ]);
+  return { data, total };
 }
 
 async function update(id, updates) {

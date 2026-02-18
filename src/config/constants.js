@@ -10,6 +10,12 @@ const USER_ROLES = Object.freeze({
     DISABLED: "DISABLED",
     PENDING: "PENDING",
   });
+
+/** Master entity status (District, Taluka, Hobli, Village, CadCenter). */
+const MASTER_STATUS = Object.freeze({
+  ACTIVE: "ACTIVE",
+  INACTIVE: "INACTIVE",
+});
   
   const CAD_AVAILABILITY = Object.freeze({
     AVAILABLE: "available",
@@ -74,6 +80,7 @@ const HTTP_STATUS = Object.freeze({
 module.exports = {
   USER_ROLES,
   USER_STATUS,
+  MASTER_STATUS,
   HTTP_STATUS,
   CAD_AVAILABILITY,
   SURVEYOR_CATEGORY,

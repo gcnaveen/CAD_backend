@@ -82,6 +82,10 @@ UserSchema.index({ "surveyorProfile.surveyType": 1 });
 UserSchema.index({ "surveyorProfile.district": 1 });
 UserSchema.index({ "surveyorProfile.taluka": 1 });
 
+// List queries: exclude deleted, filter by role/status
+UserSchema.index({ deletedAt: 1, role: 1, status: 1 });
+UserSchema.index({ deletedAt: 1, "cadProfile.cadCenter": 1, status: 1 });
+
 // -------- Password Hash Hook --------
 UserSchema.pre("save", async function (next) {
   if (!this.isModified("auth.password") || !this.auth?.password) return next();

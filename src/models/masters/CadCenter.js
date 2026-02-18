@@ -1,10 +1,11 @@
 /**
- * CAD Center Model
+ * CAD Center Model – production-ready.
  * Represents a CAD center with member statistics and availability tracking.
+ * Indexed for list (deletedAt + status + name), lookup by code, and filter by status/creator.
  */
 
 const mongoose = require("mongoose");
-const { USER_STATUS } = require("../../config/constants");
+const { USER_STATUS, MASTER_STATUS } = require("../../config/constants");
 
 const CadCenterSchema = new mongoose.Schema(
   {
@@ -58,8 +59,8 @@ const CadCenterSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["ACTIVE", "INACTIVE"],
-      default: "ACTIVE",
+      enum: Object.values(MASTER_STATUS),
+      default: MASTER_STATUS.ACTIVE,
       index: true,
     },
     capacity: {
@@ -90,10 +91,11 @@ const CadCenterSchema = new mongoose.Schema(
   }
 );
 
-// -------- Indexes --------
-CadCenterSchema.index({ name: 1, status: 1 });
-CadCenterSchema.index({ "contact.email": 1 });
+// -------- Indexes (optimized for list, get-by-code, and filters) --------
+CadCenterSchema.index({ deletedAt: 1, status: 1, name: 1 });
+CadCenterSchema.index({ code: 1 }, { sparse: true });
 CadCenterSchema.index({ status: 1, deletedAt: 1 });
+CadCenterSchema.index({ createdBy: 1, deletedAt: 1 });
 
 // -------- Virtuals: Member Statistics (computed from User collection) --------
 
@@ -219,7 +221,7 @@ CadCenterSchema.methods.hasCapacity = async function () {
  * Find active CAD centers (not deleted).
  */
 CadCenterSchema.statics.findActive = function () {
-  return this.find({ status: "ACTIVE", deletedAt: null });
+  return this.find({ status: MASTER_STATUS.ACTIVE, deletedAt: null });
 };
 
 /**

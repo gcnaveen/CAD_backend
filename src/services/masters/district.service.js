@@ -39,10 +39,19 @@ async function getByName(name) {
   return district;
 }
 
-async function list(filters = {}) {
+async function list(filters = {}, pagination = null) {
   const query = {};
   if (filters.status) query.status = filters.status;
-  return District.find(query).sort({ name: 1 }).lean();
+  const sort = { name: 1 };
+  if (!pagination) {
+    return District.find(query).sort(sort).lean();
+  }
+  const { skip, limit } = pagination;
+  const [data, total] = await Promise.all([
+    District.find(query).sort(sort).skip(skip).limit(limit).lean(),
+    District.countDocuments(query),
+  ]);
+  return { data, total };
 }
 
 async function update(id, updates) {

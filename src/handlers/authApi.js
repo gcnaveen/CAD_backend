@@ -10,7 +10,7 @@ const authHandler = require("./auth.handler");
 exports.handler = asyncHandler(async (event) => {
   const routeKey =
     event.routeKey ||
-    `${(event.requestContext?.http?.method || "").toUpperCase()} ${event.requestContext?.http?.path || ""}`.trim();
+    `${(event.requestContext?.http?.method || "").toUpperCase()} ${event.rawPath || event.requestContext?.http?.path || ""}`.trim();
 
   switch (routeKey) {
     case "POST /api/auth/superadmin/register":

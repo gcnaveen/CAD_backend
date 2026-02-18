@@ -15,9 +15,13 @@ async function getDistrict(id) {
   return ok(data);
 }
 
-async function listDistricts(filters) {
-  const data = await districtService.list(filters);
-  return ok(data);
+async function listDistricts(filters, pagination) {
+  const result = await districtService.list(filters, pagination);
+  if (!pagination) {
+    return ok(result);
+  }
+  const { paginationMeta } = require("../../utils/pagination");
+  return ok(result.data, { pagination: paginationMeta(pagination, result.total) });
 }
 
 async function updateDistrict(id, updates) {
