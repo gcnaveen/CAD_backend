@@ -1,0 +1,36 @@
+{
+  "name": "cad-backend-api",
+  "version": "1.0.0",
+  "description": "CAD Backend API - Serverless (AWS Lambda + HTTP API)",
+  "main": "src/handlers/testApi.js",
+  "private": true,
+  "scripts": {
+    "dev": "serverless offline start",
+    "deploy": "serverless deploy",
+    "deploy:dev": "serverless deploy --stage dev",
+    "deploy:dev:insecure": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 serverless deploy --stage dev",
+    "deploy:prod": "serverless deploy --stage prod",
+    "info": "serverless info",
+    "info:dev": "serverless info --stage dev",
+    "info:prod": "serverless info --stage prod",
+    "invoke:test": "serverless invoke local -f testApi"
+  },
+  "keywords": [
+    "serverless",
+    "aws",
+    "lambda"
+  ],
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
+    "js-yaml": "^4.1.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.0.3"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "serverless": "^3.40.0",
+    "serverless-offline": "^13.3.0"
+  }
+}

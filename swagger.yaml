@@ -1,0 +1,2195 @@
+openapi: "3.1.0"
+
+info:
+  title: CAD Backend API
+  version: 1.0.0
+  description: |
+    Production-grade Serverless API (AWS Lambda + API Gateway HTTP API)
+    for Survey Workflow & CAD Design Platform.
+
+    **Authentication**
+    - **Super Admin**: Register with email + password; login with email + password. JWT returned.
+    - **Surveyor**: Phone-based OTP flow. Start registration (send OTP) → verify OTP & save profile → complete (set password). JWT returned after verify-otp or complete.
+    - Protected endpoints use `Authorization: Bearer <token>`.
+  contact:
+    name: API Support
+    email: support@example.com
+  license:
+    name: Proprietary
+    url: https://example.com/license
+  termsOfService: https://example.com/terms
+
+servers:
+  - url: http://localhost:3000
+    description: Local (serverless-offline)
+  - url: https://{apiId}.execute-api.{region}.amazonaws.com
+    description: Production (API Gateway HTTP API)
+    variables:
+      apiId:
+        default: your-api-id
+      region:
+        default: ap-south-1
+      api-gateway-url:
+        default: https://bi9vfl4jf4.execute-api.ap-south-1.amazonaws.com/
+
+tags:
+  - name: Authentication
+    description: Registration and login (Super Admin, Surveyor, email login)
+  - name: Masters
+    description: District → Taluka → Hobli hierarchy (create, list, get, update)
+  - name: Surveyor Sketch Uploads
+    description: Surveyor sketch upload submissions (survey info + document URLs)
+  - name: Health
+    description: Health and readiness
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/auth/superadmin/register:
+    post:
+      tags: [Authentication]
+      summary: Register Super Admin
+      description: |
+        Create a Super Admin account. Returns user and JWT.
+        - **First registration** (no Super Admin exists) no auth required.
+        - **Subsequent registrations** require Bearer token of an existing Super Admin.
+      operationId: registerSuperAdmin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SuperAdminRegisterRequest"
+            example:
+              firstName: John
+              lastName: Doe
+              email: admin@example.com
+              password: SecureP@ss1
+      responses:
+        "201":
+          description: Super Admin registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccessResponse"
+              example:
+                success: true
+                data:
+                  user:
+                    _id: "507f1f77bcf86cd799439011"
+                    role: SUPER_ADMIN
+                    name: { first: John, last: Doe }
+                    auth: { email: admin@example.com }
+                  token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/auth/surveyor/start:
+    post:
+      tags: [Authentication]
+      summary: Start Surveyor Registration (Step 1 - Send OTP)
+      description: |
+        Step 1 of surveyor registration: Send OTP to phone number.
+        Requires phone. firstName and lastName are optional; used for new users or to fill missing name.
+        Next steps: Verify OTP → Complete Registration (password + profile).
+      operationId: surveyorStart
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SurveyorStartRequest"
+            example:
+              phone: "9876543210"
+              firstName: Raj
+              lastName: Kumar
+      responses:
+        "200":
+          description: OTP sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              example:
+                success: true
+                data:
+                  message: OTP sent successfully
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/auth/surveyor/verify-otp:
+    post:
+      tags: [Authentication]
+      summary: Verify Surveyor OTP (Step 2)
+      description: |
+        Verify OTP during registration. Marks user as verified.
+        Next step: Complete registration with password and profile via POST /api/auth/surveyor/complete.
+      operationId: surveyorVerifyOtp
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SurveyorVerifyOtpRequest"
+            example:
+              phone: "9876543210"
+              otp: "123456"
+      responses:
+        "200":
+          description: OTP verified; complete registration next
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: "#/components/schemas/User"
+                      message:
+                        type: string
+                        example: "OTP verified. Please complete registration with password and profile details."
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/auth/surveyor/complete:
+    post:
+      tags: [Authentication]
+      summary: Complete Surveyor Registration (Step 3)
+      description: |
+        Complete registration by setting password and profile in one call.
+        Requires OTP to be verified first via POST /api/auth/surveyor/verify-otp.
+        All fields are required: phone, password, district, taluka, category, and surveyType (if category is SURVEYOR).
+        Optional: firstName and lastName to set or update the surveyor name.
+        Returns user and JWT token.
+      operationId: surveyorCompleteRegistration
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SurveyorCompleteRegistrationRequest"
+            example:
+              phone: "9876543210"
+              password: "SurveyorP@ss1"
+              district: "507f1f77bcf86cd799439012"
+              taluka: "507f1f77bcf86cd799439013"
+              category: SURVEYOR
+              firstName: "Raj"
+              lastName: "Kumar"
+              surveyType: LS
+      responses:
+        "201":
+          description: Registration completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Login
+      description: |
+        Login with credentials:
+        - **Super Admin / Admin / CAD**: email + password
+        - **Surveyor**: phone + password
+        Returns user and JWT token.
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            examples:
+              emailLogin:
+                summary: Email + Password (Super Admin / Admin / CAD)
+                value:
+                  email: admin@example.com
+                  password: "SecureP@ss1"
+              phoneLogin:
+                summary: Phone + Password (Surveyor)
+                value:
+                  phone: "9876543210"
+                  password: "SurveyorP@ss1"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccessResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # -------- User Management (Super Admin / Admin only) --------
+  /api/users:
+    post:
+      tags: [Authentication]
+      summary: Create User (Admin / CAD / Surveyor)
+      description: |
+        Create a new user by email and password (or phone and password for Surveyor).
+        **Authorization:**
+        - **Super Admin** may create **Admin**, **CAD**, or **Surveyor**.
+        - **Admin** may create **CAD** or **Surveyor** only.
+        Requires `Authorization: Bearer <token>` (Super Admin or Admin).
+        **Payload by role:**
+        - **ADMIN**: email, password, firstName (lastName optional).
+        - **CAD**: email, password, firstName (lastName, cadCenter optional; cadCenter can be set later via patch).
+        - **SURVEYOR**: phone, password, firstName (lastName optional).
+      operationId: createUser
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+            examples:
+              admin:
+                summary: Create Admin (Super Admin only)
+                value:
+                  role: ADMIN
+                  email: admin@example.com
+                  password: "SecureP@ss1"
+                  firstName: Jane
+                  lastName: Admin
+              cad:
+                summary: Create CAD user (Super Admin or Admin)
+                value:
+                  role: CAD
+                  email: caduser@example.com
+                  password: "CadP@ss1"
+                  firstName: John
+                  lastName: CAD
+                  cadCenter: "507f1f77bcf86cd799439012"
+              surveyor:
+                summary: Create Surveyor (Super Admin or Admin)
+                value:
+                  role: SURVEYOR
+                  phone: "9876543210"
+                  password: "SurveyorP@ss1"
+                  firstName: Raj
+                  lastName: Kumar
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+    get:
+      tags: [Authentication]
+      summary: List Users
+      description: |
+        List users with pagination. **Super Admin** sees all; **Admin** sees only CAD and Surveyor.
+        Excludes soft-deleted users. Query params: page, limit, role, status.
+      operationId: listUsers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [SUPER_ADMIN, ADMIN, CAD, SURVEYOR]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, DISABLED, PENDING]
+      responses:
+        "200":
+          description: List of users with meta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/User"
+                      meta:
+                        type: object
+                        properties:
+                          page: { type: integer }
+                          limit: { type: integer }
+                          total: { type: integer }
+                          totalPages: { type: integer }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/users/role/{role}:
+    parameters:
+      - $ref: "#/components/parameters/Role"
+    get:
+      tags: [Authentication]
+      summary: Get Users by Role
+      description: |
+        Get users filtered by a specific role with pagination. **Super Admin** can query any role; **Admin** can only query CAD or Surveyor.
+        Excludes soft-deleted users. Query params: page, limit, status.
+      operationId: getUsersByRole
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, DISABLED, PENDING]
+      responses:
+        "200":
+          description: List of users filtered by role with meta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/User"
+                      meta:
+                        type: object
+                        properties:
+                          page: { type: integer }
+                          limit: { type: integer }
+                          total: { type: integer }
+                          totalPages: { type: integer }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/users/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    get:
+      tags: [Authentication]
+      summary: Get User by ID
+      description: Super Admin can get any user; Admin only CAD or Surveyor. Returns 404 if not found or soft-deleted.
+      operationId: getUser
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Authentication]
+      summary: Update User (Patch)
+      description: |
+        Partial update: name (firstName, lastName), status; for CAD cadCenter; for Surveyor district, taluka, category, surveyType.
+        Super Admin can update any; Admin only CAD or Surveyor.
+      operationId: updateUser
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserPatchRequest"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Authentication]
+      summary: Delete User (Soft Delete)
+      description: Sets deletedAt. Super Admin can delete any; Admin only CAD or Surveyor.
+      operationId: deleteUser
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: User deleted successfully
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/users/{userId}/block:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    post:
+      tags: [Authentication]
+      summary: Block User
+      description: |
+        Set user status to DISABLED (blocked). **Super Admin** can block any user (Admin, CAD, Surveyor).
+        **Admin** can block only CAD or Surveyor (cannot block another Admin; only Super Admin can block Admin).
+        Cannot block yourself. Requires Bearer token.
+      operationId: blockUser
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User blocked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: "#/components/schemas/User"
+                      message:
+                        type: string
+                        example: User blocked successfully
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/users/{userId}/unblock:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    post:
+      tags: [Authentication]
+      summary: Unblock User
+      description: |
+        Set user status to ACTIVE (unblocked). **Super Admin** can unblock any user; **Admin** only CAD or Surveyor.
+        Requires Bearer token.
+      operationId: unblockUser
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User unblocked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: "#/components/schemas/User"
+                      message:
+                        type: string
+                        example: User unblocked successfully
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # -------- Masters: District (top of hierarchy) --------
+  /api/masters/districts:
+    post:
+      tags: [Masters]
+      summary: Create District
+      description: Create a district (top-level in District → Taluka → Hobli hierarchy).
+      operationId: createDistrict
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DistrictCreateRequest"
+      responses:
+        "201":
+          description: District created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterSuccessResponse"
+              example:
+                success: true
+                data:
+                  _id: "507f1f77bcf86cd799439011"
+                  code: "KA-BLR"
+                  name: "Bengaluru Urban"
+                  status: ACTIVE
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    get:
+      tags: [Masters]
+      summary: List Districts
+      description: List all districts. Optional query `status=ACTIVE|INACTIVE`.
+      operationId: listDistricts
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, INACTIVE]
+      responses:
+        "200":
+          description: List of districts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterListResponse"
+
+  /api/masters/districts/{districtId}:
+    parameters:
+      - $ref: "#/components/parameters/DistrictId"
+    get:
+      tags: [Masters]
+      summary: Get District by ID
+      operationId: getDistrict
+      responses:
+        "200":
+          description: District details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterSuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Masters]
+      summary: Update District
+      operationId: updateDistrict
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DistrictUpdateRequest"
+      responses:
+        "200":
+          description: District updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterSuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # -------- Masters: Taluka (under District) --------
+  /api/masters/talukas:
+    post:
+      tags: [Masters]
+      summary: Create Taluka
+      description: Create a taluka under a district. District name must be provided in request body.
+      operationId: createTaluka
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TalukaCreateRequest"
+            example:
+              code: "BLR-N"
+              name: "Bengaluru North"
+              district: "Bengaluru Urban"
+              status: ACTIVE
+      responses:
+        "201":
+          description: Taluka created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterSuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/masters/districts/{districtId}/talukas:
+    parameters:
+      - $ref: "#/components/parameters/DistrictId"
+    get:
+      tags: [Masters]
+      summary: List Talukas by District
+      operationId: listTalukas
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, INACTIVE]
+      responses:
+        "200":
+          description: List of talukas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/masters/talukas/{talukaId}:
+    parameters:
+      - $ref: "#/components/parameters/TalukaId"
+    get:
+      tags: [Masters]
+      summary: Get Taluka by ID
+      operationId: getTaluka
+      responses:
+        "200":
+          description: Taluka details (includes populated district)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterSuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Masters]
+      summary: Update Taluka
+      operationId: updateTaluka
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TalukaUpdateRequest"
+      responses:
+        "200":
+          description: Taluka updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterSuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # -------- Masters: Hobli (under Taluka) --------
+  /api/masters/hoblis:
+    post:
+      tags: [Masters]
+      summary: Create Hobli
+      description: Create a hobli under a taluka. Taluka name must be provided in request body. District name is optional but recommended for unambiguous taluka lookup.
+      operationId: createHobli
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HobliCreateRequest"
+            example:
+              code: "HEBBAL"
+              name: "Hebbal"
+              taluka: "Bengaluru North"
+              district: "Bengaluru Urban"
+              status: ACTIVE
+      responses:
+        "201":
+          description: Hobli created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterSuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/masters/talukas/{talukaId}/hoblis:
+    parameters:
+      - $ref: "#/components/parameters/TalukaId"
+    get:
+      tags: [Masters]
+      summary: List Hoblis by Taluka
+      operationId: listHoblis
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, INACTIVE]
+      responses:
+        "200":
+          description: List of hoblis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/masters/hoblis/{hobliId}:
+    parameters:
+      - $ref: "#/components/parameters/HobliId"
+    get:
+      tags: [Masters]
+      summary: Get Hobli by ID
+      operationId: getHobli
+      responses:
+        "200":
+          description: Hobli details (includes populated taluka)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterSuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Masters]
+      summary: Update Hobli
+      operationId: updateHobli
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HobliUpdateRequest"
+      responses:
+        "200":
+          description: Hobli updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterSuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # -------- Masters: CAD Centers --------
+  /api/masters/cad-centers:
+    post:
+      tags: [Masters]
+      summary: Create CAD Center
+      description: |
+        Create a CAD center. Requires Super Admin or Admin (Bearer token).
+        Required: name, code, address (city, pincode), contact (email or phone).
+      operationId: createCadCenter
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CadCenterCreateRequest"
+            example:
+              name: Bangalore CAD Center
+              code: BLR-CAD-001
+              address:
+                city: Bangalore
+                pincode: "560001"
+              contact:
+                email: blr@cad.com
+                phone: "+91-80-12345678"
+      responses:
+        "201":
+          description: CAD center created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: Created CAD center document
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    get:
+      tags: [Masters]
+      summary: List CAD Centers
+      description: List CAD centers (non-deleted). Optional query status=ACTIVE|INACTIVE. Requires Super Admin or Admin.
+      operationId: listCadCenters
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, INACTIVE]
+      responses:
+        "200":
+          description: List of CAD centers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CadCenter"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/masters/cad-centers/{cadCenterId}:
+    parameters:
+      - $ref: "#/components/parameters/CadCenterId"
+    get:
+      tags: [Masters]
+      summary: Get CAD Center by ID
+      description: Requires Super Admin or Admin.
+      operationId: getCadCenter
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: CAD center details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/CadCenter"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Masters]
+      summary: Update CAD Center
+      description: Partial update. At least one field required. Requires Super Admin or Admin.
+      operationId: updateCadCenter
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CadCenterUpdateRequest"
+      responses:
+        "200":
+          description: CAD center updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/CadCenter"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Masters]
+      summary: Delete CAD Center (Soft Delete)
+      description: Sets deletedAt. Requires Super Admin or Admin.
+      operationId: deleteCadCenter
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: CAD center deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: CAD center deleted successfully
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # -------- Surveyor Sketch Uploads --------
+  /api/surveyor/sketch-uploads:
+    post:
+      tags: [Surveyor Sketch Uploads]
+      summary: Create Surveyor Sketch Upload
+      description: |
+        Submit a survey sketch upload with survey info and document URLs.
+        **Authorization:** Surveyor only (Bearer token required).
+        **Flow:** Frontend uploads files (e.g., to S3/presigned URL), then POSTs this payload with document URLs.
+        **Auto-generated:** `applicationId` is automatically generated in format `DISTRICT_CODE/TALUKA_CODE/YY/N` (e.g., `KA-BLR/BLR-N/26/1`).
+        **Required fields:**
+        - `surveyType`: `joint_flat` or `single_flat`
+        - `district`, `taluka`, `hobli`, `village`: ObjectIds from masters
+        - `surveyNo`: Survey number string
+        - At least one document URL: `moolaTippani`, `hissaTippani`, `atlas`, `rrPakkabook`, or `kharabu`
+        **Optional:** `others` (string, max 2000 chars) for additional notes.
+      operationId: createSurveyorSketchUpload
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SurveyorSketchUploadCreateRequest"
+            example:
+              surveyType: single_flat
+              district: "507f1f77bcf86cd799439012"
+              taluka: "507f1f77bcf86cd799439013"
+              hobli: "507f1f77bcf86cd799439014"
+              village: "507f1f77bcf86cd799439015"
+              surveyNo: "123"
+              moolaTippani: "https://storage.example.com/documents/moola.pdf"
+              hissaTippani:
+                url: "https://storage.example.com/documents/hissa.pdf"
+                fileName: "hissa_tippani.pdf"
+                mimeType: "application/pdf"
+                size: 245678
+              atlas: "https://storage.example.com/documents/atlas.jpg"
+              others: "If joint flat, provide all survey no. details"
+      responses:
+        "201":
+          description: Survey sketch upload created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/SurveyorSketchUpload"
+              example:
+                success: true
+                data:
+                  _id: "507f1f77bcf86cd799439020"
+                  applicationId: "KA-BLR/BLR-N/26/1"
+                  surveyor: "507f1f77bcf86cd799439011"
+                  surveyType: single_flat
+                  district: { _id: "507f1f77bcf86cd799439012", code: "KA-BLR", name: "Bengaluru Urban" }
+                  taluka: { _id: "507f1f77bcf86cd799439013", code: "BLR-N", name: "Bengaluru North" }
+                  hobli: { _id: "507f1f77bcf86cd799439014", code: "HEBBAL", name: "Hebbal" }
+                  village: { _id: "507f1f77bcf86cd799439015", code: "V001", name: "Village 1" }
+                  surveyNo: "123"
+                  documents:
+                    moolaTippani:
+                      url: "https://storage.example.com/documents/moola.pdf"
+                      fileName: null
+                      mimeType: null
+                      size: null
+                    hissaTippani:
+                      url: "https://storage.example.com/documents/hissa.pdf"
+                      fileName: "hissa_tippani.pdf"
+                      mimeType: "application/pdf"
+                      size: 245678
+                  status: PENDING
+                  createdAt: "2026-02-18T10:30:00.000Z"
+                  updatedAt: "2026-02-18T10:30:00.000Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    get:
+      tags: [Surveyor Sketch Uploads]
+      summary: List Surveyor Sketch Uploads
+      description: |
+        List survey sketch uploads with pagination.
+        **Authorization:**
+        - **Surveyor**: Can only see their own uploads
+        - **Admin / Super Admin**: Can see all uploads (optional `surveyorId` filter)
+        Query params: `page`, `limit`, `status`, `surveyorId` (Admin/SuperAdmin only).
+      operationId: listSurveyorSketchUploads
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, UNDER_REVIEW, APPROVED, REJECTED]
+        - name: surveyorId
+          in: query
+          description: Filter by surveyor (Admin/SuperAdmin only)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of survey sketch uploads with meta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SurveyorSketchUpload"
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer, example: 1 }
+                      limit: { type: integer, example: 20 }
+                      total: { type: integer, example: 45 }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/surveyor/sketch-uploads/{uploadId}:
+    parameters:
+      - $ref: "#/components/parameters/UploadId"
+    get:
+      tags: [Surveyor Sketch Uploads]
+      summary: Get Surveyor Sketch Upload by ID
+      description: |
+        Get a single survey sketch upload by ID.
+        **Authorization:**
+        - **Surveyor**: Can only access their own uploads
+        - **Admin / Super Admin**: Can access any upload
+      operationId: getSurveyorSketchUpload
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Survey sketch upload details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/SurveyorSketchUpload"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /test:
+    get:
+      tags: [Health]
+      summary: Health / Smoke
+      description: Service and DB connectivity check.
+      operationId: healthCheck
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                ok: true
+                service: cad-backend-api
+                stage: dev
+                dbConnected: true
+                dbName: cad_db
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT from login or register response
+
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      description: User ObjectId
+      schema:
+        type: string
+        example: "507f1f77bcf86cd799439011"
+    DistrictId:
+      name: districtId
+      in: path
+      required: true
+      description: District ObjectId
+      schema:
+        type: string
+        example: "507f1f77bcf86cd799439011"
+    TalukaId:
+      name: talukaId
+      in: path
+      required: true
+      description: Taluka ObjectId
+      schema:
+        type: string
+        example: "507f1f77bcf86cd799439012"
+    HobliId:
+      name: hobliId
+      in: path
+      required: true
+      description: Hobli ObjectId
+      schema:
+        type: string
+        example: "507f1f77bcf86cd799439013"
+    CadCenterId:
+      name: cadCenterId
+      in: path
+      required: true
+      description: CAD Center ObjectId
+      schema:
+        type: string
+        example: "507f1f77bcf86cd799439011"
+    UploadId:
+      name: uploadId
+      in: path
+      required: true
+      description: Surveyor Sketch Upload ObjectId
+      schema:
+        type: string
+        example: "507f1f77bcf86cd799439020"
+    Role:
+      name: role
+      in: path
+      required: true
+      description: User role (SUPER_ADMIN, ADMIN, CAD, or SURVEYOR)
+      schema:
+        type: string
+        enum: [SUPER_ADMIN, ADMIN, CAD, SURVEYOR]
+        example: CAD
+    Page:
+      name: page
+      in: query
+      description: Page number (for future list endpoints)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    Limit:
+      name: limit
+      in: query
+      description: Items per page (for future list endpoints)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 10
+    Search:
+      name: search
+      in: query
+      description: Search query
+      schema:
+        type: string
+        maxLength: 100
+    SortBy:
+      name: sortBy
+      in: query
+      description: Sort field
+      schema:
+        type: string
+        default: createdAt
+    SortOrder:
+      name: sortOrder
+      in: query
+      description: Sort order
+      schema:
+        type: string
+        enum: [ASC, DESC]
+        default: DESC
+
+  schemas:
+    SuperAdminRegisterRequest:
+      type: object
+      required: [firstName, email, password]
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+          example: John
+        lastName:
+          type: string
+          example: Doe
+        email:
+          type: string
+          format: email
+          example: admin@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: "SecureP@ss1"
+
+    SurveyorStartRequest:
+      type: object
+      required: [phone]
+      properties:
+        phone:
+          type: string
+          example: "9876543210"
+        firstName:
+          type: string
+          minLength: 1
+          description: Optional. Required only when creating a new user; otherwise used to update name if missing in DB.
+          example: Raj
+        lastName:
+          type: string
+          description: Optional. Used for new users or to update name if missing in DB.
+          example: Kumar
+
+    SurveyorVerifyOtpRequest:
+      type: object
+      required: [phone, otp]
+      properties:
+        phone:
+          type: string
+          example: "9876543210"
+        otp:
+          type: string
+          minLength: 6
+          maxLength: 6
+          example: "123456"
+
+    SurveyorCompleteRegistrationRequest:
+      type: object
+      required: [phone, password, district, taluka, category]
+      properties:
+        phone:
+          type: string
+          description: Phone number (must match the phone used in OTP verification)
+          example: "9876543210"
+        password:
+          type: string
+          format: password
+          minLength: 8
+          description: Password for login (must be at least 8 characters)
+          example: "SurveyorP@ss1"
+        district:
+          type: string
+          description: ObjectId of District
+          example: "507f1f77bcf86cd799439012"
+        taluka:
+          type: string
+          description: ObjectId of Taluka
+          example: "507f1f77bcf86cd799439013"
+        category:
+          type: string
+          enum: [PUBLIC, SURVEYOR]
+          example: SURVEYOR
+        surveyType:
+          type: string
+          enum: [LS, GS]
+          description: Required when category is SURVEYOR
+          example: LS
+        firstName:
+          type: string
+          description: Surveyor first name (optional).
+          example: Raj
+        lastName:
+          type: string
+          description: Surveyor last name (optional).
+          example: Kumar
+
+    LoginRequest:
+      type: object
+      required: [password]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email for Super Admin / Admin / CAD login
+          example: admin@example.com
+        phone:
+          type: string
+          description: Phone for Surveyor login
+          example: "9876543210"
+        password:
+          type: string
+          format: password
+          description: Password (required for all roles)
+          example: "SecureP@ss1"
+      oneOf:
+        - required: [email, password]
+        - required: [phone, password]
+
+    CreateUserRequest:
+      type: object
+      required: [role, password, firstName]
+      properties:
+        role:
+          type: string
+          enum: [ADMIN, CAD, SURVEYOR]
+          description: "ADMIN (Super Admin only), CAD or SURVEYOR (Super Admin or Admin)"
+        email:
+          type: string
+          format: email
+          description: Required for ADMIN and CAD
+          example: admin@example.com
+        phone:
+          type: string
+          description: Required for SURVEYOR
+          example: "9876543210"
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: "SecureP@ss1"
+        firstName:
+          type: string
+          minLength: 1
+          example: Jane
+        lastName:
+          type: string
+          example: Doe
+        cadCenter:
+          type: string
+          description: ObjectId of CAD center; optional when role is CAD (can be set later via patch)
+          example: "507f1f77bcf86cd799439012"
+
+    User:
+      type: object
+      description: User document (auth.password and OTP fields stripped)
+      properties:
+        _id:
+          type: string
+          example: "507f1f77bcf86cd799439011"
+        role:
+          type: string
+          enum: [SUPER_ADMIN, ADMIN, CAD, SURVEYOR]
+        status:
+          type: string
+          enum: [ACTIVE, DISABLED, PENDING]
+        name:
+          type: object
+          properties:
+            first: { type: string }
+            last: { type: string }
+        auth:
+          type: object
+          properties:
+            email: { type: string }
+            phone: { type: string }
+        cadProfile:
+          type: object
+          nullable: true
+        surveyorProfile:
+          type: object
+          nullable: true
+        createdBy:
+          type: string
+          nullable: true
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    UserPatchRequest:
+      type: object
+      minProperties: 1
+      description: At least one field required. CAD-only cadCenter; Surveyor-only district, taluka, category, surveyType.
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, DISABLED, PENDING]
+        cadCenter:
+          type: string
+          description: ObjectId; for CAD users only
+        district:
+          type: string
+          description: ObjectId; for Surveyor only
+        taluka:
+          type: string
+          description: ObjectId; for Surveyor only
+        category:
+          type: string
+          enum: [PUBLIC, SURVEYOR]
+        surveyType:
+          type: string
+          enum: [LS, GS]
+
+    DistrictCreateRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          trim: true
+          example: "KA-BLR"
+        name:
+          type: string
+          trim: true
+          example: "Bengaluru Urban"
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+          default: ACTIVE
+    DistrictUpdateRequest:
+      type: object
+      minProperties: 1
+      properties:
+        code:
+          type: string
+          trim: true
+        name:
+          type: string
+          trim: true
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+    TalukaCreateRequest:
+      type: object
+      required: [code, name, district]
+      properties:
+        code:
+          type: string
+          trim: true
+          example: "BLR-N"
+        name:
+          type: string
+          trim: true
+          example: "Bengaluru North"
+        district:
+          type: string
+          trim: true
+          description: District name (case-insensitive match)
+          example: "Bengaluru Urban"
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+          default: ACTIVE
+    TalukaUpdateRequest:
+      type: object
+      minProperties: 1
+      properties:
+        code:
+          type: string
+          trim: true
+        name:
+          type: string
+          trim: true
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+    HobliCreateRequest:
+      type: object
+      required: [code, name, taluka]
+      properties:
+        code:
+          type: string
+          trim: true
+          example: "HEBBAL"
+        name:
+          type: string
+          trim: true
+          example: "Hebbal"
+        taluka:
+          type: string
+          trim: true
+          description: Taluka name (case-insensitive match)
+          example: "Bengaluru North"
+        district:
+          type: string
+          trim: true
+          description: District name (optional but recommended for unambiguous taluka lookup)
+          example: "Bengaluru Urban"
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+          default: ACTIVE
+    HobliUpdateRequest:
+      type: object
+      minProperties: 1
+      properties:
+        code:
+          type: string
+          trim: true
+        name:
+          type: string
+          trim: true
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+
+    CadCenter:
+      type: object
+      description: CAD center document
+      properties:
+        _id:
+          type: string
+          example: "507f1f77bcf86cd799439011"
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+        address:
+          type: object
+          properties:
+            street: { type: string }
+            city: { type: string }
+            state: { type: string }
+            pincode: { type: string }
+            country: { type: string }
+        contact:
+          type: object
+          properties:
+            email: { type: string }
+            phone: { type: string }
+            alternatePhone: { type: string }
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        capacity:
+          type: integer
+          nullable: true
+        createdBy:
+          type: string
+          nullable: true
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CadCenterCreateRequest:
+      type: object
+      required: [name, code, address, contact]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        code:
+          type: string
+          minLength: 1
+        address:
+          type: object
+          required: [city, pincode]
+          properties:
+            city:
+              type: string
+            pincode:
+              type: string
+            street:
+              type: string
+            state:
+              type: string
+            country:
+              type: string
+        contact:
+          type: object
+          description: At least one of email or phone required
+          properties:
+            email:
+              type: string
+              format: email
+            phone:
+              type: string
+            alternatePhone:
+              type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        capacity:
+          type: integer
+          minimum: 0
+
+    CadCenterUpdateRequest:
+      type: object
+      minProperties: 1
+      description: At least one field required
+      properties:
+        name:
+          type: string
+          minLength: 1
+        code:
+          type: string
+          minLength: 1
+        address:
+          type: object
+          properties:
+            city: { type: string }
+            pincode: { type: string }
+            street: { type: string }
+            state: { type: string }
+            country: { type: string }
+        contact:
+          type: object
+          properties:
+            email: { type: string }
+            phone: { type: string }
+            alternatePhone: { type: string }
+        description:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        capacity:
+          type: integer
+          minimum: 0
+          nullable: true
+
+    SurveyorSketchUploadCreateRequest:
+      type: object
+      required: [surveyType, district, taluka, hobli, village, surveyNo]
+      description: |
+        At least one document URL is required (moolaTippani, hissaTippani, atlas, rrPakkabook, or kharabu).
+        Document values can be a string URL or an object with url, fileName, mimeType, size.
+      properties:
+        surveyType:
+          type: string
+          enum: [joint_flat, single_flat]
+          description: Type of flat (joint or single)
+          example: single_flat
+        district:
+          type: string
+          description: ObjectId of District
+          example: "507f1f77bcf86cd799439012"
+        taluka:
+          type: string
+          description: ObjectId of Taluka
+          example: "507f1f77bcf86cd799439013"
+        hobli:
+          type: string
+          description: ObjectId of Hobli
+          example: "507f1f77bcf86cd799439014"
+        village:
+          type: string
+          description: ObjectId of Village
+          example: "507f1f77bcf86cd799439015"
+        surveyNo:
+          type: string
+          minLength: 1
+          description: Survey number
+          example: "123"
+        moolaTippani:
+          oneOf:
+            - type: string
+              format: uri
+              description: Document URL
+            - type: object
+              properties:
+                url: { type: string, format: uri }
+                fileName: { type: string }
+                mimeType: { type: string }
+                size: { type: integer, minimum: 0 }
+          description: Moola Tippani document (optional but at least one document required)
+        hissaTippani:
+          oneOf:
+            - type: string
+              format: uri
+              description: Document URL
+            - type: object
+              properties:
+                url: { type: string, format: uri }
+                fileName: { type: string }
+                mimeType: { type: string }
+                size: { type: integer, minimum: 0 }
+          description: Hissa Tippani document (optional but at least one document required)
+        atlas:
+          oneOf:
+            - type: string
+              format: uri
+              description: Document URL
+            - type: object
+              properties:
+                url: { type: string, format: uri }
+                fileName: { type: string }
+                mimeType: { type: string }
+                size: { type: integer, minimum: 0 }
+          description: Atlas document (optional but at least one document required)
+        rrPakkabook:
+          oneOf:
+            - type: string
+              format: uri
+              description: Document URL
+            - type: object
+              properties:
+                url: { type: string, format: uri }
+                fileName: { type: string }
+                mimeType: { type: string }
+                size: { type: integer, minimum: 0 }
+          description: RR Pakkabook document (optional but at least one document required)
+        kharabu:
+          oneOf:
+            - type: string
+              format: uri
+              description: Document URL
+            - type: object
+              properties:
+                url: { type: string, format: uri }
+                fileName: { type: string }
+                mimeType: { type: string }
+                size: { type: integer, minimum: 0 }
+          description: Kharabu document (optional but at least one document required)
+        others:
+          type: string
+          maxLength: 2000
+          description: Optional notes (e.g., "If joint flat, provide all survey no. details")
+          example: "If joint flat, provide all survey no. details"
+
+    SurveyorSketchUpload:
+      type: object
+      description: Surveyor sketch upload document
+      properties:
+        _id:
+          type: string
+          example: "507f1f77bcf86cd799439020"
+        applicationId:
+          type: string
+          description: Auto-generated application ID in format DISTRICT_CODE/TALUKA_CODE/YY/N
+          example: "KA-BLR/BLR-N/26/1"
+        surveyor:
+          oneOf:
+            - type: string
+              description: ObjectId when not populated
+            - type: object
+              description: User object when populated
+              properties:
+                _id: { type: string }
+                name: { type: object }
+                role: { type: string }
+        surveyType:
+          type: string
+          enum: [joint_flat, single_flat]
+        district:
+          oneOf:
+            - type: string
+              description: ObjectId when not populated
+            - type: object
+              description: District object when populated
+              properties:
+                _id: { type: string }
+                code: { type: string }
+                name: { type: string }
+        taluka:
+          oneOf:
+            - type: string
+              description: ObjectId when not populated
+            - type: object
+              description: Taluka object when populated
+              properties:
+                _id: { type: string }
+                code: { type: string }
+                name: { type: string }
+        hobli:
+          oneOf:
+            - type: string
+              description: ObjectId when not populated
+            - type: object
+              description: Hobli object when populated
+              properties:
+                _id: { type: string }
+                code: { type: string }
+                name: { type: string }
+        village:
+          oneOf:
+            - type: string
+              description: ObjectId when not populated
+            - type: object
+              description: Village object when populated
+              properties:
+                _id: { type: string }
+                code: { type: string }
+                name: { type: string }
+        surveyNo:
+          type: string
+        documents:
+          type: object
+          description: Map of document keys to document objects
+          additionalProperties:
+            type: object
+            properties:
+              url:
+                type: string
+                format: uri
+              fileName:
+                type: string
+                nullable: true
+              mimeType:
+                type: string
+                nullable: true
+              size:
+                type: integer
+                nullable: true
+              uploadedAt:
+                type: string
+                format: date-time
+        others:
+          type: string
+          nullable: true
+          maxLength: 2000
+        status:
+          type: string
+          enum: [PENDING, UNDER_REVIEW, APPROVED, REJECTED]
+          default: PENDING
+        statusNote:
+          type: string
+          nullable: true
+          maxLength: 500
+        reviewedAt:
+          type: string
+          format: date-time
+          nullable: true
+        reviewedBy:
+          type: string
+          nullable: true
+          description: ObjectId of reviewer (Admin/CAD)
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    MasterSuccessResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          description: District, Taluka, or Hobli document
+    MasterListResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            type: object
+
+    AuthSuccessResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required: [user, token]
+          properties:
+            user:
+              type: object
+              description: User document (auth secrets stripped)
+            token:
+              type: string
+              description: JWT for Authorization header
+
+    MessageResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            message:
+              type: string
+              example: OTP sent successfully
+
+    HealthResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+        service:
+          type: string
+          example: cad-backend-api
+        stage:
+          type: string
+          example: dev
+        dbConnected:
+          type: boolean
+        dbName:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: Validation failed
+        code:
+          type: string
+          example: BAD_REQUEST
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+  responses:
+    BadRequest:
+      description: Bad request (validation or business rule)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            success: false
+            message: Missing required fields
+            code: BAD_REQUEST
+            errors:
+              - field: email
+                message: Required
+
+    Unauthorized:
+      description: Unauthorized (invalid or missing token / credentials)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            success: false
+            message: Invalid credentials
+            code: UNAUTHORIZED
+
+    Forbidden:
+      description: Forbidden (valid token but insufficient role)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            success: false
+            message: You do not have permission to perform this action
+            code: FORBIDDEN
+
+    NotFound:
+      description: Resource not found (e.g. district/taluka/hobli or parent)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            success: false
+            message: District not found
+            code: NOT_FOUND
+
+    Conflict:
+      description: Conflict (e.g. email already registered)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            success: false
+            message: Email already registered
+            code: CONFLICT

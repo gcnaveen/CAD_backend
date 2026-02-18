@@ -1,0 +1,171 @@
+service: cad-backend-api
+
+# Pin to v3 to avoid mandatory Serverless API connectivity (v4).
+frameworkVersion: '3'
+
+useDotenv: true
+
+custom:
+  nodeEnv:
+    dev: development
+    prod: production
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ${opt:region, 'ap-south-1'}
+  stage: ${opt:stage, 'dev'}
+  timeout: 60
+  memorySize: 512
+
+  environment:
+    NODE_ENV: ${self:custom.nodeEnv.${self:provider.stage}, 'development'}
+    STAGE: ${self:provider.stage}
+    # For Lambda: Prefer MONGODB_URI (SRV connection string) - works better in serverless
+    # If MONGODB_URI is not set, will fallback to MONGODB_URI_STANDARD
+    MONGODB_URI: ${env:MONGODB_URI, ''}
+    MONGODB_URI_STANDARD: ${env:MONGODB_URI_STANDARD, ''}
+    # Disable primary discovery in Lambda (causes timeouts)
+    MONGODB_DISCOVER_PRIMARY: 'false'
+    JWT_SECRET: ${env:JWT_SECRET, 'change-me'}
+    JWT_EXPIRES_IN: ${env:JWT_EXPIRES_IN, '24h'}
+
+  httpApi:
+    cors: true
+
+functions:
+  authApi:
+    handler: src/handlers/authApi.handler
+    events:
+      - httpApi:
+          path: /api/auth/superadmin/register
+          method: post
+      - httpApi:
+          path: /api/auth/surveyor/start
+          method: post
+      - httpApi:
+          path: /api/auth/surveyor/verify-otp
+          method: post
+      - httpApi:
+          path: /api/auth/surveyor/complete
+          method: post
+      - httpApi:
+          path: /api/auth/login
+          method: post
+      - httpApi:
+          path: /api/users
+          method: post
+      - httpApi:
+          path: /api/users
+          method: get
+      - httpApi:
+          path: /api/users/{userId}
+          method: get
+      - httpApi:
+          path: /api/users/{userId}
+          method: patch
+      - httpApi:
+          path: /api/users/{userId}
+          method: delete
+      - httpApi:
+          path: /api/users/{userId}/block
+          method: post
+      - httpApi:
+          path: /api/users/{userId}/unblock
+          method: post
+      - httpApi:
+          path: /api/surveyor/sketch-uploads
+          method: post
+      - httpApi:
+          path: /api/surveyor/sketch-uploads
+          method: get
+      - httpApi:
+          path: /api/surveyor/sketch-uploads/{uploadId}
+          method: get
+
+  testApi:
+    handler: src/handlers/testApi.handler
+    events:
+      - httpApi:
+          path: /test
+          method: GET
+
+  mastersApi:
+    handler: src/handlers/mastersApi.handler
+    events:
+      - httpApi:
+          path: /api/masters/districts
+          method: post
+      - httpApi:
+          path: /api/masters/districts
+          method: get
+      - httpApi:
+          path: /api/masters/districts/{districtId}
+          method: get
+      - httpApi:
+          path: /api/masters/districts/{districtId}
+          method: patch
+      - httpApi:
+          path: /api/masters/talukas
+          method: get
+      - httpApi:
+          path: /api/masters/talukas
+          method: post
+      - httpApi:
+          path: /api/masters/talukas/{talukaId}
+          method: get
+      - httpApi:
+          path: /api/masters/talukas/{talukaId}
+          method: patch
+      - httpApi:
+          path: /api/masters/hoblis
+          method: get
+      - httpApi:
+          path: /api/masters/hoblis
+          method: post
+      - httpApi:
+          path: /api/masters/hoblis/{hobliId}
+          method: get
+      - httpApi:
+          path: /api/masters/hoblis/{hobliId}
+          method: patch
+      - httpApi:
+          path: /api/masters/cad-centers
+          method: post
+      - httpApi:
+          path: /api/masters/cad-centers
+          method: get
+      - httpApi:
+          path: /api/masters/cad-centers/{cadCenterId}
+          method: get
+      - httpApi:
+          path: /api/masters/cad-centers/{cadCenterId}
+          method: patch
+      - httpApi:
+          path: /api/masters/cad-centers/{cadCenterId}
+          method: delete
+
+  swaggerApi:
+    handler: src/handlers/swaggerApi.handler
+    events:
+      - httpApi:
+          path: /api/docs
+          method: GET
+      - httpApi:
+          path: /api/docs/swagger.yaml
+          method: GET
+      - httpApi:
+          path: /api/docs/swagger.json
+          method: GET
+      - httpApi:
+          path: /api/docs
+          method: OPTIONS
+      - httpApi:
+          path: /api/docs/swagger.yaml
+          method: OPTIONS
+      - httpApi:
+          path: /api/docs/swagger.json
+          method: OPTIONS
+
+plugins:
+  - serverless-offline
