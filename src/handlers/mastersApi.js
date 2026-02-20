@@ -22,6 +22,8 @@ exports.handler = asyncHandler(async (event) => {
       return mastersHandler.getDistrict(event);
     case "PATCH /api/masters/districts/{districtId}":
       return mastersHandler.updateDistrict(event);
+    case "GET /api/masters/districts/{districtId}/talukas":
+      return mastersHandler.listTalukasByDistrict(event);
 
     case "POST /api/masters/talukas":
       return mastersHandler.createTaluka(event);
@@ -31,6 +33,8 @@ exports.handler = asyncHandler(async (event) => {
       return mastersHandler.getTaluka(event);
     case "PATCH /api/masters/talukas/{talukaId}":
       return mastersHandler.updateTaluka(event);
+    case "GET /api/masters/talukas/{talukaId}/hoblis":
+      return mastersHandler.listHoblisByTaluka(event);
 
     case "POST /api/masters/hoblis":
       return mastersHandler.createHobli(event);
@@ -40,6 +44,17 @@ exports.handler = asyncHandler(async (event) => {
       return mastersHandler.getHobli(event);
     case "PATCH /api/masters/hoblis/{hobliId}":
       return mastersHandler.updateHobli(event);
+    case "GET /api/masters/hoblis/{hobliId}/villages":
+      return mastersHandler.listVillagesByHobli(event);
+
+    case "POST /api/masters/villages":
+      return mastersHandler.createVillage(event);
+    case "GET /api/masters/villages":
+      return mastersHandler.listVillages(event);
+    case "GET /api/masters/villages/{villageId}":
+      return mastersHandler.getVillage(event);
+    case "PATCH /api/masters/villages/{villageId}":
+      return mastersHandler.updateVillage(event);
 
     case "POST /api/masters/cad-centers":
       return mastersHandler.createCadCenter(event);

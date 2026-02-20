@@ -1,12 +1,18 @@
 /**
- * Hobli model – belongs to Taluka (District → Taluka → Hobli → Village).
- * Production: compound indexes for list by taluka and unique (talukaId + code).
+ * Hobli model – maps to both District and Taluka (District → Taluka → Hobli → Village).
+ * Production: compound indexes for list by district/taluka and unique (talukaId + code).
  */
 const mongoose = require("mongoose");
 const { MASTER_STATUS } = require("../../config/constants");
 
 const HobliSchema = new mongoose.Schema(
   {
+    districtId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "District",
+      required: true,
+      index: true,
+    },
     talukaId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Taluka",
@@ -26,6 +32,8 @@ const HobliSchema = new mongoose.Schema(
 );
 
 HobliSchema.index({ talukaId: 1, code: 1 }, { unique: true });
+HobliSchema.index({ districtId: 1, talukaId: 1, status: 1, name: 1 });
 HobliSchema.index({ talukaId: 1, status: 1, name: 1 });
+HobliSchema.index({ districtId: 1, status: 1, name: 1 });
 
 module.exports = mongoose.models.Hobli || mongoose.model("Hobli", HobliSchema);

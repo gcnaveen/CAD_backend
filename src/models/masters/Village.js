@@ -1,13 +1,25 @@
 /**
- * Village master – belongs to a Hobli (District → Taluka → Hobli → Village).
+ * Village master – maps to District, Taluka and Hobli (District → Taluka → Hobli → Village).
  * Used by surveyor sketch upload for survey info.
- * Production: compound indexes for list by hobli and unique (hobliId + code).
+ * Production: compound indexes for list by district/taluka/hobli and unique (hobliId + code).
  */
 const mongoose = require("mongoose");
 const { MASTER_STATUS } = require("../../config/constants");
 
 const VillageSchema = new mongoose.Schema(
   {
+    districtId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "District",
+      required: true,
+      index: true,
+    },
+    talukaId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Taluka",
+      required: true,
+      index: true,
+    },
     hobliId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Hobli",
@@ -28,6 +40,8 @@ const VillageSchema = new mongoose.Schema(
 
 VillageSchema.index({ hobliId: 1, code: 1 }, { unique: true });
 VillageSchema.index({ hobliId: 1, status: 1, name: 1 });
+VillageSchema.index({ talukaId: 1, status: 1, name: 1 });
+VillageSchema.index({ districtId: 1, status: 1, name: 1 });
 
 module.exports =
   mongoose.models.Village || mongoose.model("Village", VillageSchema);

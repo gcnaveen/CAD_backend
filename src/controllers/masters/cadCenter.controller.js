@@ -10,15 +10,17 @@ async function createCadCenter(payload, creator) {
   return created(data);
 }
 
-async function getCadCenter(id) {
-  const data = await cadCenterService.getById(id);
+async function getCadCenter(id, options = {}) {
+  const data = options.includeAssignments
+    ? await cadCenterService.getByIdWithAssignments(id, options)
+    : await cadCenterService.getById(id);
   return ok(data);
 }
 
-async function listCadCenters(filters, pagination) {
-  const result = await cadCenterService.list(filters, pagination);
+async function listCadCenters(filters, pagination, options = {}) {
+  const result = await cadCenterService.list(filters, pagination, options);
   if (!pagination) {
-    return ok(result);
+    return ok(Array.isArray(result) ? result : result.data);
   }
   const { paginationMeta } = require("../../utils/pagination");
   return ok(result.data, { pagination: paginationMeta(pagination, result.total) });

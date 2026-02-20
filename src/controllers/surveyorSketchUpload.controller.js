@@ -21,8 +21,16 @@ async function listUploads(actor, options) {
   return ok(result.data, result.meta);
 }
 
+async function listAllWithAssignment(options) {
+  const result = await surveyorSketchUploadService.listAllWithAssignment(options);
+  const { paginationMeta } = require("../../utils/pagination");
+  const { page, limit, total } = result.meta;
+  return ok(result.data, { pagination: paginationMeta({ page, limit }, total) });
+}
+
 module.exports = {
   createUpload,
   getUpload,
   listUploads,
+  listAllWithAssignment,
 };

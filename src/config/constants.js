@@ -22,6 +22,22 @@ const MASTER_STATUS = Object.freeze({
     BUSY: "busy",
     OFFLINE: "offline",
   });
+
+/** CAD Center availability status (center-level; admin can set or derive from members). */
+const CAD_CENTER_AVAILABILITY = Object.freeze({
+  AVAILABLE: "AVAILABLE",
+  BUSY: "BUSY",
+  OFFLINE: "OFFLINE",
+});
+
+/** Survey sketch assignment status (survey sketch → CAD center). */
+const SURVEY_SKETCH_ASSIGNMENT_STATUS = Object.freeze({
+  ASSIGNED: "ASSIGNED",
+  IN_PROGRESS: "IN_PROGRESS",
+  COMPLETED: "COMPLETED",
+  ON_HOLD: "ON_HOLD",
+  CANCELLED: "CANCELLED",
+});
   
   const SURVEYOR_CATEGORY = Object.freeze({
     PUBLIC: "public",
@@ -41,7 +57,10 @@ const SURVEY_FLAT_TYPE = Object.freeze({
 
 /** Surveyor sketch submission workflow status. */
 const SURVEY_SKETCH_STATUS = Object.freeze({
+  /** Surveyor raised the request; awaiting admin assignment to a CAD center. */
   PENDING: "PENDING",
+  /** Admin has assigned this sketch to a CAD center. */
+  ASSIGNED: "ASSIGNED",
   UNDER_REVIEW: "UNDER_REVIEW",
   APPROVED: "APPROVED",
   REJECTED: "REJECTED",
@@ -77,12 +96,50 @@ const HTTP_STATUS = Object.freeze({
   INTERNAL_SERVER_ERROR: 500,
 });
 
+/** Upload media type: only images and audio are supported. */
+const UPLOAD_MEDIA_TYPE = Object.freeze({
+  IMAGE: "image",
+  AUDIO: "audio",
+});
+
+/** Allowed MIME types for image uploads (sketches, CAD drawings, documents, PDFs). */
+const UPLOAD_IMAGE_MIME_TYPES = Object.freeze([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "application/pdf",
+]);
+
+/** Allowed MIME types for audio uploads (remarks, voice notes). */
+const UPLOAD_AUDIO_MIME_TYPES = Object.freeze([
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/wav",
+  "audio/webm",
+  "audio/ogg",
+  "audio/m4a",
+  "audio/x-m4a",
+]);
+
+/** Max file size in bytes: 10 MB for images. */
+const UPLOAD_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+
+/** Max file size in bytes: 25 MB for audio. */
+const UPLOAD_AUDIO_MAX_BYTES = 25 * 1024 * 1024;
+
+/** Presigned URL expiry: 15 minutes. */
+const UPLOAD_PRESIGNED_EXPIRES_SECONDS = 900;
+
 module.exports = {
   USER_ROLES,
   USER_STATUS,
   MASTER_STATUS,
   HTTP_STATUS,
   CAD_AVAILABILITY,
+  CAD_CENTER_AVAILABILITY,
+  SURVEY_SKETCH_ASSIGNMENT_STATUS,
   SURVEYOR_CATEGORY,
   SURVEYOR_TYPE,
   SURVEY_FLAT_TYPE,
@@ -90,5 +147,11 @@ module.exports = {
   SURVEY_SKETCH_DOCUMENT_KEYS,
   SURVEY_SKETCH_ACCEPT_TYPES,
   SURVEY_SKETCH_ACCEPT_EXTENSIONS,
+  UPLOAD_MEDIA_TYPE,
+  UPLOAD_IMAGE_MIME_TYPES,
+  UPLOAD_AUDIO_MIME_TYPES,
+  UPLOAD_IMAGE_MAX_BYTES,
+  UPLOAD_AUDIO_MAX_BYTES,
+  UPLOAD_PRESIGNED_EXPIRES_SECONDS,
 };
 

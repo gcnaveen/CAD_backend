@@ -30,9 +30,34 @@ provider:
     # Production: set JWT_SECRET via env or SSM; do not use default in prod
     JWT_SECRET: ${env:JWT_SECRET, 'change-me'}
     JWT_EXPIRES_IN: ${env:JWT_EXPIRES_IN, '24h'}
+    # S3 bucket for sketches, CAD drawings, audio, documents
+    S3_BUCKET: ${env:S3_BUCKET, 'caddrawing'}
 
   httpApi:
     cors: true
+
+  # S3: presigned URLs + multipart upload (bucket from S3_BUCKET env, default caddrawing)
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - s3:PutObject
+        - s3:PutObjectAcl
+      Resource: arn:aws:s3:::${env:S3_BUCKET, 'caddrawing'}/*
+    - Effect: Allow
+      Action:
+        - s3:GetObject
+      Resource: arn:aws:s3:::${env:S3_BUCKET, 'caddrawing'}/*
+    - Effect: Allow
+      Action:
+        - s3:CreateMultipartUpload
+        - s3:UploadPart
+        - s3:CompleteMultipartUpload
+        - s3:AbortMultipartUpload
+      Resource: arn:aws:s3:::${env:S3_BUCKET, 'caddrawing'}/*
+    - Effect: Allow
+      Action:
+        - s3:DeleteObject
+      Resource: arn:aws:s3:::${env:S3_BUCKET, 'caddrawing'}/*
 
 functions:
   authApi:
@@ -83,6 +108,24 @@ functions:
       - httpApi:
           path: /api/surveyor/sketch-uploads/{uploadId}
           method: get
+      - httpApi:
+          path: /api/admin/survey-sketch-statuses
+          method: get
+      - httpApi:
+          path: /api/admin/survey-sketch-assignments
+          method: post
+      - httpApi:
+          path: /api/admin/survey-sketch-assignments/{assignmentId}
+          method: get
+      - httpApi:
+          path: /api/admin/survey-sketch-assignments/{assignmentId}
+          method: patch
+      - httpApi:
+          path: /api/admin/cad-centers/{cadCenterId}/assignments
+          method: get
+      - httpApi:
+          path: /api/cad/assignments/{assignmentId}/accept
+          method: post
 
   testApi:
     handler: src/handlers/testApi.handler
@@ -107,6 +150,9 @@ functions:
           path: /api/masters/districts/{districtId}
           method: patch
       - httpApi:
+          path: /api/masters/districts/{districtId}/talukas
+          method: get
+      - httpApi:
           path: /api/masters/talukas
           method: get
       - httpApi:
@@ -119,6 +165,9 @@ functions:
           path: /api/masters/talukas/{talukaId}
           method: patch
       - httpApi:
+          path: /api/masters/talukas/{talukaId}/hoblis
+          method: get
+      - httpApi:
           path: /api/masters/hoblis
           method: get
       - httpApi:
@@ -129,6 +178,21 @@ functions:
           method: get
       - httpApi:
           path: /api/masters/hoblis/{hobliId}
+          method: patch
+      - httpApi:
+          path: /api/masters/hoblis/{hobliId}/villages
+          method: get
+      - httpApi:
+          path: /api/masters/villages
+          method: post
+      - httpApi:
+          path: /api/masters/villages
+          method: get
+      - httpApi:
+          path: /api/masters/villages/{villageId}
+          method: get
+      - httpApi:
+          path: /api/masters/villages/{villageId}
           method: patch
       - httpApi:
           path: /api/masters/cad-centers
@@ -145,6 +209,19 @@ functions:
       - httpApi:
           path: /api/masters/cad-centers/{cadCenterId}
           method: delete
+
+  uploadApi:
+    handler: src/handlers/uploadApi.handler
+    events:
+      - httpApi:
+          path: /api/upload/image
+          method: post
+      - httpApi:
+          path: /api/upload/audio
+          method: post
+      - httpApi:
+          path: /api/upload/delete
+          method: post
 
   swaggerApi:
     handler: src/handlers/swaggerApi.handler

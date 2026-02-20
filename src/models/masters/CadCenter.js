@@ -5,7 +5,7 @@
  */
 
 const mongoose = require("mongoose");
-const { USER_STATUS, MASTER_STATUS } = require("../../config/constants");
+const { USER_STATUS, MASTER_STATUS, CAD_CENTER_AVAILABILITY } = require("../../config/constants");
 
 const CadCenterSchema = new mongoose.Schema(
   {
@@ -63,6 +63,13 @@ const CadCenterSchema = new mongoose.Schema(
       default: MASTER_STATUS.ACTIVE,
       index: true,
     },
+    /** Center-level availability (admin visibility: AVAILABLE, BUSY, OFFLINE). */
+    availabilityStatus: {
+      type: String,
+      enum: Object.values(CAD_CENTER_AVAILABILITY),
+      default: CAD_CENTER_AVAILABILITY.AVAILABLE,
+      index: true,
+    },
     capacity: {
       type: Number,
       min: 0,
@@ -95,6 +102,7 @@ const CadCenterSchema = new mongoose.Schema(
 CadCenterSchema.index({ deletedAt: 1, status: 1, name: 1 });
 CadCenterSchema.index({ code: 1 }, { sparse: true });
 CadCenterSchema.index({ status: 1, deletedAt: 1 });
+CadCenterSchema.index({ availabilityStatus: 1, deletedAt: 1 });
 CadCenterSchema.index({ createdBy: 1, deletedAt: 1 });
 
 // -------- Virtuals: Member Statistics (computed from User collection) --------
