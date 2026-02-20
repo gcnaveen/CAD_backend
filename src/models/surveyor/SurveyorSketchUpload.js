@@ -94,7 +94,19 @@ const SurveyorSketchUploadSchema = new mongoose.Schema(
       default: () => new Map(),
     },
 
-    /** Optional notes (e.g. "If joint flat, provide all survey no. details"). */
+    /** Optional audio file (e.g. audio remarks, voice notes). Single file: url, fileName?, mimeType?, size?, uploadedAt?. */
+    audio: {
+      type: SurveyDocumentSchema,
+      default: null,
+    },
+
+    /** Optional extra documents (e.g. additional PDFs, images). Each item: url, fileName?, mimeType?, size?, uploadedAt?. */
+    other_documents: {
+      type: [SurveyDocumentSchema],
+      default: () => [],
+    },
+
+    /** Optional notes or text (e.g. "If joint flat, provide all survey no. details"). Max 2000 chars. */
     others: {
       type: String,
       trim: true,
@@ -164,6 +176,11 @@ SurveyorSketchUploadSchema.pre("save", async function (next) {
   }
 
   try {
+    // Ensure district and taluka are ObjectIds (required fields)
+    if (!this.district || !this.taluka) {
+      return next(new Error("District and taluka are required to generate applicationId"));
+    }
+
     // Populate district and taluka if they're ObjectIds (not already populated)
     if (!this.district?.code || !this.taluka?.code) {
       await this.populate([
@@ -172,11 +189,19 @@ SurveyorSketchUploadSchema.pre("save", async function (next) {
       ]);
     }
 
-    const districtCode = this.district?.code || this.district;
-    const talukaCode = this.taluka?.code || this.taluka;
+    // After populate, check if district/taluka exist (populate sets to null if ref doesn't exist)
+    if (!this.district) {
+      return next(new Error("District not found - invalid district reference"));
+    }
+    if (!this.taluka) {
+      return next(new Error("Taluka not found - invalid taluka reference"));
+    }
+
+    const districtCode = this.district?.code;
+    const talukaCode = this.taluka?.code;
 
     if (!districtCode || !talukaCode) {
-      return next(new Error("District and taluka codes are required to generate applicationId"));
+      return next(new Error("District and taluka codes are required to generate applicationId. Ensure district and taluka exist in the database."));
     }
 
     // Get 2-digit year (e.g., 2026 → 26)
@@ -205,6 +230,10 @@ SurveyorSketchUploadSchema.pre("save", async function (next) {
     this.applicationId = `${prefix}${nextNumber}`;
     next();
   } catch (error) {
+    // Wrap Mongoose/DB errors in a more user-friendly message
+    if (error.name === "CastError" || error.message?.includes("Cast to ObjectId")) {
+      return next(new Error(`Invalid reference: ${error.message}`));
+    }
     next(error);
   }
 });

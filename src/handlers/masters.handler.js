@@ -9,8 +9,12 @@ const { validate, schemas, validObjectId } = require("../middleware/validator");
 const { authorize } = require("../middleware/auth.middleware");
 const { USER_ROLES } = require("../config/constants");
 const districtController = require("../controllers/masters/district.controller");
+const districtService = require("../services/masters/district.service");
 const talukaController = require("../controllers/masters/taluka.controller");
+const talukaService = require("../services/masters/taluka.service");
 const hobliController = require("../controllers/masters/hobli.controller");
+const hobliService = require("../services/masters/hobli.service");
+const villageController = require("../controllers/masters/village.controller");
 const cadCenterController = require("../controllers/masters/cadCenter.controller");
 const { BadRequestError } = require("../utils/errors");
 const asyncHandler = require("../utils/asyncHandler");
@@ -38,6 +42,11 @@ function getQueryParams(event) {
   if (q.taluka) filters.taluka = String(q.taluka).trim();
   if (q.districtId) filters.districtId = String(q.districtId).trim();
   if (q.talukaId) filters.talukaId = String(q.talukaId).trim();
+  if (q.hobliId) filters.hobliId = String(q.hobliId).trim();
+  if (q.availabilityStatus) {
+    const a = String(q.availabilityStatus).toUpperCase();
+    if (["AVAILABLE", "BUSY", "OFFLINE"].includes(a)) filters.availabilityStatus = a;
+  }
 
   return filters;
 }
@@ -78,6 +87,17 @@ exports.updateDistrict = asyncHandler(async (event) => {
   return await districtController.updateDistrict(districtId, body);
 });
 
+exports.listTalukasByDistrict = asyncHandler(async (event) => {
+  await ensureDb();
+  const { districtId } = getPathParams(event);
+  if (!districtId) throw new BadRequestError("districtId is required");
+  validObjectId(districtId, "districtId");
+  await districtService.getById(districtId); // 404 if district not found
+  const filters = getQueryParams(event);
+  const pagination = getPagination(event);
+  return await talukaController.listTalukas(districtId, filters, pagination);
+});
+
 // -------- Taluka (under District) --------
 exports.createTaluka = asyncHandler(async (event) => {
   await ensureDb();
@@ -110,6 +130,17 @@ exports.updateTaluka = asyncHandler(async (event) => {
   validObjectId(talukaId, "talukaId");
   const body = validate(schemas.talukaUpdate)(event);
   return await talukaController.updateTaluka(talukaId, body);
+});
+
+exports.listHoblisByTaluka = asyncHandler(async (event) => {
+  await ensureDb();
+  const { talukaId } = getPathParams(event);
+  if (!talukaId) throw new BadRequestError("talukaId is required");
+  validObjectId(talukaId, "talukaId");
+  await talukaService.getById(talukaId); // 404 if taluka not found
+  const filters = getQueryParams(event);
+  const pagination = getPagination(event);
+  return await hobliController.listHoblis(talukaId, null, filters, pagination);
 });
 
 // -------- Hobli (under Taluka) --------
@@ -147,6 +178,52 @@ exports.updateHobli = asyncHandler(async (event) => {
   return await hobliController.updateHobli(hobliId, body);
 });
 
+exports.listVillagesByHobli = asyncHandler(async (event) => {
+  await ensureDb();
+  const { hobliId } = getPathParams(event);
+  if (!hobliId) throw new BadRequestError("hobliId is required");
+  validObjectId(hobliId, "hobliId");
+  await hobliService.getById(hobliId); // 404 if hobli not found
+  const filters = getQueryParams(event);
+  const pagination = getPagination(event);
+  return await villageController.listVillagesByHobli(hobliId, filters, pagination);
+});
+
+// -------- Village (under District → Taluka → Hobli) --------
+exports.createVillage = asyncHandler(async (event) => {
+  await ensureDb();
+  const body = validate(schemas.villageCreate)(event);
+  return await villageController.createVillage(body);
+});
+
+exports.listVillages = asyncHandler(async (event) => {
+  await ensureDb();
+  const q = event.queryStringParameters || {};
+  const hobliIdentifier = q.hobli || q.hobliId || null;
+  const filters = getQueryParams(event);
+  const pagination = getPagination(event);
+  if (hobliIdentifier && require("mongoose").Types.ObjectId.isValid(hobliIdentifier)) {
+    return await villageController.listVillagesByHobli(hobliIdentifier, filters, pagination);
+  }
+  return await villageController.listVillages(filters, pagination);
+});
+
+exports.getVillage = asyncHandler(async (event) => {
+  await ensureDb();
+  const { villageId } = getPathParams(event);
+  if (!villageId) throw new BadRequestError("villageId is required");
+  validObjectId(villageId, "villageId");
+  return await villageController.getVillage(villageId);
+});
+
+exports.updateVillage = asyncHandler(async (event) => {
+  await ensureDb();
+  const { villageId } = getPathParams(event);
+  validObjectId(villageId, "villageId");
+  const body = validate(schemas.villageUpdate)(event);
+  return await villageController.updateVillage(villageId, body);
+});
+
 // -------- CAD Center (auth: Super Admin or Admin) --------
 exports.createCadCenter = asyncHandler(async (event) => {
   await ensureDb();
@@ -160,7 +237,11 @@ exports.listCadCenters = asyncHandler(async (event) => {
   await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
   const filters = getQueryParams(event);
   const pagination = getPagination(event);
-  return await cadCenterController.listCadCenters(filters, pagination);
+  const q = event.queryStringParameters || {};
+  const includeAssignmentCounts = q.includeAssignmentCounts === "true" || q.includeAssignmentCounts === true;
+  return await cadCenterController.listCadCenters(filters, pagination, {
+    includeAssignmentCounts,
+  });
 });
 
 exports.getCadCenter = asyncHandler(async (event) => {
@@ -169,7 +250,9 @@ exports.getCadCenter = asyncHandler(async (event) => {
   const { cadCenterId } = getPathParams(event);
   if (!cadCenterId) throw new BadRequestError("cadCenterId is required");
   validObjectId(cadCenterId, "cadCenterId");
-  return await cadCenterController.getCadCenter(cadCenterId);
+  const q = event.queryStringParameters || {};
+  const includeAssignments = q.includeAssignments === "true" || q.includeAssignments === true;
+  return await cadCenterController.getCadCenter(cadCenterId, { includeAssignments });
 });
 
 exports.updateCadCenter = asyncHandler(async (event) => {

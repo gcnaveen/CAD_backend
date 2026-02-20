@@ -36,9 +36,15 @@ tags:
   - name: Authentication
     description: Registration and login (Super Admin, Surveyor, email login)
   - name: Masters
-    description: District → Taluka → Hobli hierarchy (create, list, get, update)
+    description: District → Taluka → Hobli → Village hierarchy (create, list, get, update)
   - name: Surveyor Sketch Uploads
     description: Surveyor sketch upload submissions (survey info + document URLs)
+  - name: Admin - Assignments
+    description: Admin assigns survey sketches to CAD centers; view assignments and center availability
+  - name: CAD - Assignments
+    description: CAD user accepts assigned work (ASSIGNED → IN_PROGRESS)
+  - name: Upload
+    description: S3 presigned URLs for images and audio (bucket caddrawing)
   - name: Health
     description: Health and readiness
 
@@ -753,16 +759,19 @@ paths:
     get:
       tags: [Masters]
       summary: List Talukas by District
-      operationId: listTalukas
+      description: Returns talukas for the given district. Returns 404 if district does not exist.
+      operationId: listTalukasByDistrict
       parameters:
         - name: status
           in: query
           schema:
             type: string
             enum: [ACTIVE, INACTIVE]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
         "200":
-          description: List of talukas
+          description: List of talukas (with pagination meta if page/limit provided)
           content:
             application/json:
               schema:
@@ -824,12 +833,24 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/HobliCreateRequest"
-            example:
-              code: "HEBBAL"
-              name: "Hebbal"
-              taluka: "Bengaluru North"
-              district: "Bengaluru Urban"
-              status: ACTIVE
+            examples:
+              byIds:
+                summary: By district and taluka IDs (recommended)
+                value:
+                  code: "Davanagere Kasaba"
+                  name: "Davanagere Kasaba"
+                  districtId: "69906c1bd7890eaaa677eee0"
+                  talukaId: "6996d2edc83009a295e0006d"
+                  district: "Davangere"
+                  status: ACTIVE
+              byNames:
+                summary: By district and taluka names
+                value:
+                  code: "HEBBAL"
+                  name: "Hebbal"
+                  taluka: "Bengaluru North"
+                  district: "Bengaluru Urban"
+                  status: ACTIVE
       responses:
         "201":
           description: Hobli created
@@ -850,16 +871,19 @@ paths:
     get:
       tags: [Masters]
       summary: List Hoblis by Taluka
-      operationId: listHoblis
+      description: Returns hoblis for the given taluka. Returns 404 if taluka does not exist.
+      operationId: listHoblisByTaluka
       parameters:
         - name: status
           in: query
           schema:
             type: string
             enum: [ACTIVE, INACTIVE]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
         "200":
-          description: List of hoblis
+          description: List of hoblis (with pagination meta if page/limit provided)
           content:
             application/json:
               schema:
@@ -899,6 +923,152 @@ paths:
       responses:
         "200":
           description: Hobli updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterSuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/masters/hoblis/{hobliId}/villages:
+    parameters:
+      - $ref: "#/components/parameters/HobliId"
+    get:
+      tags: [Masters]
+      summary: List Villages by Hobli
+      description: Returns villages for the given hobli. Returns 404 if hobli does not exist.
+      operationId: listVillagesByHobli
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, INACTIVE]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: List of villages (with pagination meta if page/limit provided)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # -------- Masters: Village (under District → Taluka → Hobli) --------
+  /api/masters/villages:
+    post:
+      tags: [Masters]
+      summary: Create Village
+      description: |
+        Create a village. **Hierarchy:** Village maps to District, Taluka and Hobli.
+        Required: code, name, district (ObjectId), taluka (ObjectId), hobli (ObjectId).
+        Validates that hobli belongs to taluka and taluka to district.
+      operationId: createVillage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VillageCreateRequest"
+      responses:
+        "201":
+          description: Village created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterSuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    get:
+      tags: [Masters]
+      summary: List Villages
+      description: |
+        List villages. Filter by districtId, talukaId, hobliId (query params), or pass hobli/hobliId to list by hobli.
+        Optional pagination: page, limit.
+      operationId: listVillages
+      parameters:
+        - name: districtId
+          in: query
+          description: Filter by district
+          schema:
+            type: string
+        - name: talukaId
+          in: query
+          description: Filter by taluka
+          schema:
+            type: string
+        - name: hobli
+          in: query
+          description: Hobli ID to list villages under (same as hobliId)
+          schema:
+            type: string
+        - name: hobliId
+          in: query
+          description: Filter by hobli (or list villages under this hobli)
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, INACTIVE]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: List of villages (with pagination meta if page/limit provided)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/masters/villages/{villageId}:
+    parameters:
+      - name: villageId
+        in: path
+        required: true
+        description: Village ObjectId
+        schema:
+          type: string
+    get:
+      tags: [Masters]
+      summary: Get Village by ID
+      operationId: getVillage
+      responses:
+        "200":
+          description: Village details (includes populated district, taluka, hobli)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterSuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Masters]
+      summary: Update Village
+      operationId: updateVillage
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VillageUpdateRequest"
+      responses:
+        "200":
+          description: Village updated
           content:
             application/json:
               schema:
@@ -959,7 +1129,9 @@ paths:
     get:
       tags: [Masters]
       summary: List CAD Centers
-      description: List CAD centers (non-deleted). Optional query status=ACTIVE|INACTIVE. Requires Super Admin or Admin.
+      description: |
+        List CAD centers (non-deleted). Admin can see availability and how many drawings are assigned.
+        **Query:** status=ACTIVE|INACTIVE, availabilityStatus=AVAILABLE|BUSY|OFFLINE, includeAssignmentCounts=true to get assignment count per center.
       operationId: listCadCenters
       security:
         - bearerAuth: []
@@ -969,6 +1141,20 @@ paths:
           schema:
             type: string
             enum: [ACTIVE, INACTIVE]
+        - name: availabilityStatus
+          in: query
+          description: Filter by center availability (AVAILABLE, BUSY, OFFLINE)
+          schema:
+            type: string
+            enum: [AVAILABLE, BUSY, OFFLINE]
+        - name: includeAssignmentCounts
+          in: query
+          description: If true, each center includes assignmentCount (number of assigned survey sketches)
+          schema:
+            type: boolean
+            default: false
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
         "200":
           description: List of CAD centers
@@ -995,13 +1181,21 @@ paths:
     get:
       tags: [Masters]
       summary: Get CAD Center by ID
-      description: Requires Super Admin or Admin.
+      description: |
+        Get CAD center details. Use **includeAssignments=true** to get assignment count and list of assigned drawings (survey sketches).
       operationId: getCadCenter
       security:
         - bearerAuth: []
+      parameters:
+        - name: includeAssignments
+          in: query
+          description: If true, response includes assignmentCount, assignmentCountByStatus, and assignments (list of assigned survey sketches)
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
-          description: CAD center details
+          description: CAD center details (optionally with assignments)
           content:
             application/json:
               schema:
@@ -1097,7 +1291,7 @@ paths:
         - `district`, `taluka`, `hobli`, `village`: ObjectIds from masters
         - `surveyNo`: Survey number string
         - At least one document URL: `moolaTippani`, `hissaTippani`, `atlas`, `rrPakkabook`, or `kharabu`
-        **Optional:** `others` (string, max 2000 chars) for additional notes.
+        **Optional:** `audio` (single audio file: URL string or object with url, fileName, mimeType, size); `other_documents` (array of extra files, e.g. PDFs or images; each item is a URL string or object with url, fileName, mimeType, size); `others` (string, max 2000 chars) for text notes.
       operationId: createSurveyorSketchUpload
       security:
         - bearerAuth: []
@@ -1121,6 +1315,13 @@ paths:
                 mimeType: "application/pdf"
                 size: 245678
               atlas: "https://storage.example.com/documents/atlas.jpg"
+              audio:
+                url: "https://storage.example.com/audio/remarks.mp3"
+                fileName: "remarks.mp3"
+                mimeType: "audio/mpeg"
+                size: 128000
+              other_documents:
+                - "https://storage.example.com/documents/extra.pdf"
               others: "If joint flat, provide all survey no. details"
       responses:
         "201":
@@ -1158,6 +1359,17 @@ paths:
                       fileName: "hissa_tippani.pdf"
                       mimeType: "application/pdf"
                       size: 245678
+                  audio:
+                    url: "https://storage.example.com/audio/remarks.mp3"
+                    fileName: "remarks.mp3"
+                    mimeType: "audio/mpeg"
+                    size: 128000
+                  other_documents:
+                    - url: "https://storage.example.com/documents/extra.pdf"
+                      fileName: null
+                      mimeType: null
+                      size: null
+                  others: "If joint flat, provide all survey no. details"
                   status: PENDING
                   createdAt: "2026-02-18T10:30:00.000Z"
                   updatedAt: "2026-02-18T10:30:00.000Z"
@@ -1175,7 +1387,7 @@ paths:
         **Authorization:**
         - **Surveyor**: Can only see their own uploads
         - **Admin / Super Admin**: Can see all uploads (optional `surveyorId` filter)
-        Query params: `page`, `limit`, `status`, `surveyorId` (Admin/SuperAdmin only).
+        **Query filters:** `page`, `limit`, `status` (PENDING, ASSIGNED, etc.), `cadCenterId` (uploads assigned to this CAD center), `surveyorId` (Admin/SuperAdmin only).
       operationId: listSurveyorSketchUploads
       security:
         - bearerAuth: []
@@ -1195,9 +1407,15 @@ paths:
             default: 20
         - name: status
           in: query
+          description: Filter by survey sketch status
           schema:
             type: string
-            enum: [PENDING, UNDER_REVIEW, APPROVED, REJECTED]
+            enum: [PENDING, ASSIGNED, UNDER_REVIEW, APPROVED, REJECTED]
+        - name: cadCenterId
+          in: query
+          description: Filter by CAD center (only uploads assigned to this center)
+          schema:
+            type: string
         - name: surveyorId
           in: query
           description: Filter by surveyor (Admin/SuperAdmin only)
@@ -1262,6 +1480,356 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  # -------- Admin: Survey Sketch Status options (for dropdown) --------
+  /api/admin/survey-sketch-statuses:
+    get:
+      tags: [Admin - Assignments]
+      summary: List Survey Sketch Status Options
+      description: Returns all survey sketch status values for dropdown (PENDING, ASSIGNED, UNDER_REVIEW, APPROVED, REJECTED). Admin/Super Admin only.
+      operationId: getSurveySketchStatuses
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of status strings for dropdown
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items: { type: string }
+                    example: [PENDING, ASSIGNED, UNDER_REVIEW, APPROVED, REJECTED]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # -------- Admin: Survey Sketch Assignments (assign survey sketch to CAD center) --------
+  /api/admin/survey-sketch-assignments:
+    post:
+      tags: [Admin - Assignments]
+      summary: Assign Survey Sketch to CAD Center
+      description: |
+        Assign a surveyor sketch upload to a CAD center (and optionally to a specific CAD user). Admin/Super Admin only.
+        One active assignment per survey sketch; returns 409 if already assigned.
+      operationId: createSurveySketchAssignment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SurveySketchAssignmentCreateRequest"
+      responses:
+        "201":
+          description: Assignment created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/SurveySketchAssignment" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/admin/survey-sketch-assignments/{assignmentId}:
+    parameters:
+      - name: assignmentId
+        in: path
+        required: true
+        schema: { type: string }
+        description: Assignment ObjectId
+    get:
+      tags: [Admin - Assignments]
+      summary: Get Assignment by ID
+      operationId: getSurveySketchAssignment
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Assignment details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: "#/components/schemas/SurveySketchAssignment" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Admin - Assignments]
+      summary: Update Assignment
+      description: Update status, dueDate, or notes. Admin/Super Admin only. (assignedToUserId commented out for now.)
+      operationId: updateSurveySketchAssignment
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SurveySketchAssignmentUpdateRequest"
+      responses:
+        "200":
+          description: Assignment updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: "#/components/schemas/SurveySketchAssignment" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/admin/cad-centers/{cadCenterId}/assignments:
+    parameters:
+      - name: cadCenterId
+        in: path
+        required: true
+        schema: { type: string }
+        description: CAD center ObjectId
+    get:
+      tags: [Admin - Assignments]
+      summary: List Assignments by CAD Center
+      description: Get list of survey sketch assignments (drawings) for a CAD center. Admin/Super Admin only.
+      operationId: listAssignmentsByCadCenter
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ASSIGNED, IN_PROGRESS, COMPLETED, ON_HOLD, CANCELLED]
+      responses:
+        "200":
+          description: List of assignments for this center
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: array, items: { $ref: "#/components/schemas/SurveySketchAssignment" } }
+                  pagination: { type: object }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/cad/assignments/{assignmentId}/accept:
+    parameters:
+      - name: assignmentId
+        in: path
+        required: true
+        schema: { type: string }
+        description: Survey sketch assignment ObjectId
+    post:
+      tags: [CAD - Assignments]
+      summary: Accept or reject assignment (CAD)
+      description: |
+        CAD user accepts or rejects an assigned work. Only assignments with status ASSIGNED can be responded to.
+        - **accept** – status → IN_PROGRESS, assignedTo set to the CAD user.
+        - **reject** – assignment status → CANCELLED; survey sketch status → PENDING (admin can reassign).
+        The CAD user must belong to the same CAD center as the assignment.
+      operationId: acceptAssignmentByCad
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [accept, reject]
+                  default: accept
+                  description: "accept = take the work (IN_PROGRESS); reject = decline (CANCELLED, sketch back to PENDING)"
+      responses:
+        "200":
+          description: Assignment updated (IN_PROGRESS if accepted, CANCELLED if rejected)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: "#/components/schemas/SurveySketchAssignment" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/upload/image:
+    post:
+      tags: [Upload]
+      summary: Get presigned URL for image/document upload
+      description: |
+        Returns a presigned PUT URL for uploading an image or PDF document to S3 (bucket caddrawing, folder: images).
+        **Flow:** Call this API → PUT the file to `uploadUrl` → use `fileUrl` in your payload (e.g. sketch, CAD drawing, PDF document).
+        **Auth:** Surveyor, CAD, Admin, Super Admin.
+        **Allowed types:** image/jpeg, image/jpg, image/png, image/gif, image/webp, application/pdf. Max 10 MB (enforced client-side or via fileSizeBytes).
+      operationId: getImageUploadUrl
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadImageRequest"
+            example:
+              fileName: "sketch.png"
+              contentType: "image/png"
+              entityId: "507f1f77bcf86cd799439021"
+      responses:
+        "200":
+          description: Presigned URL for image upload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message: { type: string }
+                      uploadUrl: { type: string, format: uri }
+                      fileUrl: { type: string, format: uri }
+                      key: { type: string }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/upload/audio:
+    post:
+      tags: [Upload]
+      summary: Get presigned URL for audio upload
+      description: |
+        Returns a presigned PUT URL for uploading an audio file to S3 (bucket caddrawing).
+        **Flow:** Call this API → PUT the audio to `uploadUrl` → use `fileUrl` in your payload (e.g. remarks, voice notes).
+        **Auth:** Surveyor, CAD, Admin, Super Admin.
+        **Allowed types:** audio/mpeg, audio/mp3, audio/wav, audio/webm, audio/ogg, audio/m4a. Max 25 MB.
+      operationId: getAudioUploadUrl
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadAudioRequest"
+            example:
+              fileName: "remark.mp3"
+              contentType: "audio/mpeg"
+              entityId: "507f1f77bcf86cd799439021"
+      responses:
+        "200":
+          description: Presigned URL for audio upload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message: { type: string }
+                      uploadUrl: { type: string, format: uri }
+                      fileUrl: { type: string, format: uri }
+                      key: { type: string }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/upload/delete:
+    post:
+      tags: [Upload]
+      summary: Delete uploaded file
+      description: |
+        Deletes an image or audio file from S3. Provide either `key` (S3 object key) or `fileUrl` (URL returned from upload).
+        **Auth:** Surveyor, CAD, Admin, Super Admin.
+      operationId: deleteUpload
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadDeleteRequest"
+            example:
+              fileUrl: "https://caddrawing.s3.ap-south-1.amazonaws.com/uploads/images/abc/sketch.png"
+      responses:
+        "200":
+          description: File deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      message: { type: string }
+                      deleted: { type: boolean }
+                      key: { type: string }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /test:
     get:
@@ -1670,7 +2238,8 @@ components:
           enum: [ACTIVE, INACTIVE]
     HobliCreateRequest:
       type: object
-      required: [code, name, taluka]
+      description: Hobli maps to both District and Taluka. Provide talukaId or taluka (name); districtId/district optional for lookup.
+      required: [code, name]
       properties:
         code:
           type: string
@@ -1680,15 +2249,21 @@ components:
           type: string
           trim: true
           example: "Hebbal"
+        talukaId:
+          type: string
+          description: Taluka ObjectId (preferred)
         taluka:
           type: string
           trim: true
-          description: Taluka name (case-insensitive match)
+          description: Taluka name (when talukaId not provided; district or districtId recommended)
           example: "Bengaluru North"
+        districtId:
+          type: string
+          description: District ObjectId (optional; used when taluka is by name)
         district:
           type: string
           trim: true
-          description: District name (optional but recommended for unambiguous taluka lookup)
+          description: District name (optional for taluka lookup)
           example: "Bengaluru Urban"
         status:
           type: string
@@ -1697,6 +2272,47 @@ components:
     HobliUpdateRequest:
       type: object
       minProperties: 1
+      properties:
+        code:
+          type: string
+          trim: true
+        name:
+          type: string
+          trim: true
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+
+    VillageCreateRequest:
+      type: object
+      description: Village maps to District, Taluka and Hobli. All three parent IDs required.
+      required: [code, name, district, taluka, hobli]
+      properties:
+        code:
+          type: string
+          trim: true
+          example: "V001"
+        name:
+          type: string
+          trim: true
+          example: "Village One"
+        district:
+          type: string
+          description: District ObjectId
+        taluka:
+          type: string
+          description: Taluka ObjectId
+        hobli:
+          type: string
+          description: Hobli ObjectId
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+          default: ACTIVE
+    VillageUpdateRequest:
+      type: object
+      minProperties: 1
+      description: Only code, name, status can be updated; parent references cannot be changed.
       properties:
         code:
           type: string
@@ -1738,6 +2354,22 @@ components:
         status:
           type: string
           enum: [ACTIVE, INACTIVE]
+        availabilityStatus:
+          type: string
+          enum: [AVAILABLE, BUSY, OFFLINE]
+          description: Center-level availability (admin can set or derive from members)
+        assignmentCount:
+          type: integer
+          description: Present when list/get requested with includeAssignmentCounts or includeAssignments
+        assignmentCountByStatus:
+          type: object
+          description: Present when get with includeAssignments=true
+          additionalProperties: { type: integer }
+        assignments:
+          type: array
+          description: Present when get with includeAssignments=true; list of assigned survey sketches
+          items:
+            $ref: "#/components/schemas/SurveySketchAssignment"
         capacity:
           type: integer
           nullable: true
@@ -1791,6 +2423,10 @@ components:
         status:
           type: string
           enum: [ACTIVE, INACTIVE]
+        availabilityStatus:
+          type: string
+          enum: [AVAILABLE, BUSY, OFFLINE]
+          default: AVAILABLE
         capacity:
           type: integer
           minimum: 0
@@ -1798,7 +2434,7 @@ components:
     CadCenterUpdateRequest:
       type: object
       minProperties: 1
-      description: At least one field required
+      description: At least one field required (e.g. availabilityStatus for center availability)
       properties:
         name:
           type: string
@@ -1806,6 +2442,9 @@ components:
         code:
           type: string
           minLength: 1
+        availabilityStatus:
+          type: string
+          enum: [AVAILABLE, BUSY, OFFLINE]
         address:
           type: object
           properties:
@@ -1830,12 +2469,93 @@ components:
           minimum: 0
           nullable: true
 
+    SurveySketchAssignmentCreateRequest:
+      type: object
+      required: [surveyorSketchUploadId, cadCenterId]
+      description: Assign a survey sketch upload to a CAD center (admin).
+      properties:
+        surveyorSketchUploadId:
+          type: string
+          description: SurveyorSketchUpload ObjectId
+        cadCenterId:
+          type: string
+          description: CadCenter ObjectId
+        # assignedToUserId – commented out for now; uncomment if required
+        # assignedToUserId:
+        #   type: string
+        #   nullable: true
+        #   description: Optional CAD user (must belong to this center) ObjectId
+        dueDate:
+          type: string
+          format: date-time
+          nullable: true
+        notes:
+          type: string
+          maxLength: 1000
+          nullable: true
+    SurveySketchAssignmentUpdateRequest:
+      type: object
+      minProperties: 1
+      properties:
+        status:
+          type: string
+          enum: [ASSIGNED, IN_PROGRESS, COMPLETED, ON_HOLD, CANCELLED]
+        # assignedToUserId – commented out for now; uncomment if required
+        # assignedToUserId:
+        #   type: string
+        #   nullable: true
+        dueDate:
+          type: string
+          format: date-time
+          nullable: true
+        notes:
+          type: string
+          maxLength: 1000
+          nullable: true
+    SurveySketchAssignment:
+      type: object
+      description: Survey sketch assignment (drawing assigned to CAD center)
+      properties:
+        _id: { type: string }
+        surveyorSketchUpload:
+          oneOf:
+            - type: string
+            - type: object
+              properties:
+                _id: { type: string }
+                applicationId: { type: string }
+                surveyNo: { type: string }
+                status: { type: string }
+        cadCenter:
+          oneOf:
+            - type: string
+            - type: object
+              properties:
+                _id: { type: string }
+                name: { type: string }
+                code: { type: string }
+        assignedTo:
+          oneOf:
+            - type: string
+              nullable: true
+            - type: object
+              nullable: true
+        status: { type: string }
+        assignedBy: { oneOf: [{ type: string }, { type: object }] }
+        assignedAt: { type: string, format: date-time }
+        dueDate: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+        notes: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
     SurveyorSketchUploadCreateRequest:
       type: object
       required: [surveyType, district, taluka, hobli, village, surveyNo]
       description: |
         At least one document URL is required (moolaTippani, hissaTippani, atlas, rrPakkabook, or kharabu).
         Document values can be a string URL or an object with url, fileName, mimeType, size.
+        Optional: audio (single audio file), other_documents (array of extra files, e.g. PDFs or images), others (text notes, max 2000 chars).
       properties:
         surveyType:
           type: string
@@ -1923,11 +2643,106 @@ components:
                 mimeType: { type: string }
                 size: { type: integer, minimum: 0 }
           description: Kharabu document (optional but at least one document required)
+        audio:
+          oneOf:
+            - type: string
+              format: uri
+              description: Audio file URL (e.g. audio remarks, voice notes)
+            - type: object
+              properties:
+                url: { type: string, format: uri }
+                fileName: { type: string }
+                mimeType: { type: string, description: "e.g. audio/mpeg, audio/wav" }
+                size: { type: integer, minimum: 0 }
+                uploadedAt: { type: string, format: date-time }
+          description: Optional audio file (single file). Can be a URL string or object with url, fileName, mimeType, size, uploadedAt.
+        other_documents:
+          type: array
+          maxItems: 20
+          description: Optional extra documents (e.g. additional PDFs, images). Each item is a URL string or object with url, fileName, mimeType, size, uploadedAt.
+          items:
+            oneOf:
+              - type: string
+                format: uri
+                description: File URL
+              - type: object
+                properties:
+                  url: { type: string, format: uri }
+                  fileName: { type: string }
+                  mimeType: { type: string, description: "e.g. application/pdf, audio/mpeg" }
+                  size: { type: integer, minimum: 0 }
+                  uploadedAt: { type: string, format: date-time }
         others:
           type: string
           maxLength: 2000
-          description: Optional notes (e.g., "If joint flat, provide all survey no. details")
+          description: Optional text notes (e.g. "If joint flat, provide all survey no. details"). Not for file URLs; use other_documents for audio/extra files.
           example: "If joint flat, provide all survey no. details"
+
+    UploadImageRequest:
+      type: object
+      required: [fileName, contentType]
+      description: Request body for image/document upload presigned URL (images and PDFs)
+      properties:
+        fileName:
+          type: string
+          description: Original filename (used in S3 key)
+          example: "sketch.png"
+        contentType:
+          type: string
+          enum: [image/jpeg, image/jpg, image/png, image/gif, image/webp, application/pdf]
+          description: MIME type of the image or PDF document
+        entityId:
+          type: string
+          description: Optional grouping ID (e.g. drawingRequestId, surveyorSketchId)
+        fileSizeBytes:
+          type: integer
+          minimum: 0
+          maximum: 10485760
+          description: File size in bytes (max 10 MB); validated server-side if provided
+        expiresIn:
+          type: integer
+          minimum: 60
+          maximum: 3600
+          description: Presigned URL expiry in seconds (default 900)
+
+    UploadAudioRequest:
+      type: object
+      required: [fileName, contentType]
+      description: Request body for audio upload presigned URL
+      properties:
+        fileName:
+          type: string
+          description: Original filename
+          example: "remark.mp3"
+        contentType:
+          type: string
+          enum: [audio/mpeg, audio/mp3, audio/wav, audio/webm, audio/ogg, audio/m4a, audio/x-m4a]
+          description: MIME type of the audio
+        entityId:
+          type: string
+          description: Optional grouping ID
+        fileSizeBytes:
+          type: integer
+          minimum: 0
+          maximum: 26214400
+          description: File size in bytes (max 25 MB)
+        expiresIn:
+          type: integer
+          minimum: 60
+          maximum: 3600
+          description: Presigned URL expiry in seconds (default 900)
+
+    UploadDeleteRequest:
+      type: object
+      description: Request body for deleting an uploaded file (provide one of key or fileUrl)
+      properties:
+        key:
+          type: string
+          description: S3 object key (from upload response)
+        fileUrl:
+          type: string
+          format: uri
+          description: Public URL of the file (from upload response data.fileUrl)
 
     SurveyorSketchUpload:
       type: object
@@ -2016,13 +2831,36 @@ components:
               uploadedAt:
                 type: string
                 format: date-time
+        audio:
+          type: object
+          nullable: true
+          description: Optional audio file (single file)
+          properties:
+            url: { type: string, format: uri }
+            fileName: { type: string, nullable: true }
+            mimeType: { type: string, nullable: true }
+            size: { type: integer, nullable: true }
+            uploadedAt: { type: string, format: date-time, nullable: true }
+        other_documents:
+          type: array
+          description: Optional extra documents (additional PDFs, images, etc.)
+          items:
+            type: object
+            properties:
+              url: { type: string, format: uri }
+              fileName: { type: string, nullable: true }
+              mimeType: { type: string, nullable: true }
+              size: { type: integer, nullable: true }
+              uploadedAt: { type: string, format: date-time, nullable: true }
         others:
           type: string
           nullable: true
           maxLength: 2000
+          description: Optional text notes (not file URLs)
         status:
           type: string
-          enum: [PENDING, UNDER_REVIEW, APPROVED, REJECTED]
+          description: PENDING when surveyor raises request; ASSIGNED when admin assigns to a CAD center.
+          enum: [PENDING, ASSIGNED, UNDER_REVIEW, APPROVED, REJECTED]
           default: PENDING
         statusNote:
           type: string

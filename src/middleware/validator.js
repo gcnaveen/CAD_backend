@@ -250,18 +250,66 @@ const schemas = {
   },
 
   hobliCreate(body) {
-    requireFields(body, ["code", "name", "taluka"]);
+    requireFields(body, ["code", "name"]);
     const code = String(body.code).trim();
     const name = String(body.name).trim();
-    const taluka = String(body.taluka).trim();
-    if (!code || !name || !taluka) throw new BadRequestError("code, name, and taluka must be non-empty");
-    
-    // District is optional but recommended for unambiguous taluka lookup
-    const district = body.district ? String(body.district).trim() : null;
-    return { code, name, talukaName: taluka, districtName: district, status: optionalStatus(body) };
+    if (!code || !name) throw new BadRequestError("code and name must be non-empty");
+    // Either talukaId or taluka (name) required; districtId/district optional for lookup
+    const talukaId = body.talukaId ? validObjectId(body.talukaId, "talukaId") : undefined;
+    const talukaName = body.taluka ? String(body.taluka).trim() : null;
+    if (!talukaId && !talukaName) {
+      throw new BadRequestError("taluka or talukaId is required");
+    }
+    const districtId = body.districtId ? validObjectId(body.districtId, "districtId") : undefined;
+    const districtName = body.district ? String(body.district).trim() : null;
+    return {
+      code,
+      name,
+      talukaId,
+      talukaName: talukaName || undefined,
+      districtId,
+      districtName: districtName || undefined,
+      status: optionalStatus(body),
+    };
   },
 
   hobliUpdate(body) {
+    const updates = {};
+    if (body.code !== undefined) {
+      updates.code = String(body.code).trim();
+      if (!updates.code) throw new BadRequestError("code must be non-empty");
+    }
+    if (body.name !== undefined) {
+      updates.name = String(body.name).trim();
+      if (!updates.name) throw new BadRequestError("name must be non-empty");
+    }
+    if (body.status !== undefined) updates.status = optionalStatus(body);
+    if (Object.keys(updates).length === 0) {
+      throw new BadRequestError("At least one of code, name, or status is required");
+    }
+    return updates;
+  },
+
+  // -------- Village (under District → Taluka → Hobli) --------
+  villageCreate(body) {
+    requireFields(body, ["code", "name", "district", "taluka", "hobli"]);
+    const code = String(body.code).trim();
+    const name = String(body.name).trim();
+    if (!code || !name) throw new BadRequestError("code and name must be non-empty");
+    const districtId = validObjectId(body.district, "district");
+    const talukaId = validObjectId(body.taluka, "taluka");
+    const hobliId = validObjectId(body.hobli, "hobli");
+    return {
+      code,
+      name,
+      districtId,
+      talukaId,
+      hobliId,
+      status: optionalStatus(body),
+    };
+  },
+
+  villageUpdate(body) {
     const updates = {};
     if (body.code !== undefined) {
       updates.code = String(body.code).trim();
@@ -334,6 +382,81 @@ const schemas = {
       updates.status = s;
     }
     if (body.capacity !== undefined) updates.capacity = body.capacity === null ? null : Number(body.capacity);
+    if (body.availabilityStatus !== undefined) {
+      const a = String(body.availabilityStatus).toUpperCase();
+      const { CAD_CENTER_AVAILABILITY } = require("../config/constants");
+      if (!Object.values(CAD_CENTER_AVAILABILITY).includes(a)) {
+        throw new BadRequestError("availabilityStatus must be AVAILABLE, BUSY, or OFFLINE");
+      }
+      updates.availabilityStatus = a;
+    }
+    if (Object.keys(updates).length === 0) {
+      throw new BadRequestError("At least one field to update is required");
+    }
+    return updates;
+  },
+
+  // -------- Survey Sketch Assignment (admin: assign survey sketch to CAD center) --------
+  surveySketchAssignmentCreate(body) {
+    requireFields(body, ["surveyorSketchUploadId", "cadCenterId"]);
+    const surveyorSketchUploadId = validObjectId(body.surveyorSketchUploadId, "surveyorSketchUploadId");
+    const cadCenterId = validObjectId(body.cadCenterId, "cadCenterId");
+    // assignedToUserId – commented out for now; uncomment if assigning to a specific CAD user is required
+    // const assignedToUserId = body.assignedToUserId ? validObjectId(body.assignedToUserId, "assignedToUserId") : undefined;
+    let dueDate = null;
+    if (body.dueDate != null && body.dueDate !== "") {
+      dueDate = new Date(body.dueDate);
+      if (Number.isNaN(dueDate.getTime())) throw new BadRequestError("dueDate must be a valid date");
+    }
+    const notes = body.notes != null ? String(body.notes).trim().slice(0, 1000) : undefined;
+    return {
+      surveyorSketchUploadId,
+      cadCenterId,
+      // assignedToUserId: assignedToUserId || undefined,
+      dueDate: dueDate || undefined,
+      notes,
+    };
+  },
+
+  /** CAD: respond to assignment – body optional; action "accept" | "reject", default "accept". */
+  cadAssignmentRespond(body) {
+    const action = (body?.action != null && body?.action !== "")
+      ? String(body.action).toLowerCase().trim()
+      : "accept";
+    if (action !== "accept" && action !== "reject") {
+      throw new BadRequestError('action must be "accept" or "reject"', {
+        errors: [{ field: "action", message: "Invalid value" }],
+      });
+    }
+    return { action };
+  },
+
+  surveySketchAssignmentUpdate(body) {
+    const { SURVEY_SKETCH_ASSIGNMENT_STATUS } = require("../config/constants");
+    const updates = {};
+    if (body.status !== undefined) {
+      const s = String(body.status).toUpperCase();
+      if (!Object.values(SURVEY_SKETCH_ASSIGNMENT_STATUS).includes(s)) {
+        throw new BadRequestError(
+          `status must be one of: ${Object.values(SURVEY_SKETCH_ASSIGNMENT_STATUS).join(", ")}`
+        );
+      }
+      updates.status = s;
+    }
+    // assignedToUserId – commented out for now; uncomment if assigning to a specific CAD user is required
+    // if (body.assignedToUserId !== undefined) {
+    //   updates.assignedTo = body.assignedToUserId ? validObjectId(body.assignedToUserId, "assignedToUserId") : null;
+    // }
+    if (body.dueDate !== undefined) {
+      if (body.dueDate === null || body.dueDate === "") {
+        updates.dueDate = null;
+      } else {
+        const d = new Date(body.dueDate);
+        if (Number.isNaN(d.getTime())) throw new BadRequestError("dueDate must be a valid date");
+        updates.dueDate = d;
+      }
+    }
+    if (body.notes !== undefined) updates.notes = String(body.notes).trim().slice(0, 1000) || null;
     if (Object.keys(updates).length === 0) {
       throw new BadRequestError("At least one field to update is required");
     }
@@ -406,6 +529,51 @@ const schemas = {
       }
     }
 
+    // Optional audio: single file (string URL or object with url, fileName?, mimeType?, size?, uploadedAt?)
+    let audio = null;
+    if (body.audio != null && body.audio !== "") {
+      const raw = body.audio;
+      const url = typeof raw === "string" ? raw.trim() : (raw?.url || raw?.path || "").toString().trim();
+      if (url) {
+        audio =
+          typeof raw === "string"
+            ? { url }
+            : {
+                url,
+                fileName: raw.fileName != null ? String(raw.fileName).trim() : null,
+                mimeType: raw.mimeType != null ? String(raw.mimeType).trim() : null,
+                size: raw.size != null ? Number(raw.size) : null,
+                uploadedAt: raw.uploadedAt ? new Date(raw.uploadedAt) : new Date(),
+              };
+      }
+    }
+
+    // Optional other_documents: array of { url, fileName?, mimeType?, size?, uploadedAt? } (extra files, not audio)
+    let other_documents = [];
+    if (Array.isArray(body.other_documents) && body.other_documents.length > 0) {
+      const maxOtherDocs = 20;
+      if (body.other_documents.length > maxOtherDocs) {
+        throw new BadRequestError(`other_documents must have at most ${maxOtherDocs} items`, {
+          errors: [{ field: "other_documents", message: `Max ${maxOtherDocs} items` }],
+        });
+      }
+      for (const raw of body.other_documents) {
+        const url = typeof raw === "string" ? raw.trim() : (raw?.url || raw?.path || "").toString().trim();
+        if (!url) continue;
+        other_documents.push(
+          typeof raw === "string"
+            ? { url }
+            : {
+                url,
+                fileName: raw.fileName != null ? String(raw.fileName).trim() : null,
+                mimeType: raw.mimeType != null ? String(raw.mimeType).trim() : null,
+                size: raw.size != null ? Number(raw.size) : null,
+                uploadedAt: raw.uploadedAt ? new Date(raw.uploadedAt) : new Date(),
+              }
+        );
+      }
+    }
+
     return {
       surveyType,
       district,
@@ -414,7 +582,61 @@ const schemas = {
       village,
       surveyNo,
       documents,
+      audio: audio || undefined,
       others: others || undefined,
+      other_documents: other_documents.length ? other_documents : undefined,
+    };
+  },
+
+  // -------- Upload (image / audio only) --------
+  /** Request body for image upload URL. Required: fileName, contentType. Optional: entityId, fileSizeBytes, expiresIn. */
+  uploadImage(body) {
+    requireFields(body, ["fileName", "contentType"]);
+    const fileName = String(body.fileName || "").trim();
+    if (!fileName) throw new BadRequestError("fileName is required and must be non-empty", { errors: [{ field: "fileName", message: "Required" }] });
+    const contentType = String(body.contentType || "").trim().toLowerCase();
+    if (!contentType) throw new BadRequestError("contentType is required", { errors: [{ field: "contentType", message: "Required" }] });
+    const { UPLOAD_IMAGE_MIME_TYPES } = require("../config/constants");
+    if (!UPLOAD_IMAGE_MIME_TYPES.includes(contentType)) {
+      throw new BadRequestError(`contentType must be one of: ${UPLOAD_IMAGE_MIME_TYPES.join(", ")}`, { errors: [{ field: "contentType", message: "Invalid image type" }] });
+    }
+    return {
+      fileName,
+      contentType,
+      entityId: body.entityId != null ? String(body.entityId).trim() : undefined,
+      fileSizeBytes: body.fileSizeBytes != null ? Number(body.fileSizeBytes) : undefined,
+      expiresIn: body.expiresIn != null ? parseInt(body.expiresIn, 10) : undefined,
+    };
+  },
+
+  /** Request body for audio upload URL. Required: fileName, contentType. Optional: entityId, fileSizeBytes, expiresIn. */
+  uploadAudio(body) {
+    requireFields(body, ["fileName", "contentType"]);
+    const fileName = String(body.fileName || "").trim();
+    if (!fileName) throw new BadRequestError("fileName is required and must be non-empty", { errors: [{ field: "fileName", message: "Required" }] });
+    const contentType = String(body.contentType || "").trim().toLowerCase();
+    if (!contentType) throw new BadRequestError("contentType is required", { errors: [{ field: "contentType", message: "Required" }] });
+    const { UPLOAD_AUDIO_MIME_TYPES } = require("../config/constants");
+    if (!UPLOAD_AUDIO_MIME_TYPES.includes(contentType)) {
+      throw new BadRequestError(`contentType must be one of: ${UPLOAD_AUDIO_MIME_TYPES.join(", ")}`, { errors: [{ field: "contentType", message: "Invalid audio type" }] });
+    }
+    return {
+      fileName,
+      contentType,
+      entityId: body.entityId != null ? String(body.entityId).trim() : undefined,
+      fileSizeBytes: body.fileSizeBytes != null ? Number(body.fileSizeBytes) : undefined,
+      expiresIn: body.expiresIn != null ? parseInt(body.expiresIn, 10) : undefined,
+    };
+  },
+
+  /** Request body for delete. Required: one of key or fileUrl. */
+  uploadDelete(body) {
+    if (!body.key && !body.fileUrl) {
+      throw new BadRequestError("Either key or fileUrl is required", { errors: [{ field: "key", message: "Required if fileUrl not provided" }] });
+    }
+    return {
+      key: body.key != null ? String(body.key).trim() : undefined,
+      fileUrl: body.fileUrl != null ? String(body.fileUrl).trim() : undefined,
     };
   },
 };

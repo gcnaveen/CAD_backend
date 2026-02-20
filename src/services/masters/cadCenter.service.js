@@ -4,6 +4,7 @@
 
 const CadCenter = require("../../models/masters/CadCenter");
 const { NotFoundError, ConflictError, BadRequestError } = require("../../utils/errors");
+const { CAD_CENTER_AVAILABILITY } = require("../../config/constants");
 
 const notDeleted = { deletedAt: null };
 
@@ -15,6 +16,7 @@ function normalizeCreate(payload) {
     contact,
     description,
     status,
+    availabilityStatus,
     capacity,
     metadata,
     createdBy,
@@ -43,6 +45,10 @@ function normalizeCreate(payload) {
     },
     description: description != null ? String(description).trim() : undefined,
     status: status === "INACTIVE" ? "INACTIVE" : "ACTIVE",
+    availabilityStatus:
+      availabilityStatus && Object.values(CAD_CENTER_AVAILABILITY).includes(availabilityStatus)
+        ? availabilityStatus
+        : CAD_CENTER_AVAILABILITY.AVAILABLE,
     capacity: capacity != null ? Number(capacity) : null,
     metadata: metadata ? { establishedDate: metadata.establishedDate, notes: metadata.notes } : undefined,
     createdBy: createdBy || undefined,
@@ -100,24 +106,100 @@ async function getById(id) {
   return doc;
 }
 
-async function list(filters = {}, pagination = null) {
+/** Get CAD center by ID with assignment count and list of assigned drawings (survey sketches). */
+async function getByIdWithAssignments(id, assignmentOptions = {}) {
+  const doc = await CadCenter.findOne({ _id: id, ...notDeleted }).lean();
+  if (!doc) {
+    throw new NotFoundError("CAD center not found", { code: "CAD_CENTER_NOT_FOUND" });
+  }
+  const SurveySketchAssignment = require("../../models/assignment/SurveySketchAssignment");
+  const [countResult, assignments] = await Promise.all([
+    SurveySketchAssignment.aggregate([
+      { $match: { cadCenter: doc._id, status: { $ne: "CANCELLED" } } },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]),
+    SurveySketchAssignment.find({ cadCenter: id, status: { $ne: "CANCELLED" } })
+      .sort({ assignedAt: -1 })
+      .limit(assignmentOptions.limit || 100)
+      .populate("surveyorSketchUpload", "applicationId surveyNo status createdAt")
+      .populate("assignedTo", "name auth")
+      .populate("assignedBy", "name")
+      .lean(),
+  ]);
+  const byStatus = {};
+  let total = 0;
+  countResult.forEach((r) => {
+    byStatus[r._id] = r.count;
+    total += r.count;
+  });
+  return {
+    ...doc,
+    assignmentCount: total,
+    assignmentCountByStatus: byStatus,
+    assignments,
+  };
+}
+
+async function list(filters = {}, pagination = null, options = {}) {
   const query = { ...notDeleted };
   if (filters.status) {
     const s = String(filters.status).toUpperCase();
     if (["ACTIVE", "INACTIVE"].includes(s)) query.status = s;
   }
-
-  const sort = { name: 1 };
-  if (!pagination) {
-    return CadCenter.find(query).sort(sort).lean();
+  if (filters.availabilityStatus) {
+    const a = String(filters.availabilityStatus).toUpperCase();
+    if (Object.values(CAD_CENTER_AVAILABILITY).includes(a)) query.availabilityStatus = a;
   }
 
-  const { skip, limit } = pagination;
-  const [data, total] = await Promise.all([
-    CadCenter.find(query).sort(sort).skip(skip).limit(limit).lean(),
-    CadCenter.countDocuments(query),
-  ]);
-  return { data, total };
+  const sort = { name: 1 };
+  let data;
+  if (!pagination) {
+    data = await CadCenter.find(query).sort(sort).lean();
+  } else {
+    const { skip, limit } = pagination;
+    const [list, total] = await Promise.all([
+      CadCenter.find(query).sort(sort).skip(skip).limit(limit).lean(),
+      CadCenter.countDocuments(query),
+    ]);
+    data = list;
+    if (!options.includeAssignmentCounts) {
+      return { data, total };
+    }
+    const totalCount = total;
+    const centerIds = data.map((c) => c._id);
+    const SurveySketchAssignment = require("../../models/assignment/SurveySketchAssignment");
+    const counts = await SurveySketchAssignment.aggregate([
+      { $match: { cadCenter: { $in: centerIds }, status: { $ne: "CANCELLED" } } },
+      { $group: { _id: "$cadCenter", total: { $sum: 1 } } },
+    ]);
+    const countMap = {};
+    counts.forEach((c) => {
+      countMap[c._id.toString()] = c.total;
+    });
+    data = data.map((center) => ({
+      ...center,
+      assignmentCount: countMap[center._id.toString()] || 0,
+    }));
+    return { data, total: totalCount };
+  }
+
+  if (options.includeAssignmentCounts && data.length > 0) {
+    const centerIds = data.map((c) => c._id);
+    const SurveySketchAssignment = require("../../models/assignment/SurveySketchAssignment");
+    const counts = await SurveySketchAssignment.aggregate([
+      { $match: { cadCenter: { $in: centerIds }, status: { $ne: "CANCELLED" } } },
+      { $group: { _id: "$cadCenter", total: { $sum: 1 } } },
+    ]);
+    const countMap = {};
+    counts.forEach((c) => {
+      countMap[c._id.toString()] = c.total;
+    });
+    data = data.map((center) => ({
+      ...center,
+      assignmentCount: countMap[center._id.toString()] || 0,
+    }));
+  }
+  return data;
 }
 
 async function update(id, updates) {
@@ -127,6 +209,12 @@ async function update(id, updates) {
   }
 
   if (updates.code) updates.code = String(updates.code).toUpperCase();
+  if (
+    updates.availabilityStatus &&
+    !Object.values(CAD_CENTER_AVAILABILITY).includes(updates.availabilityStatus)
+  ) {
+    delete updates.availabilityStatus;
+  }
 
   const existingAddress = center.address && typeof center.address.toObject === "function"
     ? center.address.toObject()
@@ -165,6 +253,7 @@ async function remove(id) {
 module.exports = {
   create,
   getById,
+  getByIdWithAssignments,
   list,
   update,
   remove,

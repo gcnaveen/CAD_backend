@@ -2,10 +2,13 @@ const { connectDB, mongoose } = require("../config/db");
 const authController = require("../controllers/auth.controller");
 const userController = require("../controllers/user.controller");
 const surveyorSketchUploadController = require("../controllers/surveyorSketchUpload.controller");
+const surveySketchAssignmentController = require("../controllers/assignment/surveySketchAssignment.controller");
+const { parsePagination } = require("../utils/pagination");
 const authService = require("../services/auth.service");
 const { validate, schemas, validObjectId } = require("../middleware/validator");
 const { authorize } = require("../middleware/auth.middleware");
-const { USER_ROLES } = require("../config/constants");
+const { USER_ROLES, SURVEY_SKETCH_STATUS } = require("../config/constants");
+const { ok } = require("../utils/response");
 const asyncHandler = require("../utils/asyncHandler");
 const logger = require("../utils/logger");
 const { BadRequestError } = require("../utils/errors");
@@ -22,6 +25,8 @@ function getQueryParams(event) {
     role: q.role,
     status: q.status,
     surveyorId: q.surveyorId,
+    cadCenterId: q.cadCenterId,
+    surveyorSketchUploadId: q.surveyorSketchUploadId,
   };
 }
 
@@ -204,6 +209,81 @@ exports.listSurveyorSketchUploads = asyncHandler(async (event) => {
     limit: q.limit,
     status: q.status,
     surveyorId: q.surveyorId,
+    cadCenterId: q.cadCenterId,
   };
   return await surveyorSketchUploadController.listUploads(user, options);
+});
+
+// -------- Survey Sketch Status options (Admin: for status dropdown) --------
+exports.getSurveySketchStatuses = asyncHandler(async (event) => {
+  await ensureDb();
+  await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  return ok(Object.values(SURVEY_SKETCH_STATUS));
+});
+
+// -------- Survey Sketch Assignment (Admin: assign survey sketch to CAD center) --------
+exports.createSurveySketchAssignment = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const body = validate(schemas.surveySketchAssignmentCreate)(event);
+  return await surveySketchAssignmentController.createAssignment(user, body);
+});
+
+exports.getSurveySketchAssignment = asyncHandler(async (event) => {
+  await ensureDb();
+  await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const { assignmentId } = getPathParams(event);
+  if (!assignmentId) throw new BadRequestError("assignmentId is required");
+  validObjectId(assignmentId, "assignmentId");
+  return await surveySketchAssignmentController.getAssignment(assignmentId);
+});
+
+exports.listSurveySketchesWithAssignments = asyncHandler(async (event) => {
+  await ensureDb();
+  await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const q = event.queryStringParameters || {};
+  const options = { page: q.page, limit: q.limit };
+  return await surveyorSketchUploadController.listAllWithAssignment(options);
+});
+
+// List all survey sketch uploads (SurveyorSketchUpload only). Optional query: status (PENDING, ASSIGNED, etc.).
+exports.listSurveySketchAssignments = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const q = event.queryStringParameters || {};
+  const options = { page: q.page, limit: q.limit };
+  if (q.status != null && q.status !== "") options.status = q.status;
+  return await surveyorSketchUploadController.listUploads(user, options);
+});
+
+exports.listAssignmentsByCadCenter = asyncHandler(async (event) => {
+  await ensureDb();
+  await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const { cadCenterId } = getPathParams(event);
+  if (!cadCenterId) throw new BadRequestError("cadCenterId is required");
+  validObjectId(cadCenterId, "cadCenterId");
+  const q = event.queryStringParameters || {};
+  const options = { page: q.page, limit: q.limit, status: q.status };
+  return await surveySketchAssignmentController.listByCadCenter(cadCenterId, options);
+});
+
+exports.updateSurveySketchAssignment = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const { assignmentId } = getPathParams(event);
+  if (!assignmentId) throw new BadRequestError("assignmentId is required");
+  validObjectId(assignmentId, "assignmentId");
+  const body = validate(schemas.surveySketchAssignmentUpdate)(event);
+  return await surveySketchAssignmentController.updateAssignment(assignmentId, body, user);
+});
+
+// -------- CAD: Accept or reject assignment (ASSIGNED → IN_PROGRESS or CANCELLED) --------
+exports.acceptAssignmentByCad = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.CAD)(event);
+  const { assignmentId } = getPathParams(event);
+  if (!assignmentId) throw new BadRequestError("assignmentId is required");
+  validObjectId(assignmentId, "assignmentId");
+  const payload = validate(schemas.cadAssignmentRespond)(event);
+  return await surveySketchAssignmentController.respondToAssignment(assignmentId, user, payload);
 });

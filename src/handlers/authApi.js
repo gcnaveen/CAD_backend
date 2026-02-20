@@ -52,6 +52,20 @@ exports.handler = asyncHandler(async (event) => {
     case "GET /api/surveyor/sketch-uploads/{uploadId}":
       return authHandler.getSurveyorSketchUpload(event);
 
+    case "GET /api/admin/survey-sketch-statuses":
+      return authHandler.getSurveySketchStatuses(event);
+    case "POST /api/admin/survey-sketch-assignments":
+      return authHandler.createSurveySketchAssignment(event);
+    case "GET /api/admin/survey-sketch-assignments/{assignmentId}":
+      return authHandler.getSurveySketchAssignment(event);
+    case "PATCH /api/admin/survey-sketch-assignments/{assignmentId}":
+      return authHandler.updateSurveySketchAssignment(event);
+    case "GET /api/admin/cad-centers/{cadCenterId}/assignments":
+      return authHandler.listAssignmentsByCadCenter(event);
+
+    case "POST /api/cad/assignments/{assignmentId}/accept":
+      return authHandler.acceptAssignmentByCad(event);
+
     default:
       throw new BadRequestError(`Unsupported route: ${routeKey}`);
   }
