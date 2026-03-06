@@ -94,6 +94,23 @@ const SurveyorSketchUploadSchema = new mongoose.Schema(
       default: () => new Map(),
     },
 
+    /** Required single upload file for this request (URL/object metadata). */
+    singleUpload: {
+      type: SurveyDocumentSchema,
+      required: true,
+    },
+
+    // -------- Document indicator booleans --------
+    // When singleUpload is used, surveyor checks which document types are included.
+    // When separate files are uploaded, the corresponding flag is auto-set to true.
+    is_originaltippani: { type: Boolean, default: false },
+    is_hissatippani: { type: Boolean, default: false },
+    is_atlas: { type: Boolean, default: false },
+    is_rrpakkabook: { type: Boolean, default: false },
+    is_akarabandu: { type: Boolean, default: false },
+    is_kharabuttar: { type: Boolean, default: false },
+    is_mulapatra: { type: Boolean, default: false },
+
     /** Optional audio file (e.g. audio remarks, voice notes). Single file: url, fileName?, mimeType?, size?, uploadedAt?. */
     audio: {
       type: SurveyDocumentSchema,
@@ -150,23 +167,6 @@ SurveyorSketchUploadSchema.index({ surveyor: 1, status: 1, createdAt: -1 });
 SurveyorSketchUploadSchema.index({ status: 1, createdAt: -1 });
 SurveyorSketchUploadSchema.index({ district: 1, taluka: 1, hobli: 1, village: 1 });
 SurveyorSketchUploadSchema.index({ surveyNo: 1, village: 1 });
-
-// -------- Validation: at least one document required --------
-SurveyorSketchUploadSchema.pre("validate", function (next) {
-  const docKeys = Array.from(this.documents?.keys() ?? []);
-  const validKeys = SURVEY_SKETCH_DOCUMENT_KEYS.filter((k) => docKeys.includes(k));
-  const hasAtLeastOne = validKeys.some(
-    (k) => this.documents.get(k)?.url
-  );
-  if (!hasAtLeastOne) {
-    return next(
-      new Error(
-        "At least one survey document (moolaTippani, hissaTippani, atlas, rrPakkabook, kharabu) is required"
-      )
-    );
-  }
-  next();
-});
 
 // -------- Auto-generate applicationId before save --------
 SurveyorSketchUploadSchema.pre("save", async function (next) {
