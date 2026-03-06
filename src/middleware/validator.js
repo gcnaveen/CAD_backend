@@ -466,13 +466,13 @@ const schemas = {
   // -------- Surveyor Sketch Upload --------
   /**
    * Create surveyor sketch upload (survey info + document URLs).
-   * Required: surveyType, district, taluka, hobli, village, surveyNo.
-   * At least one document (moolaTippani, hissaTippani, atlas, rrPakkabook, kharabu) with a non-empty url.
+   * Required: surveyType, district, taluka, hobli, village, surveyNo, singleUpload.
+   * Note: media document fields are optional.
    * Optional: others (string, max 2000). surveyor is set from auth, not body.
    */
   surveyorSketchUploadCreate(body) {
     const { SURVEY_SKETCH_DOCUMENT_KEYS } = require("../config/constants");
-    requireFields(body, ["surveyType", "district", "taluka", "hobli", "village", "surveyNo"]);
+    requireFields(body, ["surveyType", "district", "taluka", "hobli", "village", "surveyNo", "singleUpload"]);
 
     const surveyType = String(body.surveyType).toLowerCase().trim();
     if (!["joint_flat", "single_flat"].includes(surveyType)) {
@@ -493,14 +493,12 @@ const schemas = {
       });
     }
 
-    let hasDocument = false;
     const documents = {};
     for (const key of SURVEY_SKETCH_DOCUMENT_KEYS) {
       const raw = body[key];
       if (raw == null || raw === "") continue;
       const url = typeof raw === "string" ? raw.trim() : (raw.url || raw.path || "").toString().trim();
       if (!url) continue;
-      hasDocument = true;
       documents[key] =
         typeof raw === "string"
           ? { url }
@@ -512,12 +510,26 @@ const schemas = {
               uploadedAt: raw.uploadedAt ? new Date(raw.uploadedAt) : new Date(),
             };
     }
-    if (!hasDocument) {
-      throw new BadRequestError(
-        "At least one survey document is required (moolaTippani, hissaTippani, atlas, rrPakkabook, or kharabu with a non-empty url)",
-        { errors: [{ field: "documents", message: "At least one document URL required" }] }
-      );
+    const singleUploadRaw = body.singleUpload;
+    const singleUploadUrl =
+      typeof singleUploadRaw === "string"
+        ? singleUploadRaw.trim()
+        : (singleUploadRaw?.url || singleUploadRaw?.path || "").toString().trim();
+    if (!singleUploadUrl) {
+      throw new BadRequestError("singleUpload is required and must have a non-empty url", {
+        errors: [{ field: "singleUpload", message: "Required" }],
+      });
     }
+    const singleUpload =
+      typeof singleUploadRaw === "string"
+        ? { url: singleUploadUrl }
+        : {
+            url: singleUploadUrl,
+            fileName: singleUploadRaw.fileName != null ? String(singleUploadRaw.fileName).trim() : null,
+            mimeType: singleUploadRaw.mimeType != null ? String(singleUploadRaw.mimeType).trim() : null,
+            size: singleUploadRaw.size != null ? Number(singleUploadRaw.size) : null,
+            uploadedAt: singleUploadRaw.uploadedAt ? new Date(singleUploadRaw.uploadedAt) : new Date(),
+          };
 
     let others = null;
     if (body.others != null && body.others !== "") {
@@ -574,6 +586,38 @@ const schemas = {
       }
     }
 
+    // Document indicator booleans.
+    // Map from document key → boolean field name for auto-derivation.
+    const DOC_KEY_TO_FLAG = {
+      moolaTippani: "is_originaltippani",
+      hissaTippani: "is_hissatippani",
+      atlas: "is_atlas",
+      rrPakkabook: "is_rrpakkabook",
+      kharabu: "is_kharabuttar",
+    };
+
+    const INDICATOR_FIELDS = [
+      "is_originaltippani",
+      "is_hissatippani",
+      "is_atlas",
+      "is_rrpakkabook",
+      "is_akarabandu",
+      "is_kharabuttar",
+      "is_mulapatra",
+    ];
+
+    const indicators = {};
+    for (const field of INDICATOR_FIELDS) {
+      indicators[field] = body[field] === true || body[field] === "true";
+    }
+
+    // Auto-set to true when the corresponding separate file was uploaded
+    for (const [docKey, flagName] of Object.entries(DOC_KEY_TO_FLAG)) {
+      if (documents[docKey]) {
+        indicators[flagName] = true;
+      }
+    }
+
     return {
       surveyType,
       district,
@@ -582,6 +626,8 @@ const schemas = {
       village,
       surveyNo,
       documents,
+      singleUpload,
+      ...indicators,
       audio: audio || undefined,
       others: others || undefined,
       other_documents: other_documents.length ? other_documents : undefined,

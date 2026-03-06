@@ -1290,8 +1290,9 @@ paths:
         - `surveyType`: `joint_flat` or `single_flat`
         - `district`, `taluka`, `hobli`, `village`: ObjectIds from masters
         - `surveyNo`: Survey number string
-        - At least one document URL: `moolaTippani`, `hissaTippani`, `atlas`, `rrPakkabook`, or `kharabu`
-        **Optional:** `audio` (single audio file: URL string or object with url, fileName, mimeType, size); `other_documents` (array of extra files, e.g. PDFs or images; each item is a URL string or object with url, fileName, mimeType, size); `others` (string, max 2000 chars) for text notes.
+        - `singleUpload`: single upload file (URL string or object with `url`, `fileName`, `mimeType`, `size`)
+        **Optional:** media document fields (`moolaTippani`, `hissaTippani`, `atlas`, `rrPakkabook`, `kharabu`), checklist flags (`is_originaltippani`, `is_hissatippani`, `is_atlas`, `is_rrpakkabook`, `is_akarabandu`, `is_kharabuttar`, `is_mulapatra`), `audio` (single audio file), `other_documents` (array of extra files), `others` (text notes, max 2000 chars).
+        **Checklist behavior:** If `singleUpload` is used, send the `is_*` flags as `true/false` based on what is present in the single document. If separate files are uploaded for known keys, corresponding `is_*` flags are auto-set to `true` by backend.
       operationId: createSurveyorSketchUpload
       security:
         - bearerAuth: []
@@ -1308,6 +1309,14 @@ paths:
               hobli: "507f1f77bcf86cd799439014"
               village: "507f1f77bcf86cd799439015"
               surveyNo: "123"
+              singleUpload: "https://storage.example.com/documents/single-upload.pdf"
+              is_originaltippani: true
+              is_hissatippani: true
+              is_atlas: true
+              is_rrpakkabook: false
+              is_akarabandu: false
+              is_kharabuttar: false
+              is_mulapatra: false
               moolaTippani: "https://storage.example.com/documents/moola.pdf"
               hissaTippani:
                 url: "https://storage.example.com/documents/hissa.pdf"
@@ -1348,6 +1357,11 @@ paths:
                   hobli: { _id: "507f1f77bcf86cd799439014", code: "HEBBAL", name: "Hebbal" }
                   village: { _id: "507f1f77bcf86cd799439015", code: "V001", name: "Village 1" }
                   surveyNo: "123"
+                  singleUpload:
+                    url: "https://storage.example.com/documents/single-upload.pdf"
+                    fileName: null
+                    mimeType: null
+                    size: null
                   documents:
                     moolaTippani:
                       url: "https://storage.example.com/documents/moola.pdf"
@@ -1370,6 +1384,13 @@ paths:
                       mimeType: null
                       size: null
                   others: "If joint flat, provide all survey no. details"
+                  is_originaltippani: true
+                  is_hissatippani: true
+                  is_atlas: true
+                  is_rrpakkabook: false
+                  is_akarabandu: false
+                  is_kharabuttar: false
+                  is_mulapatra: false
                   status: PENDING
                   createdAt: "2026-02-18T10:30:00.000Z"
                   updatedAt: "2026-02-18T10:30:00.000Z"
@@ -2551,10 +2572,10 @@ components:
 
     SurveyorSketchUploadCreateRequest:
       type: object
-      required: [surveyType, district, taluka, hobli, village, surveyNo]
+      required: [surveyType, district, taluka, hobli, village, surveyNo, singleUpload]
       description: |
-        At least one document URL is required (moolaTippani, hissaTippani, atlas, rrPakkabook, or kharabu).
-        Document values can be a string URL or an object with url, fileName, mimeType, size.
+        singleUpload is required (URL string or object with url, fileName, mimeType, size).
+        Media document fields are optional: moolaTippani, hissaTippani, atlas, rrPakkabook, kharabu.
         Optional: audio (single audio file), other_documents (array of extra files, e.g. PDFs or images), others (text notes, max 2000 chars).
       properties:
         surveyType:
@@ -2583,6 +2604,18 @@ components:
           minLength: 1
           description: Survey number
           example: "123"
+        singleUpload:
+          oneOf:
+            - type: string
+              format: uri
+              description: Document URL
+            - type: object
+              properties:
+                url: { type: string, format: uri }
+                fileName: { type: string }
+                mimeType: { type: string }
+                size: { type: integer, minimum: 0 }
+          description: Required single upload file (URL or document object)
         moolaTippani:
           oneOf:
             - type: string
@@ -2594,7 +2627,7 @@ components:
                 fileName: { type: string }
                 mimeType: { type: string }
                 size: { type: integer, minimum: 0 }
-          description: Moola Tippani document (optional but at least one document required)
+          description: Moola Tippani document (optional)
         hissaTippani:
           oneOf:
             - type: string
@@ -2606,7 +2639,7 @@ components:
                 fileName: { type: string }
                 mimeType: { type: string }
                 size: { type: integer, minimum: 0 }
-          description: Hissa Tippani document (optional but at least one document required)
+          description: Hissa Tippani document (optional)
         atlas:
           oneOf:
             - type: string
@@ -2618,7 +2651,7 @@ components:
                 fileName: { type: string }
                 mimeType: { type: string }
                 size: { type: integer, minimum: 0 }
-          description: Atlas document (optional but at least one document required)
+          description: Atlas document (optional)
         rrPakkabook:
           oneOf:
             - type: string
@@ -2630,7 +2663,7 @@ components:
                 fileName: { type: string }
                 mimeType: { type: string }
                 size: { type: integer, minimum: 0 }
-          description: RR Pakkabook document (optional but at least one document required)
+          description: RR Pakkabook document (optional)
         kharabu:
           oneOf:
             - type: string
@@ -2642,7 +2675,7 @@ components:
                 fileName: { type: string }
                 mimeType: { type: string }
                 size: { type: integer, minimum: 0 }
-          description: Kharabu document (optional but at least one document required)
+          description: Kharabu document (optional)
         audio:
           oneOf:
             - type: string
@@ -2677,6 +2710,34 @@ components:
           maxLength: 2000
           description: Optional text notes (e.g. "If joint flat, provide all survey no. details"). Not for file URLs; use other_documents for audio/extra files.
           example: "If joint flat, provide all survey no. details"
+        is_originaltippani:
+          type: boolean
+          default: false
+          description: "Indicates original tippani is included. Auto-set to true when moolaTippani document is uploaded separately."
+        is_hissatippani:
+          type: boolean
+          default: false
+          description: "Indicates hissa tippani is included. Auto-set to true when hissaTippani document is uploaded separately."
+        is_atlas:
+          type: boolean
+          default: false
+          description: "Indicates atlas is included. Auto-set to true when atlas document is uploaded separately."
+        is_rrpakkabook:
+          type: boolean
+          default: false
+          description: "Indicates RR pakka book is included. Auto-set to true when rrPakkabook document is uploaded separately."
+        is_akarabandu:
+          type: boolean
+          default: false
+          description: "Indicates akarabandu is included. Sent by user when using singleUpload."
+        is_kharabuttar:
+          type: boolean
+          default: false
+          description: "Indicates kharabu / kharabuttar is included. Auto-set to true when kharabu document is uploaded separately."
+        is_mulapatra:
+          type: boolean
+          default: false
+          description: "Indicates mulapatra is included. Sent by user when using singleUpload."
 
     UploadImageRequest:
       type: object
@@ -2831,6 +2892,15 @@ components:
               uploadedAt:
                 type: string
                 format: date-time
+        singleUpload:
+          type: object
+          description: Required single upload file
+          properties:
+            url: { type: string, format: uri }
+            fileName: { type: string, nullable: true }
+            mimeType: { type: string, nullable: true }
+            size: { type: integer, nullable: true }
+            uploadedAt: { type: string, format: date-time, nullable: true }
         audio:
           type: object
           nullable: true
@@ -2857,6 +2927,34 @@ components:
           nullable: true
           maxLength: 2000
           description: Optional text notes (not file URLs)
+        is_originaltippani:
+          type: boolean
+          default: false
+          description: "Indicates original tippani is included"
+        is_hissatippani:
+          type: boolean
+          default: false
+          description: "Indicates hissa tippani is included"
+        is_atlas:
+          type: boolean
+          default: false
+          description: "Indicates atlas is included"
+        is_rrpakkabook:
+          type: boolean
+          default: false
+          description: "Indicates RR pakka book is included"
+        is_akarabandu:
+          type: boolean
+          default: false
+          description: "Indicates akarabandu is included"
+        is_kharabuttar:
+          type: boolean
+          default: false
+          description: "Indicates kharabu/kharabuttar is included"
+        is_mulapatra:
+          type: boolean
+          default: false
+          description: "Indicates mulapatra is included"
         status:
           type: string
           description: PENDING when surveyor raises request; ASSIGNED when admin assigns to a CAD center.
