@@ -19,7 +19,7 @@ const MAX_LIMIT = 100;
 
 /**
  * Create a new survey sketch upload. Surveyor must be the authenticated user.
- * @param {Object} surveyor - Authenticated user (must have role SURVEYOR)
+ * @param {Object} surveyor - Authenticated user (must h ave role SURVEYOR)
  * @param {Object} payload - Validated payload from schemas.surveyorSketchUploadCreate
  * @returns {Promise<Object>} Created document (with populated refs if needed)
  */

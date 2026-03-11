@@ -85,20 +85,6 @@ const SURVEY_SKETCH_ACCEPT_TYPES = Object.freeze([
 ]);
 const SURVEY_SKETCH_ACCEPT_EXTENSIONS = Object.freeze([".pdf", ".jpg", ".jpeg", ".png", ".webp"]);
 
-/** Quote booking type. */
-const QUOTE_BOOKING_TYPE = Object.freeze({
-  VENUE_BUYOUT: "venue_buyout",
-  SPACE_BUYOUT: "space_buyout",
-});
-
-/** Quote lifecycle status. */
-const QUOTE_STATUS = Object.freeze({
-  DRAFT: "draft",
-  SHARED: "shared",
-  ACCEPTED: "accepted",
-  REJECTED: "rejected",
-});
-
 const HTTP_STATUS = Object.freeze({
   OK: 200,
   CREATED: 201,
@@ -161,8 +147,6 @@ module.exports = {
   SURVEY_SKETCH_DOCUMENT_KEYS,
   SURVEY_SKETCH_ACCEPT_TYPES,
   SURVEY_SKETCH_ACCEPT_EXTENSIONS,
-  QUOTE_BOOKING_TYPE,
-  QUOTE_STATUS,
   UPLOAD_MEDIA_TYPE,
   UPLOAD_IMAGE_MIME_TYPES,
   UPLOAD_AUDIO_MIME_TYPES,
