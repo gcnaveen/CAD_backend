@@ -66,6 +66,15 @@ exports.handler = asyncHandler(async (event) => {
     case "POST /api/cad/assignments/{assignmentId}/accept":
       return authHandler.acceptAssignmentByCad(event);
 
+    case "POST /api/quotes":
+      return authHandler.createQuote(event);
+    case "GET /api/quotes":
+      return authHandler.listQuotes(event);
+    case "GET /api/quotes/{quoteId}":
+      return authHandler.getQuote(event);
+    case "PATCH /api/quotes/{quoteId}":
+      return authHandler.patchQuote(event);
+
     default:
       throw new BadRequestError(`Unsupported route: ${routeKey}`);
   }

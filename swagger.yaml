@@ -43,6 +43,8 @@ tags:
     description: Admin assigns survey sketches to CAD centers; view assignments and center availability
   - name: CAD - Assignments
     description: CAD user accepts assigned work (ASSIGNED → IN_PROGRESS)
+  - name: Quotes
+    description: Quote builder APIs with draft/confirm workflow
   - name: Upload
     description: S3 presigned URLs for images and audio (bucket caddrawing)
   - name: Health
@@ -1495,6 +1497,198 @@ paths:
                     example: true
                   data:
                     $ref: "#/components/schemas/SurveyorSketchUpload"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # -------- Quotes --------
+  /api/quotes:
+    post:
+      tags: [Quotes]
+      summary: Create Quote
+      description: |
+        Create a quote using quote builder payload.
+        Set `draft=true, confirmed=false` for Save Draft.
+        Set `draft=false, confirmed=true` for Confirm Book.
+      operationId: createQuote
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuoteCreateRequest"
+            example:
+              leadId: "69b11a75b014e71dc485f735"
+              venueId: "69afc2df3235f0510b471102"
+              bookingType: venue_buyout
+              eventWindow:
+                startAt: "2026-03-11T07:31:00.000Z"
+                endAt: "2026-03-12T07:31:00.000Z"
+                durationHours: 24
+              pricing:
+                basePrice: 1000000
+                inclusions:
+                  - name: Generator
+                    quantity: 1
+                    maxQuantity: 1
+                addons:
+                  - name: Chairs
+                    quantity: 10
+                    unitPrice: 100
+                gstRate: 0.18
+                discount: 0
+                totals:
+                  venueBase: 1000000
+                  venueGst: 180000
+                  addonTotal: 1000
+                  addonGst: 180
+                  subtotal: 1181180
+                  discount: 0
+                  total: 1181180
+              draft: true
+              confirmed: false
+      responses:
+        "201":
+          description: Quote created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/Quote" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    get:
+      tags: [Quotes]
+      summary: List Quotes
+      description: |
+        List quotes with pagination and filters.
+        Non-admin users only see quotes created by themselves.
+      operationId: listQuotes
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+        - name: leadId
+          in: query
+          schema: { type: string }
+        - name: venueId
+          in: query
+          schema: { type: string }
+        - name: bookingType
+          in: query
+          schema:
+            type: string
+            enum: [venue_buyout, space_buyout]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, shared, accepted, rejected]
+        - name: draft
+          in: query
+          schema: { type: boolean }
+        - name: confirmed
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Quotes list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Quote"
+                  meta:
+                    type: object
+                    properties:
+                      pagination:
+                        type: object
+                        properties:
+                          page: { type: integer, example: 1 }
+                          limit: { type: integer, example: 20 }
+                          total: { type: integer, example: 10 }
+                          totalPages: { type: integer, example: 1 }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/quotes/{quoteId}:
+    parameters:
+      - name: quoteId
+        in: path
+        required: true
+        schema: { type: string }
+        description: Quote ObjectId
+    get:
+      tags: [Quotes]
+      summary: Get Quote by ID
+      operationId: getQuote
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Quote details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/Quote" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Quotes]
+      summary: Update Quote (draft/confirm and edits)
+      description: |
+        Partial update for quote fields.
+        To confirm a draft use payload: `{ "confirmed": true, "draft": false }`.
+      operationId: patchQuote
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuotePatchRequest"
+            example:
+              confirmed: true
+              draft: false
+      responses:
+        "200":
+          description: Quote updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/Quote" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":

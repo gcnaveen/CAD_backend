@@ -126,6 +126,18 @@ functions:
       - httpApi:
           path: /api/cad/assignments/{assignmentId}/accept
           method: post
+      - httpApi:
+          path: /api/quotes
+          method: post
+      - httpApi:
+          path: /api/quotes
+          method: get
+      - httpApi:
+          path: /api/quotes/{quoteId}
+          method: get
+      - httpApi:
+          path: /api/quotes/{quoteId}
+          method: patch
 
   testApi:
     handler: src/handlers/testApi.handler

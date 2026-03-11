@@ -3,6 +3,7 @@ const authController = require("../controllers/auth.controller");
 const userController = require("../controllers/user.controller");
 const surveyorSketchUploadController = require("../controllers/surveyorSketchUpload.controller");
 const surveySketchAssignmentController = require("../controllers/assignment/surveySketchAssignment.controller");
+const quoteController = require("../controllers/quote/quote.controller");
 const { parsePagination } = require("../utils/pagination");
 const authService = require("../services/auth.service");
 const { validate, schemas, validObjectId } = require("../middleware/validator");
@@ -27,6 +28,11 @@ function getQueryParams(event) {
     surveyorId: q.surveyorId,
     cadCenterId: q.cadCenterId,
     surveyorSketchUploadId: q.surveyorSketchUploadId,
+    leadId: q.leadId,
+    venueId: q.venueId,
+    bookingType: q.bookingType,
+    draft: q.draft,
+    confirmed: q.confirmed,
   };
 }
 
@@ -286,4 +292,49 @@ exports.acceptAssignmentByCad = asyncHandler(async (event) => {
   validObjectId(assignmentId, "assignmentId");
   const payload = validate(schemas.cadAssignmentRespond)(event);
   return await surveySketchAssignmentController.respondToAssignment(assignmentId, user, payload);
+});
+
+// -------- Quotes --------
+exports.createQuote = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN, USER_ROLES.CAD, USER_ROLES.SURVEYOR)(event);
+  const body = validate(schemas.quoteCreate)(event);
+  return await quoteController.createQuote(user, body);
+});
+
+exports.getQuote = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN, USER_ROLES.CAD, USER_ROLES.SURVEYOR)(event);
+  const { quoteId } = getPathParams(event);
+  if (!quoteId) throw new BadRequestError("quoteId is required");
+  validObjectId(quoteId, "quoteId");
+  return await quoteController.getQuote(user, quoteId);
+});
+
+exports.listQuotes = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN, USER_ROLES.CAD, USER_ROLES.SURVEYOR)(event);
+  const q = getQueryParams(event);
+  const query = {
+    page: q.page,
+    limit: q.limit,
+    leadId: q.leadId,
+    venueId: q.venueId,
+    bookingType: q.bookingType,
+    status: q.status,
+    createdBy: (event.queryStringParameters || {}).createdBy,
+  };
+  if (q.draft != null && q.draft !== "") query.draft = q.draft === "true";
+  if (q.confirmed != null && q.confirmed !== "") query.confirmed = q.confirmed === "true";
+  return await quoteController.listQuotes(user, query);
+});
+
+exports.patchQuote = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN, USER_ROLES.CAD, USER_ROLES.SURVEYOR)(event);
+  const { quoteId } = getPathParams(event);
+  if (!quoteId) throw new BadRequestError("quoteId is required");
+  validObjectId(quoteId, "quoteId");
+  const body = validate(schemas.quotePatch)(event);
+  return await quoteController.patchQuote(user, quoteId, body);
 });
