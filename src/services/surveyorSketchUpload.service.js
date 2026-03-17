@@ -9,9 +9,13 @@ const District = require("../models/masters/District");
 const Taluka = require("../models/masters/Taluka");
 const Hobli = require("../models/masters/Hobli");
 const Village = require("../models/masters/Village");
+const surveySketchAssignmentService = require("./assignment/surveySketchAssignment.service");
+const flowService = require("./config/surveySketchAssignmentFlow.service");
+const notificationService = require("./notification.service");
 const { USER_ROLES } = require("../config/constants");
 const { ForbiddenError, NotFoundError, BadRequestError } = require("../utils/errors");
 const mongoose = require("mongoose");
+const logger = require("../utils/logger");
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 20;
@@ -74,46 +78,99 @@ async function create(surveyor, payload) {
     });
   }
 
-  const doc = new SurveyorSketchUpload({
-    surveyor: surveyor._id,
-    surveyType: payload.surveyType,
-    district: payload.district,
-    taluka: payload.taluka,
-    hobli: payload.hobli,
-    village: payload.village,
-    surveyNo: payload.surveyNo,
-    documents: new Map(Object.entries(payload.documents)),
-    singleUpload: payload.singleUpload,
-    is_originaltippani: payload.is_originaltippani || false,
-    is_hissatippani: payload.is_hissatippani || false,
-    is_atlas: payload.is_atlas || false,
-    is_rrpakkabook: payload.is_rrpakkabook || false,
-    is_akarabandu: payload.is_akarabandu || false,
-    is_kharabuttar: payload.is_kharabuttar || false,
-    is_mulapatra: payload.is_mulapatra || false,
-    audio: payload.audio || null,
-    other_documents: Array.isArray(payload.other_documents) ? payload.other_documents : [],
-    others: payload.others ?? null,
-  });
+  const createDoc = () =>
+    new SurveyorSketchUpload({
+      surveyor: surveyor._id,
+      surveyType: payload.surveyType,
+      district: payload.district,
+      taluka: payload.taluka,
+      hobli: payload.hobli,
+      village: payload.village,
+      surveyNo: payload.surveyNo,
+      documents: new Map(Object.entries(payload.documents || {})),
+      singleUpload: payload.singleUpload,
+      is_originaltippani: payload.is_originaltippani || false,
+      is_hissatippani: payload.is_hissatippani || false,
+      is_atlas: payload.is_atlas || false,
+      is_rrpakkabook: payload.is_rrpakkabook || false,
+      is_akarabandu: payload.is_akarabandu || false,
+      is_kharabuttar: payload.is_kharabuttar || false,
+      is_mulapatra: payload.is_mulapatra || false,
+      audio: payload.audio || null,
+      other_documents: Array.isArray(payload.other_documents) ? payload.other_documents : [],
+      others: payload.others ?? null,
+    });
 
-  try {
-    await doc.save();
-    return doc.toJSON ? doc.toJSON() : doc;
-  } catch (err) {
-    // Handle Mongoose validation errors
-    if (err.name === "ValidationError") {
-      const errors = Object.values(err.errors || {}).map((e) => ({
-        field: e.path,
-        message: e.message,
-      }));
-      throw new BadRequestError("Validation failed", { code: "VALIDATION_ERROR", errors });
+  const MAX_RETRIES = 4;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
+    const doc = createDoc();
+    try {
+      await doc.save();
+      try {
+        const flow = await flowService.getAutoAssignState();
+        if (flow.enabled) {
+          await surveySketchAssignmentService.autoAssignFromFlow(doc._id, flow.updatedBy);
+        }
+      } catch (autoAssignError) {
+        // Do not fail sketch submission if auto-assign logic fails.
+        logger.error("Auto assignment flow failed after sketch creation", autoAssignError, {
+          surveyorSketchUploadId: String(doc._id),
+        });
+      }
+
+      const latest = await SurveyorSketchUpload.findById(doc._id).lean();
+      try {
+        const targetUsers = [surveyor._id];
+        await notificationService.create({
+          type: "SURVEY_SKETCH_UPLOADED",
+          title: "Survey sketch uploaded",
+          message: `Sketch ${latest?.applicationId || doc.applicationId || ""} uploaded and submitted.`,
+          entityType: "SurveyorSketchUpload",
+          entityId: doc._id,
+          targetRoles: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN],
+          targetUsers,
+          createdBy: surveyor._id,
+          data: {
+            surveyNo: latest?.surveyNo || doc.surveyNo,
+            status: latest?.status || doc.status,
+          },
+        });
+      } catch (notificationError) {
+        logger.error("Failed to create upload notification", notificationError, {
+          surveyorSketchUploadId: String(doc._id),
+        });
+      }
+
+      return latest || (doc.toJSON ? doc.toJSON() : doc);
+    } catch (err) {
+      const isDuplicateApplicationId =
+        err?.code === 11000 &&
+        (err?.keyPattern?.applicationId || err?.keyValue?.applicationId || String(err?.message || "").includes("applicationId"));
+
+      if (isDuplicateApplicationId && attempt < MAX_RETRIES) {
+        // Retry with a fresh document so pre-save regenerates applicationId.
+        continue;
+      }
+
+      // Handle Mongoose validation errors
+      if (err.name === "ValidationError") {
+        const errors = Object.values(err.errors || {}).map((e) => ({
+          field: e.path,
+          message: e.message,
+        }));
+        throw new BadRequestError("Validation failed", { code: "VALIDATION_ERROR", errors });
+      }
+      // Handle applicationId generation errors from pre-save hook
+      if (err.message?.includes("applicationId") || err.message?.includes("District") || err.message?.includes("Taluka")) {
+        throw new BadRequestError(err.message, { code: "APPLICATION_ID_GENERATION_FAILED" });
+      }
+      throw err;
     }
-    // Handle applicationId generation errors from pre-save hook
-    if (err.message?.includes("applicationId") || err.message?.includes("District") || err.message?.includes("Taluka")) {
-      throw new BadRequestError(err.message, { code: "APPLICATION_ID_GENERATION_FAILED" });
-    }
-    throw err;
   }
+
+  throw new BadRequestError("Failed to create survey sketch upload after retries", {
+    code: "APPLICATION_ID_GENERATION_FAILED",
+  });
 }
 
 /**

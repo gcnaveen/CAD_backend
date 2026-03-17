@@ -51,6 +51,16 @@ exports.handler = asyncHandler(async (event) => {
       return authHandler.listSurveyorSketchUploads(event);
     case "GET /api/surveyor/sketch-uploads/{uploadId}":
       return authHandler.getSurveyorSketchUpload(event);
+    case "POST /api/surveyor/sketch-drafts":
+      return authHandler.createSurveyDraft(event);
+    case "GET /api/surveyor/sketch-drafts":
+      return authHandler.listSurveyDrafts(event);
+    case "GET /api/surveyor/sketch-drafts/{draftId}":
+      return authHandler.getSurveyDraft(event);
+    case "PATCH /api/surveyor/sketch-drafts/{draftId}":
+      return authHandler.updateSurveyDraft(event);
+    case "DELETE /api/surveyor/sketch-drafts/{draftId}":
+      return authHandler.deleteSurveyDraft(event);
 
     case "GET /api/admin/survey-sketch-statuses":
       return authHandler.getSurveySketchStatuses(event);
@@ -65,6 +75,18 @@ exports.handler = asyncHandler(async (event) => {
 
     case "POST /api/cad/assignments/{assignmentId}/accept":
       return authHandler.acceptAssignmentByCad(event);
+    case "GET /api/admin/survey-sketch-assignment-flow":
+      return authHandler.getSurveySketchAssignmentFlow(event);
+    case "PATCH /api/admin/survey-sketch-assignment-flow":
+      return authHandler.updateSurveySketchAssignmentFlow(event);
+    case "GET /api/notifications":
+      return authHandler.listNotifications(event);
+    case "GET /api/notifications/{notificationId}":
+      return authHandler.getNotification(event);
+    case "POST /api/notifications/{notificationId}/read":
+      return authHandler.markNotificationRead(event);
+    case "POST /api/notifications/read-all":
+      return authHandler.markAllNotificationsRead(event);
 
     default:
       throw new BadRequestError(`Unsupported route: ${routeKey}`);

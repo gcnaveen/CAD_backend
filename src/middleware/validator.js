@@ -53,17 +53,38 @@ function validate(schemaFn) {
   };
 }
 
+function validateExact4Password(password, field = "password") {
+  if (typeof password !== "string" || password.length !== 4) {
+    throw new BadRequestError(`${field} must be exactly 4 characters`, {
+      errors: [{ field, message: "Must be exactly 4 characters" }],
+    });
+  }
+}
+
 const schemas = {
-  /** Super Admin: firstName, email, password. lastName optional. */
+  /** Super Admin: fullName, email, password. */
   superAdminRegister(body) {
-    requireFields(body, ["firstName", "email", "password"]);
-    return body;
+    requireFields(body, ["fullName", "email", "password"]);
+    validateExact4Password(body.password, "password");
+    const fullName = String(body.fullName || "").trim();
+    if (!fullName) {
+      throw new BadRequestError("fullName is required and must be non-empty", {
+        errors: [{ field: "fullName", message: "Required" }],
+      });
+    }
+    return { ...body, fullName };
   },
 
-  /** Surveyor start: phone + name. lastName optional. */
+  /** Surveyor start: phone + fullName. */
   surveyorStart(body) {
-    requireFields(body, ["phone", "firstName"]);
-    return body;
+    requireFields(body, ["phone", "fullName"]);
+    const fullName = String(body.fullName || "").trim();
+    if (!fullName) {
+      throw new BadRequestError("fullName is required and must be non-empty", {
+        errors: [{ field: "fullName", message: "Required" }],
+      });
+    }
+    return { ...body, fullName };
   },
 
   /** Surveyor verify: phone + otp only. */
@@ -75,6 +96,7 @@ const schemas = {
   /** Surveyor complete registration: phone + password + profile (all required). */
   surveyorCompleteRegistration(body) {
     requireFields(body, ["phone", "password", "district", "taluka", "category"]);
+    validateExact4Password(body.password, "password");
     const category = String(body.category).toUpperCase();
     if (category !== "PUBLIC" && category !== "SURVEYOR") {
       throw new BadRequestError("category must be PUBLIC or SURVEYOR");
@@ -101,12 +123,12 @@ const schemas = {
 
   /**
    * Create user (Admin / CAD / Surveyor). Caller's role is enforced in service.
-   * - ADMIN: email, password, firstName (lastName optional).
-   * - CAD: email, password, firstName (lastName, cadCenter optional; cadCenter can be set later via patch).
-   * - SURVEYOR: phone, password, firstName (lastName optional).
+   * - ADMIN: email, password, fullName.
+   * - CAD: email, password, fullName (cadCenter optional; cadCenter can be set later via patch).
+   * - SURVEYOR: phone, password, fullName.
    */
   createUser(body) {
-    requireFields(body, ["role", "password", "firstName"]);
+    requireFields(body, ["role", "password", "fullName"]);
     const role = String(body.role).toUpperCase();
     const allowedRoles = ["ADMIN", "CAD", "SURVEYOR"];
     if (!allowedRoles.includes(role)) {
@@ -115,50 +137,42 @@ const schemas = {
       });
     }
     const password = body.password;
-    if (typeof password !== "string" || password.length < 8) {
-      throw new BadRequestError("password must be at least 8 characters", {
-        errors: [{ field: "password", message: "Min 8 characters" }],
-      });
-    }
-    const firstName = String(body.firstName || "").trim();
-    const lastName = body.lastName != null ? String(body.lastName).trim() : "";
-    if (!firstName) {
-      throw new BadRequestError("firstName is required and must be non-empty", {
-        errors: [{ field: "firstName", message: "Required" }],
+    validateExact4Password(password, "password");
+    const fullName = String(body.fullName || "").trim();
+    if (!fullName) {
+      throw new BadRequestError("fullName is required and must be non-empty", {
+        errors: [{ field: "fullName", message: "Required" }],
       });
     }
     if (role === "ADMIN") {
       requireFields(body, ["email"]);
       const email = String(body.email).toLowerCase().trim();
       if (!email) throw new BadRequestError("email is required and must be non-empty");
-      return { role, email, password, firstName, lastName };
+      return { role, email, password, fullName };
     }
     if (role === "CAD") {
       requireFields(body, ["email"]);
       const email = String(body.email).toLowerCase().trim();
       if (!email) throw new BadRequestError("email is required and must be non-empty");
       const cadCenter = body.cadCenter != null && body.cadCenter !== "" ? validObjectId(body.cadCenter, "cadCenter") : undefined;
-      return { role, email, password, firstName, lastName, cadCenter };
+      return { role, email, password, fullName, cadCenter };
     }
     if (role === "SURVEYOR") {
       requireFields(body, ["phone"]);
       const phone = String(body.phone).trim();
       if (!phone) throw new BadRequestError("phone is required and must be non-empty");
-      return { role, phone, password, firstName, lastName };
+      return { role, phone, password, fullName };
     }
     return body;
   },
 
   /**
-   * Patch user: optional firstName, lastName, status; for CAD optional cadCenter; for Surveyor optional district, taluka, category, surveyType.
+   * Patch user: optional fullName, status; for CAD optional cadCenter; for Surveyor optional district, taluka, category, surveyType.
    */
   userPatch(body) {
     const updates = {};
-    if (body.firstName !== undefined) {
-      updates.firstName = String(body.firstName).trim();
-    }
-    if (body.lastName !== undefined) {
-      updates.lastName = String(body.lastName).trim();
+    if (body.fullName !== undefined) {
+      updates.fullName = String(body.fullName).trim();
     }
     if (body.status !== undefined) {
       const s = String(body.status).toUpperCase();
@@ -463,6 +477,29 @@ const schemas = {
     return updates;
   },
 
+  surveySketchAssignmentFlowUpdate(body) {
+    if (body?.autoAssignEnabled === undefined) {
+      throw new BadRequestError("autoAssignEnabled is required", {
+        errors: [{ field: "autoAssignEnabled", message: "Required" }],
+      });
+    }
+    const raw = body.autoAssignEnabled;
+    const normalized =
+      raw === true || raw === false
+        ? raw
+        : String(raw).toLowerCase().trim() === "true"
+          ? true
+          : String(raw).toLowerCase().trim() === "false"
+            ? false
+            : null;
+    if (normalized === null) {
+      throw new BadRequestError("autoAssignEnabled must be boolean", {
+        errors: [{ field: "autoAssignEnabled", message: "Invalid value" }],
+      });
+    }
+    return { autoAssignEnabled: normalized };
+  },
+
   // -------- Surveyor Sketch Upload --------
   /**
    * Create surveyor sketch upload (survey info + document URLs).
@@ -632,6 +669,190 @@ const schemas = {
       others: others || undefined,
       other_documents: other_documents.length ? other_documents : undefined,
     };
+  },
+
+  /**
+   * Survey draft payload parser (create/update): all fields optional for partial save.
+   */
+  surveyDraftUpsert(body, { requireAtLeastOne = false } = {}) {
+    const { SURVEY_SKETCH_DOCUMENT_KEYS } = require("../config/constants");
+    const payload = {};
+
+    if (body.surveyType !== undefined) {
+      const surveyType = String(body.surveyType).toLowerCase().trim();
+      if (!["joint_flat", "single_flat"].includes(surveyType)) {
+        throw new BadRequestError("surveyType must be joint_flat or single_flat", {
+          errors: [{ field: "surveyType", message: "Invalid value" }],
+        });
+      }
+      payload.surveyType = surveyType;
+    }
+
+    if (body.district !== undefined) payload.district = body.district ? validObjectId(body.district, "district") : null;
+    if (body.taluka !== undefined) payload.taluka = body.taluka ? validObjectId(body.taluka, "taluka") : null;
+    if (body.hobli !== undefined) payload.hobli = body.hobli ? validObjectId(body.hobli, "hobli") : null;
+    if (body.village !== undefined) payload.village = body.village ? validObjectId(body.village, "village") : null;
+    if (body.surveyNo !== undefined) payload.surveyNo = body.surveyNo ? String(body.surveyNo).trim() : null;
+
+    const documents = {};
+    let hasAnyDocumentField = false;
+    for (const key of SURVEY_SKETCH_DOCUMENT_KEYS) {
+      if (body[key] === undefined) continue;
+      hasAnyDocumentField = true;
+      const raw = body[key];
+      if (raw == null || raw === "") continue;
+      const url = typeof raw === "string" ? raw.trim() : (raw.url || raw.path || "").toString().trim();
+      if (!url) continue;
+      documents[key] =
+        typeof raw === "string"
+          ? { url }
+          : {
+              url,
+              fileName: raw.fileName != null ? String(raw.fileName).trim() : null,
+              mimeType: raw.mimeType != null ? String(raw.mimeType).trim() : null,
+              size: raw.size != null ? Number(raw.size) : null,
+              uploadedAt: raw.uploadedAt ? new Date(raw.uploadedAt) : new Date(),
+            };
+    }
+    if (hasAnyDocumentField) payload.documents = documents;
+
+    if (body.singleUpload !== undefined) {
+      const singleUploadRaw = body.singleUpload;
+      if (singleUploadRaw === null || singleUploadRaw === "") {
+        payload.singleUpload = null;
+      } else {
+        const singleUploadUrl =
+          typeof singleUploadRaw === "string"
+            ? singleUploadRaw.trim()
+            : (singleUploadRaw?.url || singleUploadRaw?.path || "").toString().trim();
+        if (!singleUploadUrl) {
+          throw new BadRequestError("singleUpload must have a non-empty url", {
+            errors: [{ field: "singleUpload", message: "Invalid value" }],
+          });
+        }
+        payload.singleUpload =
+          typeof singleUploadRaw === "string"
+            ? { url: singleUploadUrl }
+            : {
+                url: singleUploadUrl,
+                fileName: singleUploadRaw.fileName != null ? String(singleUploadRaw.fileName).trim() : null,
+                mimeType: singleUploadRaw.mimeType != null ? String(singleUploadRaw.mimeType).trim() : null,
+                size: singleUploadRaw.size != null ? Number(singleUploadRaw.size) : null,
+                uploadedAt: singleUploadRaw.uploadedAt ? new Date(singleUploadRaw.uploadedAt) : new Date(),
+              };
+      }
+    }
+
+    const INDICATOR_FIELDS = [
+      "is_originaltippani",
+      "is_hissatippani",
+      "is_atlas",
+      "is_rrpakkabook",
+      "is_akarabandu",
+      "is_kharabuttar",
+      "is_mulapatra",
+    ];
+    for (const field of INDICATOR_FIELDS) {
+      if (body[field] === undefined) continue;
+      payload[field] = body[field] === true || body[field] === "true";
+    }
+
+    if (body.audio !== undefined) {
+      const raw = body.audio;
+      if (raw == null || raw === "") {
+        payload.audio = null;
+      } else {
+        const url = typeof raw === "string" ? raw.trim() : (raw?.url || raw?.path || "").toString().trim();
+        if (!url) payload.audio = null;
+        else {
+          payload.audio =
+            typeof raw === "string"
+              ? { url }
+              : {
+                  url,
+                  fileName: raw.fileName != null ? String(raw.fileName).trim() : null,
+                  mimeType: raw.mimeType != null ? String(raw.mimeType).trim() : null,
+                  size: raw.size != null ? Number(raw.size) : null,
+                  uploadedAt: raw.uploadedAt ? new Date(raw.uploadedAt) : new Date(),
+                };
+        }
+      }
+    }
+
+    if (body.other_documents !== undefined) {
+      if (body.other_documents == null) {
+        payload.other_documents = [];
+      } else {
+        if (!Array.isArray(body.other_documents)) {
+          throw new BadRequestError("other_documents must be an array");
+        }
+        const maxOtherDocs = 20;
+        if (body.other_documents.length > maxOtherDocs) {
+          throw new BadRequestError(`other_documents must have at most ${maxOtherDocs} items`, {
+            errors: [{ field: "other_documents", message: `Max ${maxOtherDocs} items` }],
+          });
+        }
+        payload.other_documents = body.other_documents
+          .map((raw) => {
+            const url = typeof raw === "string" ? raw.trim() : (raw?.url || raw?.path || "").toString().trim();
+            if (!url) return null;
+            return typeof raw === "string"
+              ? { url }
+              : {
+                  url,
+                  fileName: raw.fileName != null ? String(raw.fileName).trim() : null,
+                  mimeType: raw.mimeType != null ? String(raw.mimeType).trim() : null,
+                  size: raw.size != null ? Number(raw.size) : null,
+                  uploadedAt: raw.uploadedAt ? new Date(raw.uploadedAt) : new Date(),
+                };
+          })
+          .filter(Boolean);
+      }
+    }
+
+    if (body.others !== undefined) {
+      if (body.others == null || body.others === "") payload.others = null;
+      else {
+        const others = String(body.others).trim();
+        if (others.length > 2000) {
+          throw new BadRequestError("others must be at most 2000 characters", {
+            errors: [{ field: "others", message: "Max 2000 characters" }],
+          });
+        }
+        payload.others = others;
+      }
+    }
+
+    if (requireAtLeastOne && Object.keys(payload).length === 0) {
+      throw new BadRequestError("At least one draft field is required");
+    }
+
+    return payload;
+  },
+
+  surveyDraftCreate(body) {
+    return schemas.surveyDraftUpsert(body, { requireAtLeastOne: false });
+  },
+
+  surveyDraftUpdate(body) {
+    return schemas.surveyDraftUpsert(body, { requireAtLeastOne: true });
+  },
+
+  notificationListQuery(query = {}) {
+    const out = {};
+    if (query.page !== undefined) out.page = query.page;
+    if (query.limit !== undefined) out.limit = query.limit;
+    if (query.type != null && query.type !== "") out.type = String(query.type).trim();
+    if (query.unreadOnly != null && query.unreadOnly !== "") {
+      const raw = String(query.unreadOnly).toLowerCase().trim();
+      if (raw !== "true" && raw !== "false") {
+        throw new BadRequestError("unreadOnly must be true or false", {
+          errors: [{ field: "unreadOnly", message: "Invalid value" }],
+        });
+      }
+      out.unreadOnly = raw === "true";
+    }
+    return out;
   },
 
   // -------- Upload (image / audio only) --------

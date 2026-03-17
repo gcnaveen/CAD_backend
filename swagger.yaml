@@ -39,10 +39,14 @@ tags:
     description: District → Taluka → Hobli → Village hierarchy (create, list, get, update)
   - name: Surveyor Sketch Uploads
     description: Surveyor sketch upload submissions (survey info + document URLs)
+  - name: Surveyor Sketch Drafts
+    description: Surveyor draft saves for partial/in-progress sketch forms
   - name: Admin - Assignments
     description: Admin assigns survey sketches to CAD centers; view assignments and center availability
   - name: CAD - Assignments
     description: CAD user accepts assigned work (ASSIGNED → IN_PROGRESS)
+  - name: Notifications
+    description: Role-based notification feed for assignment and sketch lifecycle updates
   - name: Upload
     description: S3 presigned URLs for images and audio (bucket caddrawing)
   - name: Health
@@ -69,10 +73,9 @@ paths:
             schema:
               $ref: "#/components/schemas/SuperAdminRegisterRequest"
             example:
-              firstName: John
-              lastName: Doe
+              fullName: John Doe
               email: admin@example.com
-              password: SecureP@ss1
+              password: "1234"
       responses:
         "201":
           description: Super Admin registered
@@ -100,7 +103,7 @@ paths:
       summary: Start Surveyor Registration (Step 1 - Send OTP)
       description: |
         Step 1 of surveyor registration: Send OTP to phone number.
-        Requires phone. firstName and lastName are optional; used for new users or to fill missing name.
+        Requires phone and fullName.
         Next steps: Verify OTP → Complete Registration (password + profile).
       operationId: surveyorStart
       security: []
@@ -112,8 +115,7 @@ paths:
               $ref: "#/components/schemas/SurveyorStartRequest"
             example:
               phone: "9876543210"
-              firstName: Raj
-              lastName: Kumar
+              fullName: Raj Kumar
       responses:
         "200":
           description: OTP sent
@@ -176,7 +178,7 @@ paths:
         Complete registration by setting password and profile in one call.
         Requires OTP to be verified first via POST /api/auth/surveyor/verify-otp.
         All fields are required: phone, password, district, taluka, category, and surveyType (if category is SURVEYOR).
-        Optional: firstName and lastName to set or update the surveyor name.
+        Optional: fullName to set or update the surveyor name.
         Returns user and JWT token.
       operationId: surveyorCompleteRegistration
       security: []
@@ -188,12 +190,11 @@ paths:
               $ref: "#/components/schemas/SurveyorCompleteRegistrationRequest"
             example:
               phone: "9876543210"
-              password: "SurveyorP@ss1"
+              password: "1234"
               district: "507f1f77bcf86cd799439012"
               taluka: "507f1f77bcf86cd799439013"
               category: SURVEYOR
-              firstName: "Raj"
-              lastName: "Kumar"
+              fullName: "Raj Kumar"
               surveyType: LS
       responses:
         "201":
@@ -261,9 +262,9 @@ paths:
         - **Admin** may create **CAD** or **Surveyor** only.
         Requires `Authorization: Bearer <token>` (Super Admin or Admin).
         **Payload by role:**
-        - **ADMIN**: email, password, firstName (lastName optional).
-        - **CAD**: email, password, firstName (lastName, cadCenter optional; cadCenter can be set later via patch).
-        - **SURVEYOR**: phone, password, firstName (lastName optional).
+        - **ADMIN**: email, password, fullName.
+        - **CAD**: email, password, fullName (cadCenter optional; cadCenter can be set later via patch).
+        - **SURVEYOR**: phone, password, fullName.
       operationId: createUser
       security:
         - bearerAuth: []
@@ -279,26 +280,23 @@ paths:
                 value:
                   role: ADMIN
                   email: admin@example.com
-                  password: "SecureP@ss1"
-                  firstName: Jane
-                  lastName: Admin
+                  password: "1234"
+                  fullName: Jane Admin
               cad:
                 summary: Create CAD user (Super Admin or Admin)
                 value:
                   role: CAD
                   email: caduser@example.com
-                  password: "CadP@ss1"
-                  firstName: John
-                  lastName: CAD
+                  password: "1234"
+                  fullName: John CAD
                   cadCenter: "507f1f77bcf86cd799439012"
               surveyor:
                 summary: Create Surveyor (Super Admin or Admin)
                 value:
                   role: SURVEYOR
                   phone: "9876543210"
-                  password: "SurveyorP@ss1"
-                  firstName: Raj
-                  lastName: Kumar
+                  password: "1234"
+                  fullName: Raj Kumar
       responses:
         "201":
           description: User created
@@ -488,7 +486,7 @@ paths:
       tags: [Authentication]
       summary: Update User (Patch)
       description: |
-        Partial update: name (firstName, lastName), status; for CAD cadCenter; for Surveyor district, taluka, category, surveyType.
+        Partial update: name (fullName), status; for CAD cadCenter; for Surveyor district, taluka, category, surveyType.
         Super Admin can update any; Admin only CAD or Surveyor.
       operationId: updateUser
       security:
@@ -1502,6 +1500,172 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/surveyor/sketch-drafts:
+    post:
+      tags: [Surveyor Sketch Drafts]
+      summary: Save Survey Sketch Draft
+      description: |
+        Save an in-progress survey sketch as draft.
+        All fields are optional and can be saved partially.
+        Surveyor only.
+      operationId: createSurveyDraft
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SurveyDraftUpsertRequest"
+            example:
+              surveyType: single_flat
+              district: "507f1f77bcf86cd799439012"
+              surveyNo: "123/1"
+              is_originaltippani: true
+      responses:
+        "201":
+          description: Draft saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/SurveyDraft" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    get:
+      tags: [Surveyor Sketch Drafts]
+      summary: List Survey Sketch Drafts
+      description: |
+        Surveyor sees own drafts.
+        Admin/Super Admin can list all drafts and optionally filter by surveyorId.
+      operationId: listSurveyDrafts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: surveyorId
+          in: query
+          schema: { type: string }
+          description: Optional filter (Admin/Super Admin only)
+      responses:
+        "200":
+          description: Draft list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/SurveyDraft" }
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer, example: 1 }
+                      limit: { type: integer, example: 20 }
+                      total: { type: integer, example: 10 }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/surveyor/sketch-drafts/{draftId}:
+    parameters:
+      - name: draftId
+        in: path
+        required: true
+        schema: { type: string }
+        description: SurveyDraft ObjectId
+    get:
+      tags: [Surveyor Sketch Drafts]
+      summary: Get Survey Draft by ID
+      operationId: getSurveyDraft
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Draft details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/SurveyDraft" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Surveyor Sketch Drafts]
+      summary: Update Survey Draft
+      operationId: updateSurveyDraft
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SurveyDraftUpsertRequest"
+      responses:
+        "200":
+          description: Draft updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/SurveyDraft" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Surveyor Sketch Drafts]
+      summary: Delete Survey Draft
+      operationId: deleteSurveyDraft
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Draft deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      message: { type: string, example: Survey draft deleted successfully }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # -------- Admin: Survey Sketch Status options (for dropdown) --------
   /api/admin/survey-sketch-statuses:
     get:
@@ -1524,6 +1688,66 @@ paths:
                     type: array
                     items: { type: string }
                     example: [PENDING, ASSIGNED, UNDER_REVIEW, APPROVED, REJECTED]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/admin/survey-sketch-assignment-flow:
+    get:
+      tags: [Admin - Assignments]
+      summary: Get Survey Sketch Assignment Flow Setting
+      description: |
+        Get current assignment flow mode.
+        - `autoAssignEnabled=false`: admin assigns manually.
+        - `autoAssignEnabled=true`: new survey sketch uploads are auto-assigned to CAD centers.
+      operationId: getSurveySketchAssignmentFlow
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current flow setting
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/SurveySketchAssignmentFlowSetting" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    patch:
+      tags: [Admin - Assignments]
+      summary: Update Survey Sketch Assignment Flow Setting
+      description: |
+        Toggle assignment flow.
+        - `false`: admin manual assignment.
+        - `true`: auto-assign on survey sketch creation.
+      operationId: updateSurveySketchAssignmentFlow
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SurveySketchAssignmentFlowUpdateRequest"
+            example:
+              autoAssignEnabled: true
+      responses:
+        "200":
+          description: Flow setting updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/SurveySketchAssignmentFlowSetting" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -1717,6 +1941,137 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /api/notifications:
+    get:
+      tags: [Notifications]
+      summary: List Notifications
+      description: |
+        Get role-based notifications for the logged-in user.
+        Admin/Super Admin receive all important flow updates (uploads, assignments, status changes).
+      operationId: listNotifications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: type
+          in: query
+          schema: { type: string }
+        - name: unreadOnly
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Notification feed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Notification" }
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer, example: 1 }
+                      limit: { type: integer, example: 20 }
+                      total: { type: integer, example: 100 }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/notifications/{notificationId}:
+    parameters:
+      - name: notificationId
+        in: path
+        required: true
+        schema: { type: string }
+        description: Notification ObjectId
+    get:
+      tags: [Notifications]
+      summary: Get Notification by ID
+      operationId: getNotification
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Notification details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/Notification" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/notifications/{notificationId}/read:
+    parameters:
+      - name: notificationId
+        in: path
+        required: true
+        schema: { type: string }
+        description: Notification ObjectId
+    post:
+      tags: [Notifications]
+      summary: Mark Notification as Read
+      operationId: markNotificationRead
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Notification marked read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/Notification" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/notifications/read-all:
+    post:
+      tags: [Notifications]
+      summary: Mark All Notifications as Read
+      operationId: markAllNotificationsRead
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: All notifications marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      message: { type: string, example: All notifications marked as read }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /api/upload/image:
     post:
@@ -1982,15 +2337,12 @@ components:
   schemas:
     SuperAdminRegisterRequest:
       type: object
-      required: [firstName, email, password]
+      required: [fullName, email, password]
       properties:
-        firstName:
+        fullName:
           type: string
           minLength: 1
-          example: John
-        lastName:
-          type: string
-          example: Doe
+          example: John Doe
         email:
           type: string
           format: email
@@ -1998,25 +2350,22 @@ components:
         password:
           type: string
           format: password
-          minLength: 8
-          example: "SecureP@ss1"
+          minLength: 4
+          maxLength: 4
+          example: "1234"
 
     SurveyorStartRequest:
       type: object
-      required: [phone]
+      required: [phone, fullName]
       properties:
         phone:
           type: string
           example: "9876543210"
-        firstName:
+        fullName:
           type: string
           minLength: 1
-          description: Optional. Required only when creating a new user; otherwise used to update name if missing in DB.
-          example: Raj
-        lastName:
-          type: string
-          description: Optional. Used for new users or to update name if missing in DB.
-          example: Kumar
+          description: Full name of surveyor.
+          example: Raj Kumar
 
     SurveyorVerifyOtpRequest:
       type: object
@@ -2042,9 +2391,10 @@ components:
         password:
           type: string
           format: password
-          minLength: 8
-          description: Password for login (must be at least 8 characters)
-          example: "SurveyorP@ss1"
+          minLength: 4
+          maxLength: 4
+          description: Password for login (must be exactly 4 characters)
+          example: "1234"
         district:
           type: string
           description: ObjectId of District
@@ -2062,14 +2412,10 @@ components:
           enum: [LS, GS]
           description: Required when category is SURVEYOR
           example: LS
-        firstName:
+        fullName:
           type: string
-          description: Surveyor first name (optional).
-          example: Raj
-        lastName:
-          type: string
-          description: Surveyor last name (optional).
-          example: Kumar
+          description: Surveyor full name (optional).
+          example: Raj Kumar
 
     LoginRequest:
       type: object
@@ -2095,7 +2441,7 @@ components:
 
     CreateUserRequest:
       type: object
-      required: [role, password, firstName]
+      required: [role, password, fullName]
       properties:
         role:
           type: string
@@ -2113,15 +2459,13 @@ components:
         password:
           type: string
           format: password
-          minLength: 8
+          minLength: 4
+          maxLength: 4
           example: "SecureP@ss1"
-        firstName:
+        fullName:
           type: string
           minLength: 1
-          example: Jane
-        lastName:
-          type: string
-          example: Doe
+          example: Jane Doe
         cadCenter:
           type: string
           description: ObjectId of CAD center; optional when role is CAD (can be set later via patch)
@@ -2171,9 +2515,7 @@ components:
       minProperties: 1
       description: At least one field required. CAD-only cadCenter; Surveyor-only district, taluka, category, surveyType.
       properties:
-        firstName:
-          type: string
-        lastName:
+        fullName:
           type: string
         status:
           type: string
@@ -2569,6 +2911,34 @@ components:
         notes: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    SurveySketchAssignmentFlowSetting:
+      type: object
+      properties:
+        key:
+          type: string
+          example: SURVEY_SKETCH_ASSIGNMENT_FLOW
+        autoAssignEnabled:
+          type: boolean
+          example: false
+        updatedBy:
+          oneOf:
+            - type: string
+              nullable: true
+            - type: object
+              nullable: true
+              properties:
+                _id: { type: string }
+                name: { type: object }
+                role: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    SurveySketchAssignmentFlowUpdateRequest:
+      type: object
+      required: [autoAssignEnabled]
+      properties:
+        autoAssignEnabled:
+          type: boolean
+          description: true = auto assign new submissions, false = manual admin assignment.
 
     SurveyorSketchUploadCreateRequest:
       type: object
@@ -2738,6 +3108,114 @@ components:
           type: boolean
           default: false
           description: "Indicates mulapatra is included. Sent by user when using singleUpload."
+
+    SurveyDraftUpsertRequest:
+      type: object
+      description: Save or update survey draft (all fields optional).
+      properties:
+        surveyType:
+          type: string
+          enum: [joint_flat, single_flat]
+        district: { type: string }
+        taluka: { type: string }
+        hobli: { type: string }
+        village: { type: string }
+        surveyNo: { type: string }
+        singleUpload:
+          oneOf:
+            - type: string
+              format: uri
+            - type: object
+              properties:
+                url: { type: string, format: uri }
+                fileName: { type: string }
+                mimeType: { type: string }
+                size: { type: integer, minimum: 0 }
+        moolaTippani:
+          oneOf:
+            - type: string
+              format: uri
+            - type: object
+              properties:
+                url: { type: string, format: uri }
+                fileName: { type: string }
+                mimeType: { type: string }
+                size: { type: integer, minimum: 0 }
+        hissaTippani:
+          oneOf:
+            - type: string
+              format: uri
+            - type: object
+              properties:
+                url: { type: string, format: uri }
+                fileName: { type: string }
+                mimeType: { type: string }
+                size: { type: integer, minimum: 0 }
+        atlas:
+          oneOf:
+            - type: string
+              format: uri
+            - type: object
+              properties:
+                url: { type: string, format: uri }
+                fileName: { type: string }
+                mimeType: { type: string }
+                size: { type: integer, minimum: 0 }
+        rrPakkabook:
+          oneOf:
+            - type: string
+              format: uri
+            - type: object
+              properties:
+                url: { type: string, format: uri }
+                fileName: { type: string }
+                mimeType: { type: string }
+                size: { type: integer, minimum: 0 }
+        kharabu:
+          oneOf:
+            - type: string
+              format: uri
+            - type: object
+              properties:
+                url: { type: string, format: uri }
+                fileName: { type: string }
+                mimeType: { type: string }
+                size: { type: integer, minimum: 0 }
+        is_originaltippani: { type: boolean }
+        is_hissatippani: { type: boolean }
+        is_atlas: { type: boolean }
+        is_rrpakkabook: { type: boolean }
+        is_akarabandu: { type: boolean }
+        is_kharabuttar: { type: boolean }
+        is_mulapatra: { type: boolean }
+        audio:
+          oneOf:
+            - type: string
+              format: uri
+            - type: object
+              properties:
+                url: { type: string, format: uri }
+                fileName: { type: string }
+                mimeType: { type: string }
+                size: { type: integer, minimum: 0 }
+                uploadedAt: { type: string, format: date-time }
+        other_documents:
+          type: array
+          maxItems: 20
+          items:
+            oneOf:
+              - type: string
+                format: uri
+              - type: object
+                properties:
+                  url: { type: string, format: uri }
+                  fileName: { type: string }
+                  mimeType: { type: string }
+                  size: { type: integer, minimum: 0 }
+                  uploadedAt: { type: string, format: date-time }
+        others:
+          type: string
+          maxLength: 2000
 
     UploadImageRequest:
       type: object
@@ -2972,6 +3450,114 @@ components:
           type: string
           nullable: true
           description: ObjectId of reviewer (Admin/CAD)
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SurveyDraft:
+      type: object
+      description: Partial survey draft saved by surveyor.
+      properties:
+        _id: { type: string }
+        surveyor:
+          oneOf:
+            - type: string
+            - type: object
+              properties:
+                _id: { type: string }
+                name: { type: object }
+                role: { type: string }
+        surveyType:
+          type: string
+          enum: [joint_flat, single_flat]
+          nullable: true
+        district: { oneOf: [{ type: string }, { type: object }], nullable: true }
+        taluka: { oneOf: [{ type: string }, { type: object }], nullable: true }
+        hobli: { oneOf: [{ type: string }, { type: object }], nullable: true }
+        village: { oneOf: [{ type: string }, { type: object }], nullable: true }
+        surveyNo: { type: string, nullable: true }
+        documents:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              url: { type: string, format: uri }
+              fileName: { type: string, nullable: true }
+              mimeType: { type: string, nullable: true }
+              size: { type: integer, nullable: true }
+              uploadedAt: { type: string, format: date-time, nullable: true }
+        singleUpload:
+          type: object
+          nullable: true
+          properties:
+            url: { type: string, format: uri }
+            fileName: { type: string, nullable: true }
+            mimeType: { type: string, nullable: true }
+            size: { type: integer, nullable: true }
+            uploadedAt: { type: string, format: date-time, nullable: true }
+        is_originaltippani: { type: boolean }
+        is_hissatippani: { type: boolean }
+        is_atlas: { type: boolean }
+        is_rrpakkabook: { type: boolean }
+        is_akarabandu: { type: boolean }
+        is_kharabuttar: { type: boolean }
+        is_mulapatra: { type: boolean }
+        audio:
+          type: object
+          nullable: true
+          properties:
+            url: { type: string, format: uri }
+            fileName: { type: string, nullable: true }
+            mimeType: { type: string, nullable: true }
+            size: { type: integer, nullable: true }
+            uploadedAt: { type: string, format: date-time, nullable: true }
+        other_documents:
+          type: array
+          items:
+            type: object
+            properties:
+              url: { type: string, format: uri }
+              fileName: { type: string, nullable: true }
+              mimeType: { type: string, nullable: true }
+              size: { type: integer, nullable: true }
+              uploadedAt: { type: string, format: date-time, nullable: true }
+        others: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Notification:
+      type: object
+      properties:
+        _id: { type: string }
+        type: { type: string, example: SURVEY_SKETCH_ASSIGNED }
+        title: { type: string, example: Survey sketch assigned }
+        message: { type: string }
+        entityType: { type: string, nullable: true }
+        entityId: { type: string, nullable: true }
+        data:
+          type: object
+          nullable: true
+        targetRoles:
+          type: array
+          items:
+            type: string
+            enum: [SUPER_ADMIN, ADMIN, CAD, SURVEYOR]
+        targetUsers:
+          type: array
+          items: { type: string }
+        isRead:
+          type: boolean
+          example: false
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdBy:
+          type: string
+          nullable: true
         createdAt:
           type: string
           format: date-time

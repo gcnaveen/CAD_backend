@@ -2,7 +2,10 @@ const { connectDB, mongoose } = require("../config/db");
 const authController = require("../controllers/auth.controller");
 const userController = require("../controllers/user.controller");
 const surveyorSketchUploadController = require("../controllers/surveyorSketchUpload.controller");
+const surveyDraftController = require("../controllers/surveyDraft.controller");
 const surveySketchAssignmentController = require("../controllers/assignment/surveySketchAssignment.controller");
+const surveySketchAssignmentFlowController = require("../controllers/config/surveySketchAssignmentFlow.controller");
+const notificationController = require("../controllers/notification.controller");
 const { parsePagination } = require("../utils/pagination");
 const authService = require("../services/auth.service");
 const { validate, schemas, validObjectId } = require("../middleware/validator");
@@ -214,6 +217,87 @@ exports.listSurveyorSketchUploads = asyncHandler(async (event) => {
   return await surveyorSketchUploadController.listUploads(user, options);
 });
 
+// -------- Surveyor Sketch Draft --------
+exports.createSurveyDraft = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SURVEYOR)(event);
+  const body = validate(schemas.surveyDraftCreate)(event);
+  return await surveyDraftController.createDraft(user, body);
+});
+
+exports.listSurveyDrafts = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SURVEYOR, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)(event);
+  const q = getQueryParams(event);
+  const options = {
+    page: q.page,
+    limit: q.limit,
+    surveyorId: q.surveyorId,
+  };
+  return await surveyDraftController.listDrafts(user, options);
+});
+
+exports.getSurveyDraft = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SURVEYOR, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)(event);
+  const { draftId } = getPathParams(event);
+  if (!draftId) throw new BadRequestError("draftId is required");
+  validObjectId(draftId, "draftId");
+  return await surveyDraftController.getDraft(user, draftId);
+});
+
+exports.updateSurveyDraft = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SURVEYOR)(event);
+  const { draftId } = getPathParams(event);
+  if (!draftId) throw new BadRequestError("draftId is required");
+  validObjectId(draftId, "draftId");
+  const body = validate(schemas.surveyDraftUpdate)(event);
+  return await surveyDraftController.updateDraft(user, draftId, body);
+});
+
+exports.deleteSurveyDraft = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SURVEYOR)(event);
+  const { draftId } = getPathParams(event);
+  if (!draftId) throw new BadRequestError("draftId is required");
+  validObjectId(draftId, "draftId");
+  return await surveyDraftController.deleteDraft(user, draftId);
+});
+
+// -------- Notifications --------
+exports.listNotifications = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SURVEYOR, USER_ROLES.CAD, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)(event);
+  const q = event.queryStringParameters || {};
+  const options = schemas.notificationListQuery(q);
+  return await notificationController.listNotifications(user, options);
+});
+
+exports.getNotification = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SURVEYOR, USER_ROLES.CAD, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)(event);
+  const { notificationId } = getPathParams(event);
+  if (!notificationId) throw new BadRequestError("notificationId is required");
+  validObjectId(notificationId, "notificationId");
+  return await notificationController.getNotification(user, notificationId);
+});
+
+exports.markNotificationRead = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SURVEYOR, USER_ROLES.CAD, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)(event);
+  const { notificationId } = getPathParams(event);
+  if (!notificationId) throw new BadRequestError("notificationId is required");
+  validObjectId(notificationId, "notificationId");
+  return await notificationController.markNotificationRead(user, notificationId);
+});
+
+exports.markAllNotificationsRead = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SURVEYOR, USER_ROLES.CAD, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)(event);
+  return await notificationController.markAllNotificationsRead(user);
+});
+
 // -------- Survey Sketch Status options (Admin: for status dropdown) --------
 exports.getSurveySketchStatuses = asyncHandler(async (event) => {
   await ensureDb();
@@ -286,4 +370,18 @@ exports.acceptAssignmentByCad = asyncHandler(async (event) => {
   validObjectId(assignmentId, "assignmentId");
   const payload = validate(schemas.cadAssignmentRespond)(event);
   return await surveySketchAssignmentController.respondToAssignment(assignmentId, user, payload);
+});
+
+// -------- Admin: Auto assignment flow toggle --------
+exports.getSurveySketchAssignmentFlow = asyncHandler(async (event) => {
+  await ensureDb();
+  await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  return await surveySketchAssignmentFlowController.getFlowSettings();
+});
+
+exports.updateSurveySketchAssignmentFlow = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const body = validate(schemas.surveySketchAssignmentFlowUpdate)(event);
+  return await surveySketchAssignmentFlowController.updateFlowSettings(user, body);
 });
