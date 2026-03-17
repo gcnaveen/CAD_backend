@@ -73,7 +73,8 @@ paths:
             schema:
               $ref: "#/components/schemas/SuperAdminRegisterRequest"
             example:
-              fullName: John Doe
+              firstName: John
+              lastName: Doe
               email: admin@example.com
               password: "1234"
       responses:
@@ -103,7 +104,7 @@ paths:
       summary: Start Surveyor Registration (Step 1 - Send OTP)
       description: |
         Step 1 of surveyor registration: Send OTP to phone number.
-        Requires phone and fullName.
+        Requires phone and firstName. lastName is optional.
         Next steps: Verify OTP → Complete Registration (password + profile).
       operationId: surveyorStart
       security: []
@@ -115,7 +116,8 @@ paths:
               $ref: "#/components/schemas/SurveyorStartRequest"
             example:
               phone: "9876543210"
-              fullName: Raj Kumar
+              firstName: Raj
+              lastName: Kumar
       responses:
         "200":
           description: OTP sent
@@ -178,7 +180,7 @@ paths:
         Complete registration by setting password and profile in one call.
         Requires OTP to be verified first via POST /api/auth/surveyor/verify-otp.
         All fields are required: phone, password, district, taluka, category, and surveyType (if category is SURVEYOR).
-        Optional: fullName to set or update the surveyor name.
+        Optional: firstName and lastName to set or update the surveyor name.
         Returns user and JWT token.
       operationId: surveyorCompleteRegistration
       security: []
@@ -194,7 +196,8 @@ paths:
               district: "507f1f77bcf86cd799439012"
               taluka: "507f1f77bcf86cd799439013"
               category: SURVEYOR
-              fullName: "Raj Kumar"
+              firstName: "Raj"
+              lastName: "Kumar"
               surveyType: LS
       responses:
         "201":
@@ -262,9 +265,9 @@ paths:
         - **Admin** may create **CAD** or **Surveyor** only.
         Requires `Authorization: Bearer <token>` (Super Admin or Admin).
         **Payload by role:**
-        - **ADMIN**: email, password, fullName.
-        - **CAD**: email, password, fullName (cadCenter optional; cadCenter can be set later via patch).
-        - **SURVEYOR**: phone, password, fullName.
+        - **ADMIN**: email, password, firstName (lastName optional).
+        - **CAD**: email, password, firstName (lastName optional, cadCenter optional; cadCenter can be set later via patch).
+        - **SURVEYOR**: phone, password, firstName (lastName optional).
       operationId: createUser
       security:
         - bearerAuth: []
@@ -281,14 +284,16 @@ paths:
                   role: ADMIN
                   email: admin@example.com
                   password: "1234"
-                  fullName: Jane Admin
+                  firstName: Jane
+                  lastName: Admin
               cad:
                 summary: Create CAD user (Super Admin or Admin)
                 value:
                   role: CAD
                   email: caduser@example.com
                   password: "1234"
-                  fullName: John CAD
+                  firstName: John
+                  lastName: CAD
                   cadCenter: "507f1f77bcf86cd799439012"
               surveyor:
                 summary: Create Surveyor (Super Admin or Admin)
@@ -296,7 +301,8 @@ paths:
                   role: SURVEYOR
                   phone: "9876543210"
                   password: "1234"
-                  fullName: Raj Kumar
+                  firstName: Raj
+                  lastName: Kumar
       responses:
         "201":
           description: User created
@@ -486,7 +492,7 @@ paths:
       tags: [Authentication]
       summary: Update User (Patch)
       description: |
-        Partial update: name (fullName), status; for CAD cadCenter; for Surveyor district, taluka, category, surveyType.
+        Partial update: name (firstName, lastName), status; for CAD cadCenter; for Surveyor district, taluka, category, surveyType.
         Super Admin can update any; Admin only CAD or Surveyor.
       operationId: updateUser
       security:
@@ -2337,12 +2343,15 @@ components:
   schemas:
     SuperAdminRegisterRequest:
       type: object
-      required: [fullName, email, password]
+      required: [firstName, email, password]
       properties:
-        fullName:
+        firstName:
           type: string
           minLength: 1
-          example: John Doe
+          example: John
+        lastName:
+          type: string
+          example: Doe
         email:
           type: string
           format: email
@@ -2356,16 +2365,20 @@ components:
 
     SurveyorStartRequest:
       type: object
-      required: [phone, fullName]
+      required: [phone, firstName]
       properties:
         phone:
           type: string
           example: "9876543210"
-        fullName:
+        firstName:
           type: string
           minLength: 1
-          description: Full name of surveyor.
-          example: Raj Kumar
+          description: First name of surveyor.
+          example: Raj
+        lastName:
+          type: string
+          description: Last name of surveyor (optional).
+          example: Kumar
 
     SurveyorVerifyOtpRequest:
       type: object
@@ -2412,10 +2425,14 @@ components:
           enum: [LS, GS]
           description: Required when category is SURVEYOR
           example: LS
-        fullName:
+        firstName:
           type: string
-          description: Surveyor full name (optional).
-          example: Raj Kumar
+          description: Surveyor first name (optional).
+          example: Raj
+        lastName:
+          type: string
+          description: Surveyor last name (optional).
+          example: Kumar
 
     LoginRequest:
       type: object
@@ -2441,7 +2458,7 @@ components:
 
     CreateUserRequest:
       type: object
-      required: [role, password, fullName]
+      required: [role, password, firstName]
       properties:
         role:
           type: string
@@ -2462,10 +2479,13 @@ components:
           minLength: 4
           maxLength: 4
           example: "SecureP@ss1"
-        fullName:
+        firstName:
           type: string
           minLength: 1
-          example: Jane Doe
+          example: Jane
+        lastName:
+          type: string
+          example: Doe
         cadCenter:
           type: string
           description: ObjectId of CAD center; optional when role is CAD (can be set later via patch)
@@ -2515,7 +2535,9 @@ components:
       minProperties: 1
       description: At least one field required. CAD-only cadCenter; Surveyor-only district, taluka, category, surveyType.
       properties:
-        fullName:
+        firstName:
+          type: string
+        lastName:
           type: string
         status:
           type: string

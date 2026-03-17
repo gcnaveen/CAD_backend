@@ -62,29 +62,31 @@ function validateExact4Password(password, field = "password") {
 }
 
 const schemas = {
-  /** Super Admin: fullName, email, password. */
+  /** Super Admin: firstName, email, password. lastName optional. */
   superAdminRegister(body) {
-    requireFields(body, ["fullName", "email", "password"]);
+    requireFields(body, ["firstName", "email", "password"]);
     validateExact4Password(body.password, "password");
-    const fullName = String(body.fullName || "").trim();
-    if (!fullName) {
-      throw new BadRequestError("fullName is required and must be non-empty", {
-        errors: [{ field: "fullName", message: "Required" }],
+    const firstName = String(body.firstName || "").trim();
+    const lastName = body.lastName != null ? String(body.lastName).trim() : "";
+    if (!firstName) {
+      throw new BadRequestError("firstName is required and must be non-empty", {
+        errors: [{ field: "firstName", message: "Required" }],
       });
     }
-    return { ...body, fullName };
+    return { ...body, firstName, lastName };
   },
 
-  /** Surveyor start: phone + fullName. */
+  /** Surveyor start: phone + firstName. lastName optional. */
   surveyorStart(body) {
-    requireFields(body, ["phone", "fullName"]);
-    const fullName = String(body.fullName || "").trim();
-    if (!fullName) {
-      throw new BadRequestError("fullName is required and must be non-empty", {
-        errors: [{ field: "fullName", message: "Required" }],
+    requireFields(body, ["phone", "firstName"]);
+    const firstName = String(body.firstName || "").trim();
+    const lastName = body.lastName != null ? String(body.lastName).trim() : "";
+    if (!firstName) {
+      throw new BadRequestError("firstName is required and must be non-empty", {
+        errors: [{ field: "firstName", message: "Required" }],
       });
     }
-    return { ...body, fullName };
+    return { ...body, firstName, lastName };
   },
 
   /** Surveyor verify: phone + otp only. */
@@ -123,12 +125,12 @@ const schemas = {
 
   /**
    * Create user (Admin / CAD / Surveyor). Caller's role is enforced in service.
-   * - ADMIN: email, password, fullName.
-   * - CAD: email, password, fullName (cadCenter optional; cadCenter can be set later via patch).
-   * - SURVEYOR: phone, password, fullName.
+   * - ADMIN: email, password, firstName (lastName optional).
+   * - CAD: email, password, firstName (lastName optional, cadCenter optional; cadCenter can be set later via patch).
+   * - SURVEYOR: phone, password, firstName (lastName optional).
    */
   createUser(body) {
-    requireFields(body, ["role", "password", "fullName"]);
+    requireFields(body, ["role", "password", "firstName"]);
     const role = String(body.role).toUpperCase();
     const allowedRoles = ["ADMIN", "CAD", "SURVEYOR"];
     if (!allowedRoles.includes(role)) {
@@ -138,41 +140,45 @@ const schemas = {
     }
     const password = body.password;
     validateExact4Password(password, "password");
-    const fullName = String(body.fullName || "").trim();
-    if (!fullName) {
-      throw new BadRequestError("fullName is required and must be non-empty", {
-        errors: [{ field: "fullName", message: "Required" }],
+    const firstName = String(body.firstName || "").trim();
+    const lastName = body.lastName != null ? String(body.lastName).trim() : "";
+    if (!firstName) {
+      throw new BadRequestError("firstName is required and must be non-empty", {
+        errors: [{ field: "firstName", message: "Required" }],
       });
     }
     if (role === "ADMIN") {
       requireFields(body, ["email"]);
       const email = String(body.email).toLowerCase().trim();
       if (!email) throw new BadRequestError("email is required and must be non-empty");
-      return { role, email, password, fullName };
+      return { role, email, password, firstName, lastName };
     }
     if (role === "CAD") {
       requireFields(body, ["email"]);
       const email = String(body.email).toLowerCase().trim();
       if (!email) throw new BadRequestError("email is required and must be non-empty");
       const cadCenter = body.cadCenter != null && body.cadCenter !== "" ? validObjectId(body.cadCenter, "cadCenter") : undefined;
-      return { role, email, password, fullName, cadCenter };
+      return { role, email, password, firstName, lastName, cadCenter };
     }
     if (role === "SURVEYOR") {
       requireFields(body, ["phone"]);
       const phone = String(body.phone).trim();
       if (!phone) throw new BadRequestError("phone is required and must be non-empty");
-      return { role, phone, password, fullName };
+      return { role, phone, password, firstName, lastName };
     }
     return body;
   },
 
   /**
-   * Patch user: optional fullName, status; for CAD optional cadCenter; for Surveyor optional district, taluka, category, surveyType.
+   * Patch user: optional firstName, lastName, status; for CAD optional cadCenter; for Surveyor optional district, taluka, category, surveyType.
    */
   userPatch(body) {
     const updates = {};
-    if (body.fullName !== undefined) {
-      updates.fullName = String(body.fullName).trim();
+    if (body.firstName !== undefined) {
+      updates.firstName = String(body.firstName).trim();
+    }
+    if (body.lastName !== undefined) {
+      updates.lastName = String(body.lastName).trim();
     }
     if (body.status !== undefined) {
       const s = String(body.status).toUpperCase();

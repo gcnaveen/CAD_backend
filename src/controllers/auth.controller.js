@@ -10,7 +10,7 @@ async function registerSuperAdmin(payload) {
 }
 
 /**
- * Surveyor step 1: send OTP to phone. Body: phone, fullName.
+ * Surveyor step 1: send OTP to phone. Body: phone, firstName, lastName?.
  */
 async function surveyorSendOtp(payload) {
   const result = await authService.surveyorSendOtp(payload);
