@@ -32,6 +32,7 @@ provider:
     JWT_EXPIRES_IN: ${env:JWT_EXPIRES_IN, '24h'}
     # S3 bucket for sketches, CAD drawings, audio, documents
     S3_BUCKET: ${env:S3_BUCKET, 'caddrawing'}
+    OTP_TEST_MODE: ${env:OTP_TEST_MODE, 'false'}
 
   httpApi:
     cors: true
@@ -109,6 +110,21 @@ functions:
           path: /api/surveyor/sketch-uploads/{uploadId}
           method: get
       - httpApi:
+          path: /api/surveyor/sketch-drafts
+          method: post
+      - httpApi:
+          path: /api/surveyor/sketch-drafts
+          method: get
+      - httpApi:
+          path: /api/surveyor/sketch-drafts/{draftId}
+          method: get
+      - httpApi:
+          path: /api/surveyor/sketch-drafts/{draftId}
+          method: patch
+      - httpApi:
+          path: /api/surveyor/sketch-drafts/{draftId}
+          method: delete
+      - httpApi:
           path: /api/admin/survey-sketch-statuses
           method: get
       - httpApi:
@@ -125,6 +141,24 @@ functions:
           method: get
       - httpApi:
           path: /api/cad/assignments/{assignmentId}/accept
+          method: post
+      - httpApi:
+          path: /api/admin/survey-sketch-assignment-flow
+          method: get
+      - httpApi:
+          path: /api/admin/survey-sketch-assignment-flow
+          method: patch
+      - httpApi:
+          path: /api/notifications
+          method: get
+      - httpApi:
+          path: /api/notifications/{notificationId}
+          method: get
+      - httpApi:
+          path: /api/notifications/{notificationId}/read
+          method: post
+      - httpApi:
+          path: /api/notifications/read-all
           method: post
 
   testApi:

@@ -7,13 +7,70 @@ const SurveySketchAssignment = require("../../models/assignment/SurveySketchAssi
 const SurveyorSketchUpload = require("../../models/surveyor/SurveyorSketchUpload");
 const CadCenter = require("../../models/masters/CadCenter");
 const User = require("../../models/user/User");
+const notificationService = require("../notification.service");
+const logger = require("../../utils/logger");
 const {
   NotFoundError,
   ConflictError,
   BadRequestError,
   ForbiddenError,
 } = require("../../utils/errors");
-const { USER_ROLES, SURVEY_SKETCH_ASSIGNMENT_STATUS, SURVEY_SKETCH_STATUS } = require("../../config/constants");
+const { USER_ROLES, USER_STATUS, SURVEY_SKETCH_ASSIGNMENT_STATUS, SURVEY_SKETCH_STATUS } = require("../../config/constants");
+
+async function getCadUserIdsByCenter(cadCenterId) {
+  const users = await User.find({
+    role: USER_ROLES.CAD,
+    status: USER_STATUS.ACTIVE,
+    deletedAt: null,
+    "cadProfile.cadCenter": cadCenterId,
+  })
+    .select("_id")
+    .lean();
+  return users.map((u) => u._id);
+}
+
+async function notifyAssignmentEvent({
+  type,
+  title,
+  message,
+  assignmentDoc,
+  createdBy,
+  extraTargetUsers = [],
+}) {
+  try {
+    const sketch = assignmentDoc?.surveyorSketchUpload
+      ? await SurveyorSketchUpload.findById(assignmentDoc.surveyorSketchUpload).select("_id surveyor surveyNo status applicationId").lean()
+      : null;
+    const cadUserIds = assignmentDoc?.cadCenter ? await getCadUserIdsByCenter(assignmentDoc.cadCenter) : [];
+    const targetUsers = [
+      ...(sketch?.surveyor ? [sketch.surveyor] : []),
+      ...cadUserIds,
+      ...extraTargetUsers,
+    ];
+
+    await notificationService.create({
+      type,
+      title,
+      message,
+      entityType: "SurveySketchAssignment",
+      entityId: assignmentDoc?._id,
+      targetRoles: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN],
+      targetUsers,
+      createdBy: createdBy || null,
+      data: {
+        assignmentStatus: assignmentDoc?.status,
+        cadCenter: assignmentDoc?.cadCenter || null,
+        surveyNo: sketch?.surveyNo || null,
+        applicationId: sketch?.applicationId || null,
+      },
+    });
+  } catch (err) {
+    logger.error("Failed to create assignment notification", err, {
+      assignmentId: String(assignmentDoc?._id || ""),
+      type,
+    });
+  }
+}
 
 /**
  * Create an assignment: survey sketch → CAD center (optional: specific CAD user).
@@ -88,6 +145,15 @@ async function create(payload, assignedBy) {
     .populate("assignedTo", "name auth")
     .populate("assignedBy", "name")
     .lean();
+
+  await notifyAssignmentEvent({
+    type: "SURVEY_SKETCH_ASSIGNED",
+    title: "Survey sketch assigned",
+    message: "A survey sketch has been assigned to a CAD center.",
+    assignmentDoc: populated || doc,
+    createdBy: assignedBy?._id,
+  });
+
   return populated;
 }
 
@@ -182,12 +248,20 @@ async function update(assignmentId, updates, actor) {
       status: SURVEY_SKETCH_STATUS.PENDING,
     });
   }
-  return SurveySketchAssignment.findById(doc._id)
+  const populated = await SurveySketchAssignment.findById(doc._id)
     .populate("surveyorSketchUpload", "applicationId surveyNo status")
     .populate("cadCenter", "name code")
     .populate("assignedTo", "name auth")
     .populate("assignedBy", "name")
     .lean();
+  await notifyAssignmentEvent({
+    type: "SURVEY_SKETCH_ASSIGNMENT_UPDATED",
+    title: "Assignment updated",
+    message: `Assignment status updated to ${doc.status}.`,
+    assignmentDoc: populated || doc,
+    createdBy: actor?._id,
+  });
+  return populated;
 }
 
 const CAD_ASSIGNMENT_RESPONSE_ACTION = Object.freeze({ ACCEPT: "accept", REJECT: "reject" });
@@ -241,13 +315,23 @@ async function respondToAssignment(assignmentId, cadUser, action) {
       });
     }
   }
-
-  return SurveySketchAssignment.findById(doc._id)
+  const populated = await SurveySketchAssignment.findById(doc._id)
     .populate("surveyorSketchUpload", "applicationId surveyNo status")
     .populate("cadCenter", "name code")
     .populate("assignedTo", "name auth")
     .populate("assignedBy", "name")
     .lean();
+  await notifyAssignmentEvent({
+    type: isAccept ? "SURVEY_SKETCH_ACCEPTED_BY_CAD" : "SURVEY_SKETCH_REJECTED_BY_CAD",
+    title: isAccept ? "Assignment accepted by CAD" : "Assignment rejected by CAD",
+    message: isAccept
+      ? "CAD user accepted the assigned survey sketch."
+      : "CAD user rejected the assigned survey sketch.",
+    assignmentDoc: populated || doc,
+    createdBy: cadUser?._id,
+    extraTargetUsers: [cadUser?._id].filter(Boolean),
+  });
+  return populated;
 }
 
 /**
@@ -278,6 +362,102 @@ async function listAll(filters = {}, pagination = null) {
   return { data, total };
 }
 
+async function pickCadCenterForAutoAssign() {
+  const loadStatuses = [
+    SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED,
+    SURVEY_SKETCH_ASSIGNMENT_STATUS.IN_PROGRESS,
+    SURVEY_SKETCH_ASSIGNMENT_STATUS.ON_HOLD,
+  ];
+
+  const rows = await CadCenter.aggregate([
+    {
+      $match: {
+        deletedAt: null,
+        status: "ACTIVE",
+        availabilityStatus: { $in: ["AVAILABLE", "BUSY"] },
+      },
+    },
+    {
+      $lookup: {
+        from: "surveysketchassignments",
+        let: { centerId: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ["$cadCenter", "$$centerId"] },
+              status: { $in: loadStatuses },
+            },
+          },
+          { $count: "count" },
+        ],
+        as: "activeWork",
+      },
+    },
+    {
+      $addFields: {
+        currentLoad: { $ifNull: [{ $arrayElemAt: ["$activeWork.count", 0] }, 0] },
+        availabilityRank: {
+          $cond: [{ $eq: ["$availabilityStatus", "AVAILABLE"] }, 0, 1],
+        },
+      },
+    },
+    { $sort: { availabilityRank: 1, currentLoad: 1, createdAt: 1, _id: 1 } },
+    { $limit: 1 },
+    { $project: { _id: 1 } },
+  ]);
+
+  return rows?.[0]?._id || null;
+}
+
+/**
+ * Auto-assign newly created survey sketch to best CAD center.
+ * Used only when admin toggle is enabled.
+ */
+async function autoAssignFromFlow(surveyorSketchUploadId, assignedByUserId) {
+  if (!assignedByUserId) return null;
+
+  const [sketch, assignedBy] = await Promise.all([
+    SurveyorSketchUpload.findById(surveyorSketchUploadId).select("_id status").lean(),
+    User.findById(assignedByUserId).select("_id role").lean(),
+  ]);
+  if (!sketch || !assignedBy) return null;
+
+  const existing = await SurveySketchAssignment.findOne({
+    surveyorSketchUpload: surveyorSketchUploadId,
+    status: { $nin: [SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED] },
+  }).lean();
+  if (existing) return existing;
+
+  const cadCenterId = await pickCadCenterForAutoAssign();
+  if (!cadCenterId) return null;
+
+  const doc = new SurveySketchAssignment({
+    surveyorSketchUpload: surveyorSketchUploadId,
+    cadCenter: cadCenterId,
+    assignedTo: null,
+    status: SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED,
+    assignedBy: assignedBy._id,
+  });
+  await doc.save();
+
+  await SurveyorSketchUpload.findByIdAndUpdate(surveyorSketchUploadId, {
+    status: SURVEY_SKETCH_STATUS.ASSIGNED,
+  });
+  const populated = await SurveySketchAssignment.findById(doc._id)
+    .populate("surveyorSketchUpload", "applicationId surveyNo status")
+    .populate("cadCenter", "name code availabilityStatus")
+    .populate("assignedBy", "name")
+    .lean();
+  await notifyAssignmentEvent({
+    type: "SURVEY_SKETCH_AUTO_ASSIGNED",
+    title: "Survey sketch auto-assigned",
+    message: "A new survey sketch was automatically assigned to a CAD center.",
+    assignmentDoc: populated || doc,
+    createdBy: assignedBy?._id,
+  });
+  return populated;
+}
+
 module.exports = {
   create,
   listByCadCenter,
@@ -286,4 +466,5 @@ module.exports = {
   update,
   respondToAssignment,
   listAll,
+  autoAssignFromFlow,
 };

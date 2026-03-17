@@ -74,30 +74,28 @@ function assertCanCreateRole(creator, targetRole) {
 /**
  * Create a new user (Admin, CAD, or Surveyor) by Super Admin or Admin.
  * - Super Admin → Admin, CAD, or Surveyor.
- * - Admin → CAD (email, password, firstName, lastName?, cadCenter) or Surveyor (phone, password, firstName, lastName?).
+ * - Admin → CAD (email, password, fullName, cadCenter) or Surveyor (phone, password, fullName).
  *
  * @param {Object} creator - Authenticated user performing the action
- * @param {Object} payload - Validated payload (role, email?, phone?, password, firstName, lastName?, cadCenter?)
+ * @param {Object} payload - Validated payload (role, email?, phone?, password, fullName, cadCenter?)
  * @returns {Promise<{ user }>}
  */
 async function createUser(creator, payload) {
-  const { role, email, phone, password, firstName, lastName, cadCenter } = payload;
+  const { role, email, phone, password, fullName, cadCenter } = payload;
 
   assertCanCreateRole(creator, role);
 
-  const normalizedFirstName = String(firstName || "").trim();
-  const normalizedLastName = lastName != null ? String(lastName).trim() : "";
+  const normalizedFullName = String(fullName || "").trim();
 
-  if (!normalizedFirstName) {
-    throw new BadRequestError("firstName is required and must be non-empty");
+  if (!normalizedFullName) {
+    throw new BadRequestError("fullName is required and must be non-empty");
   }
 
   if (role === USER_ROLES.ADMIN) {
     return createAdminUser(creator, {
       email,
       password,
-      firstName: normalizedFirstName,
-      lastName: normalizedLastName,
+      fullName: normalizedFullName,
     });
   }
 
@@ -105,8 +103,7 @@ async function createUser(creator, payload) {
     return createCadUser(creator, {
       email,
       password,
-      firstName: normalizedFirstName,
-      lastName: normalizedLastName,
+      fullName: normalizedFullName,
       cadCenter,
     });
   }
@@ -115,8 +112,7 @@ async function createUser(creator, payload) {
     return createSurveyorUser(creator, {
       phone,
       password,
-      firstName: normalizedFirstName,
-      lastName: normalizedLastName,
+      fullName: normalizedFullName,
     });
   }
 
@@ -126,7 +122,7 @@ async function createUser(creator, payload) {
 /**
  * Create Admin user (Super Admin only).
  */
-async function createAdminUser(creator, { email, password, firstName, lastName }) {
+async function createAdminUser(creator, { email, password, fullName }) {
   const normalizedEmail = email.toLowerCase().trim();
   const existing = await User.findOne({ "auth.email": normalizedEmail });
   if (existing) {
@@ -136,7 +132,7 @@ async function createAdminUser(creator, { email, password, firstName, lastName }
   const user = await User.create({
     role: USER_ROLES.ADMIN,
     status: USER_STATUS.ACTIVE,
-    name: { first: firstName, last: lastName },
+    name: { first: fullName, last: "" },
     auth: {
       email: normalizedEmail,
       password,
@@ -150,7 +146,7 @@ async function createAdminUser(creator, { email, password, firstName, lastName }
 /**
  * Create CAD user (Admin only). cadCenter is optional for now (can be set later via patch).
  */
-async function createCadUser(creator, { email, password, firstName, lastName, cadCenter }) {
+async function createCadUser(creator, { email, password, fullName, cadCenter }) {
   const normalizedEmail = email.toLowerCase().trim();
   const existing = await User.findOne({ "auth.email": normalizedEmail });
   if (existing) {
@@ -170,7 +166,7 @@ async function createCadUser(creator, { email, password, firstName, lastName, ca
   const userPayload = {
     role: USER_ROLES.CAD,
     status: USER_STATUS.ACTIVE,
-    name: { first: firstName, last: lastName },
+    name: { first: fullName, last: "" },
     auth: {
       email: normalizedEmail,
       password,
@@ -189,7 +185,7 @@ async function createCadUser(creator, { email, password, firstName, lastName, ca
 /**
  * Create Surveyor user (Admin only). Created with phone + password; otpVerified set so they can login without OTP.
  */
-async function createSurveyorUser(creator, { phone, password, firstName, lastName }) {
+async function createSurveyorUser(creator, { phone, password, fullName }) {
   const normalizedPhone = String(phone).trim();
   const existing = await User.findOne({ "auth.phone": normalizedPhone });
   if (existing) {
@@ -199,7 +195,7 @@ async function createSurveyorUser(creator, { phone, password, firstName, lastNam
   const user = await User.create({
     role: USER_ROLES.SURVEYOR,
     status: USER_STATUS.ACTIVE,
-    name: { first: firstName, last: lastName },
+    name: { first: fullName, last: "" },
     auth: {
       phone: normalizedPhone,
       password,
@@ -298,13 +294,14 @@ async function patch(actor, userId, payload) {
   }
   assertCanManageUser(actor, user);
 
-  const { firstName, lastName, status, cadCenter, district, taluka, category, surveyType } = payload;
+  const { fullName, status, cadCenter, district, taluka, category, surveyType } = payload;
 
-  if (firstName !== undefined) {
-    user.name.first = String(firstName).trim() || user.name.first;
-  }
-  if (lastName !== undefined) {
-    user.name.last = String(lastName).trim();
+  if (fullName !== undefined) {
+    const normalized = String(fullName).trim();
+    if (normalized) {
+      user.name.first = normalized;
+      user.name.last = "";
+    }
   }
   if (status !== undefined) {
     const s = String(status).toUpperCase();

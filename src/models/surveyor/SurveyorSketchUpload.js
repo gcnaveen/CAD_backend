@@ -97,7 +97,7 @@ const SurveyorSketchUploadSchema = new mongoose.Schema(
     /** Required single upload file for this request (URL/object metadata). */
     singleUpload: {
       type: SurveyDocumentSchema,
-      required: true,
+      // required: true,
     },
 
     // -------- Document indicator booleans --------
@@ -211,18 +211,33 @@ SurveyorSketchUploadSchema.pre("save", async function (next) {
     const prefix = `${districtCode}/${talukaCode}/${year}/`;
     const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-    // Single query: find the doc with highest number for this prefix (index-friendly)
-    const lastDoc = await this.constructor
-      .findOne({ applicationId: new RegExp(`^${escapedPrefix}\\d+$`) })
-      .sort({ applicationId: -1 })
-      .select("applicationId")
-      .lean();
+    // Find numeric max suffix safely (lexicographic sort on applicationId is incorrect after 9).
+    const maxRows = await this.constructor.aggregate([
+      { $match: { applicationId: new RegExp(`^${escapedPrefix}\\d+$`) } },
+      {
+        $project: {
+          suffix: {
+            $arrayElemAt: [{ $split: ["$applicationId", prefix] }, 1],
+          },
+        },
+      },
+      {
+        $project: {
+          seq: {
+            $convert: {
+              input: "$suffix",
+              to: "int",
+              onError: 0,
+              onNull: 0,
+            },
+          },
+        },
+      },
+      { $sort: { seq: -1 } },
+      { $limit: 1 },
+    ]);
 
-    let maxNumber = 0;
-    if (lastDoc?.applicationId) {
-      const match = lastDoc.applicationId.match(new RegExp(`^${escapedPrefix}(\\d+)$`));
-      if (match?.[1]) maxNumber = parseInt(match[1], 10);
-    }
+    const maxNumber = maxRows?.[0]?.seq || 0;
 
     const nextNumber = maxNumber + 1;
 
