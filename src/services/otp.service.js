@@ -1,6 +1,9 @@
 /**
  * OTP Service
  * Handles OTP generation, storage, verification, and delivery to phone.
+ *
+ * Testing: Set COMMON_OTP (e.g. "123456") or OTP_TEST_MODE=true in env to use a fixed OTP
+ * for all generations. Change/remove for production or after DLT completion.
  */
 
 const User = require("../models/user/User");
@@ -10,7 +13,13 @@ const logger = require("../utils/logger");
 
 const OTP_EXPIRY_MINUTES = 10;
 
+/** For testing: common OTP for all generations. Set COMMON_OTP or OTP_TEST_MODE=true; remove for production. */
+const TEST_OTP = process.env.COMMON_OTP || (process.env.OTP_TEST_MODE === "true" ? "123456" : null);
+
 const generateOtp = () => {
+  if (TEST_OTP) {
+    return String(TEST_OTP).trim();
+  }
   return String(100000 + Math.floor(Math.random() * 900000));
 };
 
@@ -65,12 +74,20 @@ class OtpService {
       user.auth.otpVerified = false;
       await user.save();
 
-      const sent = await sendOtpSms(normalizedPhone, otp);
-      if (!sent) {
-        throw new DatabaseError("Failed to send OTP");
+      if (TEST_OTP) {
+        // Testing: skip SMS to avoid cost/DLT; OTP is stored and can be verified with COMMON_OTP value
+        logger.info("OTP issued (test mode – SMS skipped)", {
+          userId: user._id?.toString(),
+          phone: normalizedPhone,
+          otp: otp,
+        });
+      } else {
+        const sent = await sendOtpSms(normalizedPhone, otp);
+        if (!sent) {
+          throw new DatabaseError("Failed to send OTP");
+        }
+        logger.info("OTP issued", { userId: user._id?.toString(), phone: normalizedPhone });
       }
-
-      logger.info("OTP issued", { userId: user._id?.toString(), phone: normalizedPhone });
       return { message: "OTP sent to phone", expiresAt: expires };
     } catch (error) {
       if (
