@@ -36,10 +36,10 @@ class AuthService {
    * Password role → create as ACTIVE, return user + token.
    */
   async registerSuperAdmin(payload) {
-    const { fullName, email, password } = payload;
+    const { firstName, lastName, email, password } = payload;
 
-    if (!email || !password || !fullName) {
-      throw new BadRequestError("fullName, email and password are required");
+    if (!email || !password || !firstName) {
+      throw new BadRequestError("firstName, email and password are required");
     }
 
     const existing = await User.findOne({ "auth.email": email.toLowerCase().trim() });
@@ -49,7 +49,7 @@ class AuthService {
 
     const user = await User.create({
       role: USER_ROLES.SUPER_ADMIN,
-      name: { first: fullName.trim(), last: "" },
+      name: { first: firstName.trim(), last: (lastName || "").trim() },
       auth: {
         email: email.toLowerCase().trim(),
         password,
@@ -71,10 +71,10 @@ class AuthService {
    * Returns otpRequired: true (verify next to get token).
    */
   async surveyorSendOtp(payload) {
-    const { phone, fullName } = payload;
+    const { phone, firstName, lastName } = payload;
 
-    if (!phone || !fullName) {
-      throw new BadRequestError("phone and fullName are required");
+    if (!phone || !firstName) {
+      throw new BadRequestError("phone and firstName are required");
     }
 
     const normalizedPhone = String(phone).trim();
@@ -86,7 +86,7 @@ class AuthService {
       try {
         user = await User.create({
           role: USER_ROLES.SURVEYOR,
-          name: { first: fullName.trim(), last: "" },
+          name: { first: firstName.trim(), last: (lastName || "").trim() },
           auth: { phone: normalizedPhone },
         });
         // Reload with OTP fields selected
@@ -108,8 +108,8 @@ class AuthService {
       if (user.role !== USER_ROLES.SURVEYOR) {
         throw new ConflictError("This phone is registered with a different role");
       }
-      user.name.first = fullName.trim();
-      user.name.last = "";
+      user.name.first = firstName.trim();
+      user.name.last = (lastName || "").trim();
       await user.save();
     }
 
@@ -160,7 +160,7 @@ class AuthService {
    * Requires OTP to be verified first. Returns user + token.
    */
   async surveyorCompleteRegistration(payload) {
-    const { phone, password, district, taluka, category, surveyType, fullName } = payload;
+    const { phone, password, district, taluka, category, surveyType, firstName, lastName } = payload;
 
     if (!phone || !password) {
       throw new BadRequestError("phone and password are required");
@@ -194,9 +194,11 @@ class AuthService {
     }
 
     // Update name if provided in payload
-    if (fullName) {
-      user.name.first = fullName.trim();
-      user.name.last = "";
+    if (firstName) {
+      user.name.first = firstName.trim();
+    }
+    if (lastName !== undefined) {
+      user.name.last = lastName ? lastName.trim() : "";
     }
 
     // Set password
