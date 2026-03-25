@@ -123,6 +123,12 @@ const SurveyorSketchUploadSchema = new mongoose.Schema(
       default: () => [],
     },
 
+    /** CAD output (finished sketch) after assignment completion; surveyor downloads via url (same shape as singleUpload). */
+    cadDeliverable: {
+      type: SurveyDocumentSchema,
+      default: null,
+    },
+
     /** Optional notes or text (e.g. "If joint flat, provide all survey no. details"). Max 2000 chars. */
     others: {
       type: String,

@@ -11,7 +11,8 @@ const notDeleted = { deletedAt: null };
 function assertReadAccess(actor, draft) {
   if (actor.role === USER_ROLES.SUPER_ADMIN || actor.role === USER_ROLES.ADMIN) return;
   if (actor.role !== USER_ROLES.SURVEYOR) throw new ForbiddenError("Insufficient permissions");
-  if (String(draft.surveyor) !== String(actor._id)) {
+  const draftSurveyorId = draft?.surveyor?._id?.toString?.() ?? draft?.surveyor?.toString?.();
+  if (String(draftSurveyorId) !== String(actor._id)) {
     throw new ForbiddenError("You can only access your own drafts");
   }
 }

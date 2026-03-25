@@ -4,6 +4,7 @@
  */
 
 const SurveyorSketchUpload = require("../models/surveyor/SurveyorSketchUpload");
+const SurveySketchAssignment = require("../models/assignment/SurveySketchAssignment");
 const User = require("../models/user/User");
 const District = require("../models/masters/District");
 const Taluka = require("../models/masters/Taluka");
@@ -12,7 +13,7 @@ const Village = require("../models/masters/Village");
 const surveySketchAssignmentService = require("./assignment/surveySketchAssignment.service");
 const flowService = require("./config/surveySketchAssignmentFlow.service");
 const notificationService = require("./notification.service");
-const { USER_ROLES } = require("../config/constants");
+const { USER_ROLES, SURVEY_SKETCH_ASSIGNMENT_STATUS } = require("../config/constants");
 const { ForbiddenError, NotFoundError, BadRequestError } = require("../utils/errors");
 const mongoose = require("mongoose");
 const logger = require("../utils/logger");
@@ -205,6 +206,47 @@ async function getById(actor, uploadId) {
 }
 
 /**
+ * CAD: full sketch upload for an assignment they can work on (same shape as surveyor GET).
+ */
+async function getByIdForCad(actor, uploadId) {
+  if (actor.role !== USER_ROLES.CAD) {
+    throw new ForbiddenError("Only CAD users can use this endpoint");
+  }
+
+  const userCenterId = actor.cadProfile?.cadCenter != null ? actor.cadProfile.cadCenter : null;
+  const orClauses = [{ assignedTo: actor._id }];
+  if (userCenterId) {
+    orClauses.push({ assignedTo: null, cadCenter: userCenterId });
+  }
+
+  const linked = await SurveySketchAssignment.findOne({
+    surveyorSketchUpload: uploadId,
+    status: { $ne: SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED },
+    $or: orClauses,
+  })
+    .select("_id")
+    .lean();
+
+  if (!linked) {
+    throw new ForbiddenError("You do not have access to this sketch upload");
+  }
+
+  const doc = await SurveyorSketchUpload.findById(uploadId)
+    .populate("surveyor", "name role")
+    .populate("district", "code name")
+    .populate("taluka", "code name")
+    .populate("hobli", "code name")
+    .populate("village", "code name")
+    .lean();
+
+  if (!doc) {
+    throw new NotFoundError("Survey sketch upload not found");
+  }
+
+  return doc;
+}
+
+/**
  * List uploads. Surveyor: only own; Admin/SuperAdmin: all (optional filter by surveyor, status, cadCenterId).
  * cadCenterId: only uploads that are assigned to that CAD center (via SurveySketchAssignment).
  * @param {Object} actor - Authenticated user
@@ -310,6 +352,7 @@ async function listAllWithAssignment(options = {}) {
 module.exports = {
   create,
   getById,
+  getByIdForCad,
   list,
   listAllWithAssignment,
 };
