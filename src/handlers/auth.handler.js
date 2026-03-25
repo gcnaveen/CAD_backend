@@ -372,6 +372,36 @@ exports.acceptAssignmentByCad = asyncHandler(async (event) => {
   return await surveySketchAssignmentController.respondToAssignment(assignmentId, user, payload);
 });
 
+// -------- CAD: List my assignments (direct assignee or legacy center pool) --------
+exports.listCadAssignments = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.CAD)(event);
+  const q = event.queryStringParameters || {};
+  const options = { page: q.page, limit: q.limit, status: q.status };
+  return await surveySketchAssignmentController.listForCadUser(user, options);
+});
+
+// -------- CAD: Get source sketch upload (inputs) for work --------
+exports.getCadSketchUpload = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.CAD)(event);
+  const { uploadId } = getPathParams(event);
+  if (!uploadId) throw new BadRequestError("uploadId is required");
+  validObjectId(uploadId, "uploadId");
+  return await surveyorSketchUploadController.getUploadForCad(user, uploadId);
+});
+
+// -------- CAD: Submit finished sketch (sets cadDeliverable on upload; assignment COMPLETED) --------
+exports.deliverCadSketch = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.CAD)(event);
+  const { assignmentId } = getPathParams(event);
+  if (!assignmentId) throw new BadRequestError("assignmentId is required");
+  validObjectId(assignmentId, "assignmentId");
+  const body = validate(schemas.cadSketchDeliverable)(event);
+  return await surveySketchAssignmentController.deliverCadSketch(assignmentId, user, body);
+});
+
 // -------- Admin: Auto assignment flow toggle --------
 exports.getSurveySketchAssignmentFlow = asyncHandler(async (event) => {
   await ensureDb();

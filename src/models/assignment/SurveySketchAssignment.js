@@ -16,11 +16,11 @@ const SurveySketchAssignmentSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    /** CAD center this sketch is assigned to. */
+    /** CAD center (optional; legacy pool assignments). Omit when assigning directly to a CAD user. */
     cadCenter: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "CadCenter",
-      required: true,
+      default: null,
       index: true,
     },
     /** Optional: specific CAD user within the center assigned to do the work. */

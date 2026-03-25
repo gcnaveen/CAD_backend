@@ -61,6 +61,8 @@ const SURVEY_SKETCH_STATUS = Object.freeze({
   PENDING: "PENDING",
   /** Admin has assigned this sketch to a CAD center. */
   ASSIGNED: "ASSIGNED",
+  /** CAD has uploaded the finished sketch; surveyor can download from cadDeliverable on the upload. */
+  CAD_DELIVERED: "CAD_DELIVERED",
   UNDER_REVIEW: "UNDER_REVIEW",
   APPROVED: "APPROVED",
   REJECTED: "REJECTED",

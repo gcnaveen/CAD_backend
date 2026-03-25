@@ -27,6 +27,17 @@ async function listByCadCenter(cadCenterId, options) {
   });
 }
 
+async function listForCadUser(cadUser, options) {
+  const result = await surveySketchAssignmentService.listForCadUser(cadUser, options);
+  const limit = Math.min(100, Math.max(1, parseInt(options.limit, 10) || 20));
+  const page = Math.max(1, parseInt(options.page, 10) || 1);
+  const skip = (page - 1) * limit;
+  const { paginationMeta } = require("../../utils/pagination");
+  return ok(result.data, {
+    pagination: paginationMeta({ page, limit, skip }, result.total),
+  });
+}
+
 async function listAll(filters, pagination) {
   const result = await surveySketchAssignmentService.listAll(filters, pagination);
   if (!pagination) return ok(result.data);
@@ -45,11 +56,18 @@ async function respondToAssignment(assignmentId, cadUser, payload) {
   return ok(data);
 }
 
+async function deliverCadSketch(assignmentId, cadUser, payload) {
+  const data = await surveySketchAssignmentService.deliverCadSketch(assignmentId, cadUser, payload);
+  return ok(data);
+}
+
 module.exports = {
   createAssignment,
   getAssignment,
   listByCadCenter,
+  listForCadUser,
   listAll,
   updateAssignment,
   respondToAssignment,
+  deliverCadSketch,
 };

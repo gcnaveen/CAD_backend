@@ -73,8 +73,14 @@ exports.handler = asyncHandler(async (event) => {
     case "GET /api/admin/cad-centers/{cadCenterId}/assignments":
       return authHandler.listAssignmentsByCadCenter(event);
 
+    case "GET /api/cad/assignments":
+      return authHandler.listCadAssignments(event);
+    case "GET /api/cad/sketch-uploads/{uploadId}":
+      return authHandler.getCadSketchUpload(event);
     case "POST /api/cad/assignments/{assignmentId}/accept":
       return authHandler.acceptAssignmentByCad(event);
+    case "POST /api/cad/assignments/{assignmentId}/deliver":
+      return authHandler.deliverCadSketch(event);
     case "GET /api/admin/survey-sketch-assignment-flow":
       return authHandler.getSurveySketchAssignmentFlow(event);
     case "PATCH /api/admin/survey-sketch-assignment-flow":

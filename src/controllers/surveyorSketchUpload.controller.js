@@ -16,6 +16,11 @@ async function getUpload(actor, uploadId) {
   return ok(result);
 }
 
+async function getUploadForCad(actor, uploadId) {
+  const result = await surveyorSketchUploadService.getByIdForCad(actor, uploadId);
+  return ok(result);
+}
+
 async function listUploads(actor, options) {
   const result = await surveyorSketchUploadService.list(actor, options);
   return ok(result.data, result.meta);
@@ -31,6 +36,7 @@ async function listAllWithAssignment(options) {
 module.exports = {
   createUpload,
   getUpload,
+  getUploadForCad,
   listUploads,
   listAllWithAssignment,
 };

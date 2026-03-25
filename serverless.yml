@@ -140,7 +140,16 @@ functions:
           path: /api/admin/cad-centers/{cadCenterId}/assignments
           method: get
       - httpApi:
+          path: /api/cad/assignments
+          method: get
+      - httpApi:
+          path: /api/cad/sketch-uploads/{uploadId}
+          method: get
+      - httpApi:
           path: /api/cad/assignments/{assignmentId}/accept
+          method: post
+      - httpApi:
+          path: /api/cad/assignments/{assignmentId}/deliver
           method: post
       - httpApi:
           path: /api/admin/survey-sketch-assignment-flow

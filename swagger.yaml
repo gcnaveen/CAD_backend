@@ -1763,10 +1763,11 @@ paths:
   /api/admin/survey-sketch-assignments:
     post:
       tags: [Admin - Assignments]
-      summary: Assign Survey Sketch to CAD Center
+      summary: Assign Survey Sketch to CAD (center and/or user)
       description: |
-        Assign a surveyor sketch upload to a CAD center (and optionally to a specific CAD user). Admin/Super Admin only.
-        One active assignment per survey sketch; returns 409 if already assigned.
+        Assign a surveyor sketch upload. **Use `cadUserId` or `assignedCadUserId`** for the CAD **user** ObjectId (role CAD). That is not a CadCenter id.
+        When a CAD user id is provided, `cadCenterId` is ignored. **Legacy:** `cadCenterId` only = a real CadCenter document id (pool); if you mistakenly send a user id there, the API may still resolve it as a CAD user when no center exists.
+        Admin/Super Admin only. One active assignment per survey sketch; returns 409 if already assigned.
       operationId: createSurveySketchAssignment
       security:
         - bearerAuth: []
@@ -1900,6 +1901,76 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/cad/assignments:
+    get:
+      tags: [CAD - Assignments]
+      summary: List my assignments (CAD)
+      description: |
+        Returns assignments for the logged-in CAD user: rows where they are `assignedTo`, plus legacy unclaimed rows for their `cadCenter` (if linked).
+        Excludes CANCELLED unless `status` query is set to that value.
+      operationId: listCadAssignments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ASSIGNED, IN_PROGRESS, COMPLETED, ON_HOLD, CANCELLED]
+      responses:
+        "200":
+          description: Paginated assignments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: array, items: { $ref: "#/components/schemas/SurveySketchAssignment" } }
+                  pagination: { type: object }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/cad/sketch-uploads/{uploadId}:
+    parameters:
+      - name: uploadId
+        in: path
+        required: true
+        schema: { type: string }
+        description: SurveyorSketchUpload ObjectId (from assignment.surveyorSketchUpload)
+    get:
+      tags: [CAD - Assignments]
+      summary: Get sketch upload for CAD work (inputs)
+      description: |
+        Full surveyor sketch document (documents, singleUpload, etc.) when the CAD user has a non-cancelled assignment for this upload.
+      operationId: getCadSketchUpload
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Survey sketch upload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: "#/components/schemas/SurveyorSketchUpload" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/cad/assignments/{assignmentId}/accept:
     parameters:
       - name: assignmentId
@@ -1912,9 +1983,9 @@ paths:
       summary: Accept or reject assignment (CAD)
       description: |
         CAD user accepts or rejects an assigned work. Only assignments with status ASSIGNED can be responded to.
-        - **accept** – status → IN_PROGRESS, assignedTo set to the CAD user.
+        - **accept** – status → IN_PROGRESS; `assignedTo` set to this user if not already set (direct assign keeps the same user).
         - **reject** – assignment status → CANCELLED; survey sketch status → PENDING (admin can reassign).
-        The CAD user must belong to the same CAD center as the assignment.
+        Eligible if the assignment is pre-assigned to this user (`assignedCadUserId` flow), or (legacy) the assignment has a `cadCenter` matching the user's linked center.
       operationId: acceptAssignmentByCad
       security:
         - bearerAuth: []
@@ -1932,6 +2003,48 @@ paths:
       responses:
         "200":
           description: Assignment updated (IN_PROGRESS if accepted, CANCELLED if rejected)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: "#/components/schemas/SurveySketchAssignment" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/cad/assignments/{assignmentId}/deliver:
+    parameters:
+      - name: assignmentId
+        in: path
+        required: true
+        schema: { type: string }
+        description: Survey sketch assignment ObjectId (must be IN_PROGRESS and assigned to this CAD user)
+    post:
+      tags: [CAD - Assignments]
+      summary: Submit finished sketch (CAD deliverable)
+      description: |
+        After uploading the file via presigned PUT (`/api/upload/image`), POST the resulting URL here.
+        Sets `cadDeliverable` on the survey sketch upload, assignment status → COMPLETED, sketch status → CAD_DELIVERED.
+        The surveyor can download using `cadDeliverable.url` from `GET /api/surveyor/sketch-uploads/{uploadId}`.
+      operationId: deliverCadSketch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CadSketchDeliverableRequest"
+      responses:
+        "200":
+          description: Updated assignment
           content:
             application/json:
               schema:
@@ -2856,20 +2969,24 @@ components:
 
     SurveySketchAssignmentCreateRequest:
       type: object
-      required: [surveyorSketchUploadId, cadCenterId]
-      description: Assign a survey sketch upload to a CAD center (admin).
+      required: [surveyorSketchUploadId]
+      description: |
+        At least one of **`cadUserId`**, **`assignedCadUserId`**, or **`cadCenterId`**.  
+        **`cadUserId` and `assignedCadUserId` are the same thing** (CAD user `_id`, not a center). Use either name; if both are sent they must match.
       properties:
         surveyorSketchUploadId:
           type: string
           description: SurveyorSketchUpload ObjectId
+        cadUserId:
+          type: string
+          description: CAD **user** ObjectId (role CAD). Preferred clear name; same as assignedCadUserId
         cadCenterId:
           type: string
-          description: CadCenter ObjectId
-        # assignedToUserId – commented out for now; uncomment if required
-        # assignedToUserId:
-        #   type: string
-        #   nullable: true
-        #   description: Optional CAD user (must belong to this center) ObjectId
+          nullable: true
+          description: Only for a real **CadCenter** document id (legacy pool). Do not use for a user id — use `cadUserId` instead
+        assignedCadUserId:
+          type: string
+          description: Same as `cadUserId` (active CAD user ObjectId)
         dueDate:
           type: string
           format: date-time
@@ -2878,6 +2995,26 @@ components:
           type: string
           maxLength: 1000
           nullable: true
+    CadSketchDeliverableRequest:
+      type: object
+      required: [url]
+      description: Metadata for the finished file after S3 presigned upload
+      properties:
+        url:
+          type: string
+          format: uri
+          description: File URL or S3 key as returned from upload API
+        fileName:
+          type: string
+          nullable: true
+        mimeType:
+          type: string
+          nullable: true
+        size:
+          type: integer
+          nullable: true
+          description: Size in bytes
+
     SurveySketchAssignmentUpdateRequest:
       type: object
       minProperties: 1
@@ -2911,10 +3048,22 @@ components:
                 applicationId: { type: string }
                 surveyNo: { type: string }
                 status: { type: string }
+                cadDeliverable:
+                  type: object
+                  nullable: true
+                  properties:
+                    url: { type: string, format: uri }
+                    fileName: { type: string, nullable: true }
+                    mimeType: { type: string, nullable: true }
+                    size: { type: integer, nullable: true }
+                    uploadedAt: { type: string, format: date-time, nullable: true }
         cadCenter:
+          nullable: true
           oneOf:
             - type: string
+              nullable: true
             - type: object
+              nullable: true
               properties:
                 _id: { type: string }
                 name: { type: string }
@@ -3455,10 +3604,20 @@ components:
           type: boolean
           default: false
           description: "Indicates mulapatra is included"
+        cadDeliverable:
+          type: object
+          nullable: true
+          description: CAD output after deliver endpoint; surveyor uses url to download
+          properties:
+            url: { type: string, format: uri }
+            fileName: { type: string, nullable: true }
+            mimeType: { type: string, nullable: true }
+            size: { type: integer, nullable: true }
+            uploadedAt: { type: string, format: date-time, nullable: true }
         status:
           type: string
-          description: PENDING when surveyor raises request; ASSIGNED when admin assigns to a CAD center.
-          enum: [PENDING, ASSIGNED, UNDER_REVIEW, APPROVED, REJECTED]
+          description: PENDING → ASSIGNED → CAD_DELIVERED after CAD submits deliverable; etc.
+          enum: [PENDING, ASSIGNED, CAD_DELIVERED, UNDER_REVIEW, APPROVED, REJECTED]
           default: PENDING
         statusNote:
           type: string

@@ -416,13 +416,36 @@ const schemas = {
     return updates;
   },
 
-  // -------- Survey Sketch Assignment (admin: assign survey sketch to CAD center) --------
+  // -------- Survey Sketch Assignment (admin: assign survey sketch to CAD user or legacy center) --------
   surveySketchAssignmentCreate(body) {
-    requireFields(body, ["surveyorSketchUploadId", "cadCenterId"]);
+    requireFields(body, ["surveyorSketchUploadId"]);
     const surveyorSketchUploadId = validObjectId(body.surveyorSketchUploadId, "surveyorSketchUploadId");
-    const cadCenterId = validObjectId(body.cadCenterId, "cadCenterId");
-    // assignedToUserId – commented out for now; uncomment if assigning to a specific CAD user is required
-    // const assignedToUserId = body.assignedToUserId ? validObjectId(body.assignedToUserId, "assignedToUserId") : undefined;
+    const cadCenterId =
+      body.cadCenterId != null && body.cadCenterId !== ""
+        ? validObjectId(body.cadCenterId, "cadCenterId")
+        : null;
+    let assignedCadUserId =
+      body.assignedCadUserId != null && body.assignedCadUserId !== ""
+        ? validObjectId(body.assignedCadUserId, "assignedCadUserId")
+        : null;
+    const cadUserId =
+      body.cadUserId != null && body.cadUserId !== ""
+        ? validObjectId(body.cadUserId, "cadUserId")
+        : null;
+    if (assignedCadUserId && cadUserId && String(assignedCadUserId) !== String(cadUserId)) {
+      throw new BadRequestError("assignedCadUserId and cadUserId must be the same if both are sent", {
+        code: "CONFLICTING_CAD_USER_IDS",
+      });
+    }
+    if (!assignedCadUserId && cadUserId) {
+      assignedCadUserId = cadUserId;
+    }
+    if (!cadCenterId && !assignedCadUserId) {
+      throw new BadRequestError(
+        "Provide cadUserId or assignedCadUserId (CAD user ObjectId), or cadCenterId for a real CAD center only",
+        { code: "ASSIGNMENT_TARGET_REQUIRED" }
+      );
+    }
     let dueDate = null;
     if (body.dueDate != null && body.dueDate !== "") {
       dueDate = new Date(body.dueDate);
@@ -431,10 +454,25 @@ const schemas = {
     const notes = body.notes != null ? String(body.notes).trim().slice(0, 1000) : undefined;
     return {
       surveyorSketchUploadId,
-      cadCenterId,
-      // assignedToUserId: assignedToUserId || undefined,
+      cadCenterId: cadCenterId || undefined,
+      assignedCadUserId: assignedCadUserId || undefined,
       dueDate: dueDate || undefined,
       notes,
+    };
+  },
+
+  /** CAD: finished sketch file metadata (URL from presigned PUT). */
+  cadSketchDeliverable(body) {
+    requireFields(body, ["url"]);
+    const url = String(body.url ?? "").trim();
+    if (!url) {
+      throw new BadRequestError("url is required", { errors: [{ field: "url", message: "Required" }] });
+    }
+    return {
+      url,
+      fileName: body.fileName != null ? String(body.fileName).trim() : undefined,
+      mimeType: body.mimeType != null ? String(body.mimeType).trim() : undefined,
+      size: body.size !== undefined && body.size !== null ? body.size : undefined,
     };
   },
 
