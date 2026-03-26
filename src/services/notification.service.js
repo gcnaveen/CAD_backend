@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Notification = require("../models/notification/Notification");
+const { USER_ROLES } = require("../config/constants");
 const { NotFoundError, ForbiddenError } = require("../utils/errors");
 
 const DEFAULT_PAGE = 1;
@@ -12,10 +13,29 @@ function toObjectIdIfValid(id) {
   return null;
 }
 
-function accessFilter(actor) {
-  return {
-    $or: [{ targetRoles: actor.role }, { targetUsers: actor._id }],
-  };
+function isPlatformAdmin(role) {
+  return role === USER_ROLES.SUPER_ADMIN || role === USER_ROLES.ADMIN;
+}
+
+/**
+ * Visibility for list / mark-read operations:
+ * - ADMIN & SUPER_ADMIN: full feed (operational; not scoped by targetUsers).
+ * - All other roles: only rows that explicitly list their user id in targetUsers.
+ *
+ * targetRoles on stored documents is reserved for categorisation / filtering;
+ * it must not grant visibility to non-admins (avoids CAD/SURVEYOR seeing each other's feeds).
+ */
+function listAccessFilter(actor) {
+  if (isPlatformAdmin(actor.role)) {
+    return {};
+  }
+  return { targetUsers: actor._id };
+}
+
+function actorCanAccessDocument(doc, actor) {
+  if (isPlatformAdmin(actor.role)) return true;
+  const uid = String(actor._id);
+  return (doc.targetUsers || []).some((u) => String(u) === uid);
 }
 
 function decorate(doc, actorId) {
@@ -27,6 +47,10 @@ function decorate(doc, actorId) {
   };
 }
 
+/**
+ * Create a notification. Non-admin visibility is driven only by `targetUsers` at list/get time.
+ * @param {{ targetRoles?: string[], targetUsers?: unknown[] }} payload
+ */
 async function create(payload) {
   const doc = await Notification.create({
     type: payload.type,
@@ -48,7 +72,7 @@ async function list(actor, options = {}) {
   const skip = (page - 1) * limit;
   const filter = {
     deletedAt: null,
-    ...accessFilter(actor),
+    ...listAccessFilter(actor),
   };
   if (options.type) filter.type = String(options.type).trim();
   if (options.unreadOnly === true) {
@@ -73,10 +97,9 @@ async function list(actor, options = {}) {
 async function getById(actor, notificationId) {
   const doc = await Notification.findOne({ _id: notificationId, deletedAt: null }).lean();
   if (!doc) throw new NotFoundError("Notification not found");
-  const canAccess =
-    (doc.targetRoles || []).includes(actor.role) ||
-    (doc.targetUsers || []).some((u) => String(u) === String(actor._id));
-  if (!canAccess) throw new ForbiddenError("You are not allowed to access this notification");
+  if (!actorCanAccessDocument(doc, actor)) {
+    throw new ForbiddenError("You are not allowed to access this notification");
+  }
   return decorate(doc, actor._id);
 }
 
@@ -85,7 +108,7 @@ async function markRead(actor, notificationId) {
     {
       _id: notificationId,
       deletedAt: null,
-      ...accessFilter(actor),
+      ...listAccessFilter(actor),
       readBy: { $not: { $elemMatch: { user: actor._id } } },
     },
     {
@@ -94,13 +117,12 @@ async function markRead(actor, notificationId) {
     { new: true }
   ).lean();
   if (!updated) {
-    const already = await Notification.findOne({
-      _id: notificationId,
-      deletedAt: null,
-      ...accessFilter(actor),
-    }).lean();
-    if (!already) throw new NotFoundError("Notification not found");
-    return decorate(already, actor._id);
+    const doc = await Notification.findOne({ _id: notificationId, deletedAt: null }).lean();
+    if (!doc) throw new NotFoundError("Notification not found");
+    if (!actorCanAccessDocument(doc, actor)) {
+      throw new ForbiddenError("You are not allowed to access this notification");
+    }
+    return decorate(doc, actor._id);
   }
   return decorate(updated, actor._id);
 }
@@ -109,7 +131,7 @@ async function markAllRead(actor) {
   await Notification.updateMany(
     {
       deletedAt: null,
-      ...accessFilter(actor),
+      ...listAccessFilter(actor),
       readBy: { $not: { $elemMatch: { user: actor._id } } },
     },
     {
