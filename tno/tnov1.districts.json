@@ -1,0 +1,833 @@
+[{
+  "_id": {
+    "$oid": "66c97b0da03981af35adba32"
+  },
+  "district_id": 1,
+  "name": "Bengaluru Urban",
+  "k_name": "Bengaluru Urban",
+  "is_active": true,
+  "is_archived": true,
+  "createdAt": {
+    "$date": "2024-08-24T06:17:49.893Z"
+  },
+  "updatedAt": {
+    "$date": "2024-08-24T07:40:40.830Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "66c97c0637e227fe174095d6"
+  },
+  "district_id": 2,
+  "name": "mysore",
+  "k_name": "Mysore",
+  "is_active": true,
+  "is_archived": true,
+  "createdAt": {
+    "$date": "2024-08-24T06:21:58.129Z"
+  },
+  "updatedAt": {
+    "$date": "2024-08-24T07:58:15.860Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "66c9833234f6913ba7ed3dbe"
+  },
+  "district_id": 3,
+  "name": "mandya",
+  "k_name": "Mandya",
+  "is_active": true,
+  "is_archived": true,
+  "createdAt": {
+    "$date": "2024-08-24T06:52:34.838Z"
+  },
+  "updatedAt": {
+    "$date": "2024-08-24T07:58:16.795Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "66c9859c34f6913ba7ed3de5"
+  },
+  "district_id": 4,
+  "name": "Belgavi",
+  "k_name": "Belgavi",
+  "is_active": true,
+  "is_archived": true,
+  "createdAt": {
+    "$date": "2024-08-24T07:02:52.903Z"
+  },
+  "updatedAt": {
+    "$date": "2024-08-26T16:47:12.024Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "66c987eb34f6913ba7ed3e14"
+  },
+  "district_id": 5,
+  "name": "Bengaluru rural",
+  "k_name": "Bengaluru Rural",
+  "is_active": true,
+  "is_archived": true,
+  "createdAt": {
+    "$date": "2024-08-24T07:12:43.960Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.344Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "66c989101101491d2536ca33"
+  },
+  "district_id": 7,
+  "name": "shivamogga",
+  "k_name": "Shivamogga",
+  "is_active": true,
+  "is_archived": true,
+  "createdAt": {
+    "$date": "2024-08-24T07:17:36.178Z"
+  },
+  "updatedAt": {
+    "$date": "2024-08-26T16:34:14.463Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "66c993413b3058f677033685"
+  },
+  "district_id": 9,
+  "name": "bengaluru urban",
+  "k_name": "Bengaluru Urban",
+  "is_active": true,
+  "is_archived": true,
+  "createdAt": {
+    "$date": "2024-08-24T08:01:05.337Z"
+  },
+  "updatedAt": {
+    "$date": "2024-08-26T16:33:57.772Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "66ccb1efd42849ee784bf9bb"
+  },
+  "district_id": 10,
+  "name": "bengaluru urban",
+  "k_name": "Bengaluru Urban",
+  "is_active": true,
+  "is_archived": true,
+  "createdAt": {
+    "$date": "2024-08-26T16:48:47.489Z"
+  },
+  "updatedAt": {
+    "$date": "2024-08-26T16:48:52.785Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "66ccb1fdd42849ee784bf9c7"
+  },
+  "district_id": 11,
+  "name": "Bengaluru urban",
+  "k_name": "Bengaluru Urban",
+  "is_active": true,
+  "is_archived": true,
+  "createdAt": {
+    "$date": "2024-08-26T16:49:01.286Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.344Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "66cd77ceaf600c62ef675256"
+  },
+  "district_id": 12,
+  "name": "Bengaluru urban",
+  "k_name": "Bengaluru Urban",
+  "is_active": true,
+  "is_archived": true,
+  "createdAt": {
+    "$date": "2024-08-27T06:53:02.173Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.344Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "655c8a14788ad54a9157d4f3"
+  },
+  "district_id": 1,
+  "name": "Bagalkote",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:44:36.953Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.374Z"
+  },
+  "__v": 0,
+  "k_name": "ಬಾಗಲಕೋಟೆ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "655c8a80d50c7eac364960cc"
+  },
+  "district_id": 2,
+  "name": "Ballari",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:46:24.122Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.382Z"
+  },
+  "__v": 0,
+  "k_name": "ಬಳ್ಳಾರಿ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "655c8c70d50c7eac364960e8"
+  },
+  "district_id": 3,
+  "name": "Belagavi",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:54:40.136Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.374Z"
+  },
+  "__v": 0,
+  "k_name": "ಬೆಳಗಾವಿ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "655c8c74d50c7eac364960ef"
+  },
+  "district_id": 4,
+  "name": "Bengaluru rural",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:54:44.575Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.344Z"
+  },
+  "__v": 0,
+  "k_name": "ಬೆಂಗಳೂರು ಗ್ರಾಮಾಂತರ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "655c8c7ad50c7eac364960f6"
+  },
+  "district_id": 5,
+  "name": "Bengaluru urban",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:54:50.360Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.344Z"
+  },
+  "__v": 0,
+  "k_name": "ಬೆಂಗಳೂರು ನಗರ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "655c8c7fd50c7eac364960fd"
+  },
+  "district_id": 6,
+  "name": "Bidar",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:54:55.506Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.382Z"
+  },
+  "__v": 0,
+  "k_name": "ಬೀದರ್‌",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "655c8c83d50c7eac36496104"
+  },
+  "district_id": 7,
+  "name": "Chamarajanagara",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:54:59.931Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.363Z"
+  },
+  "__v": 0,
+  "k_name": "ಚಾಮರಾಜನಗರ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "655c8c88d50c7eac3649610b"
+  },
+  "district_id": 8,
+  "name": "Chikkaballapura",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:55:04.786Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.344Z"
+  },
+  "__v": 0,
+  "k_name": "ಚಿಕ್ಕಬಳ್ಳಾಪುರ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "655c8c8ed50c7eac36496112"
+  },
+  "district_id": 9,
+  "name": "Chikkamagaluru",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:55:10.225Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.363Z"
+  },
+  "__v": 0,
+  "k_name": "ಚಿಕ್ಕಮಗಳೂರು",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "655c8c93d50c7eac36496119"
+  },
+  "district_id": 10,
+  "name": "Chitradurga",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:55:15.846Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.344Z"
+  },
+  "__v": 0,
+  "k_name": "ಚಿತ್ರದುರ್ಗ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "655c8c98d50c7eac36496120"
+  },
+  "district_id": 11,
+  "name": "Dakshina Kannada",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:55:20.898Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.363Z"
+  },
+  "__v": 0,
+  "k_name": "ದಕ್ಷಿಣ ಕನ್ನಡ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "655c8c9ed50c7eac36496127"
+  },
+  "district_id": 12,
+  "name": "Davanagere",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:55:26.577Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.344Z"
+  },
+  "__v": 0,
+  "k_name": "ದಾವಣಗೆರೆ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "655c8ca3d50c7eac3649612e"
+  },
+  "district_id": 13,
+  "name": "Dharwad",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:55:31.306Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.374Z"
+  },
+  "__v": 0,
+  "k_name": "ಧಾರವಾಡ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "655c8caad50c7eac36496135"
+  },
+  "district_id": 14,
+  "name": "Gadag",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:55:38.529Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.374Z"
+  },
+  "__v": 0,
+  "k_name": "ಗದಗ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "655c8cb0d50c7eac36496140"
+  },
+  "district_id": 15,
+  "name": "Hassan",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:55:44.625Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.363Z"
+  },
+  "__v": 0,
+  "k_name": "ಹಾಸನ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "655c8cb5d50c7eac36496153"
+  },
+  "district_id": 16,
+  "name": "Haveri",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:55:49.170Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.374Z"
+  },
+  "__v": 0,
+  "k_name": "ಹಾವೇರಿ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "655c8cb8d50c7eac3649615a"
+  },
+  "district_id": 17,
+  "name": "Kalaburagi",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:55:52.905Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.382Z"
+  },
+  "__v": 0,
+  "k_name": "ಕಲಬುರಗಿ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "655c8cbcd50c7eac36496161"
+  },
+  "district_id": 18,
+  "name": "Kodagu",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:55:56.918Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.363Z"
+  },
+  "__v": 0,
+  "k_name": "ಕೊಡಗು",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "655c8cc1d50c7eac3649616c"
+  },
+  "district_id": 19,
+  "name": "Kolar",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:56:01.936Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.344Z"
+  },
+  "__v": 0,
+  "k_name": "ಕೋಲಾರ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "655c8cc6d50c7eac36496175"
+  },
+  "district_id": 20,
+  "name": "Koppal",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:56:06.518Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.382Z"
+  },
+  "__v": 0,
+  "k_name": "ಕೊಪ್ಪಳ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "655c8ccdd50c7eac36496180"
+  },
+  "district_id": 21,
+  "name": "Mandya",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:56:13.447Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.363Z"
+  },
+  "__v": 0,
+  "k_name": "ಮಂಡ್ಯ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "655c8cd1d50c7eac36496189"
+  },
+  "district_id": 22,
+  "name": "Mysuru",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:56:17.675Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.363Z"
+  },
+  "__v": 0,
+  "k_name": "ಮೈಸೂರು",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "655c8cd5d50c7eac36496190"
+  },
+  "district_id": 23,
+  "name": "Raichur",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:56:21.617Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.382Z"
+  },
+  "__v": 0,
+  "k_name": "ರಾಯಚೂರು",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "655c8cd9d50c7eac36496197"
+  },
+  "district_id": 24,
+  "name": "Ramanagara",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:56:25.241Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.344Z"
+  },
+  "__v": 0,
+  "k_name": "ರಾಮನಗರ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "655c8ce6d50c7eac3649619e"
+  },
+  "district_id": 25,
+  "name": "Shivamogga",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:56:38.708Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.344Z"
+  },
+  "__v": 0,
+  "k_name": "ಶಿವಮೊಗ್ಗ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "655c8cf3d50c7eac364961ab"
+  },
+  "district_id": 26,
+  "name": "Tumkuru",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:56:51.485Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.344Z"
+  },
+  "__v": 0,
+  "k_name": "ತುಮಕೂರು",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "655c8cfad50c7eac364961b2"
+  },
+  "district_id": 27,
+  "name": "Udupi",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:56:58.356Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.363Z"
+  },
+  "__v": 0,
+  "k_name": "ಉಡುಪಿ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "655c8cfed50c7eac364961b9"
+  },
+  "district_id": 28,
+  "name": "Uttara kannada",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:57:02.355Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.374Z"
+  },
+  "__v": 0,
+  "k_name": "ಉತ್ತರ ಕನ್ನಡ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "655c8d02d50c7eac364961c0"
+  },
+  "district_id": 29,
+  "name": "Vijayapura",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:57:06.103Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.374Z"
+  },
+  "__v": 0,
+  "k_name": "ವಿಜಯಪುರ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "655c8d05d50c7eac364961c7"
+  },
+  "district_id": 30,
+  "name": "Vijayanagara",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:57:09.845Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.382Z"
+  },
+  "__v": 0,
+  "k_name": "ವಿಜಯನಗರ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "655c8d3ed50c7eac364961d2"
+  },
+  "district_id": 31,
+  "name": "Yadgir",
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2023-11-21T10:58:06.380Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:05.382Z"
+  },
+  "__v": 0,
+  "k_name": "ಯಾದಗಿರಿ",
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+}]

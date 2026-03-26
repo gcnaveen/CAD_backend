@@ -215,6 +215,73 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /api/auth/surveyor/forgot-password/start:
+    post:
+      tags: [Authentication]
+      summary: Start Surveyor Forgot Password (Send OTP)
+      description: |
+        Step 1 of forgot password flow: send OTP to the surveyor phone number.
+        Only works for users with role `SURVEYOR`.
+      operationId: surveyorForgotPasswordStart
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SurveyorForgotPasswordStartRequest"
+            example:
+              phone: "9876543210"
+      responses:
+        "200":
+          description: OTP sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OtpSendResponse"
+              example:
+                success: true
+                data:
+                  message: OTP sent to phone
+                  expiresAt: "2026-03-17T10:00:00.000Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/auth/surveyor/forgot-password/reset:
+    post:
+      tags: [Authentication]
+      summary: Reset Surveyor Password (Verify OTP)
+      description: |
+        Step 2 of forgot password flow: verify OTP and reset password.
+        Password must be exactly 4 characters (same rule as registration/login).
+      operationId: surveyorForgotPasswordReset
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SurveyorForgotPasswordResetRequest"
+            example:
+              phone: "9876543210"
+              otp: "123456"
+              password: "1234"
+      responses:
+        "200":
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /api/auth/login:
     post:
       tags: [Authentication]
@@ -2546,6 +2613,56 @@ components:
           type: string
           description: Surveyor last name (optional).
           example: Kumar
+
+    SurveyorForgotPasswordStartRequest:
+      type: object
+      required: [phone]
+      properties:
+        phone:
+          type: string
+          description: Surveyor phone number
+          example: "9876543210"
+
+    SurveyorForgotPasswordResetRequest:
+      type: object
+      required: [phone, otp, password]
+      properties:
+        phone:
+          type: string
+          example: "9876543210"
+        otp:
+          type: string
+          minLength: 6
+          maxLength: 6
+          example: "123456"
+        password:
+          type: string
+          format: password
+          minLength: 4
+          maxLength: 4
+          description: New password (must be exactly 4 characters)
+          example: "1234"
+
+    OtpSendResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required: [message, expiresAt]
+          properties:
+            message:
+              type: string
+              example: OTP sent to phone
+            expiresAt:
+              type: string
+              format: date-time
+            otpRequired:
+              type: boolean
+              example: true
 
     LoginRequest:
       type: object

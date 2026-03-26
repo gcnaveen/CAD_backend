@@ -102,6 +102,20 @@ exports.surveyorCompleteRegistration = asyncHandler(async (event) => {
   return await authController.surveyorCompleteRegistration(body);
 });
 
+// -------- Surveyor Forgot Password Step 1: send OTP --------
+exports.surveyorForgotPasswordStart = asyncHandler(async (event) => {
+  await ensureDb();
+  const body = validate(schemas.surveyorForgotPasswordStart)(event);
+  return await authController.surveyorForgotPasswordStart(body);
+});
+
+// -------- Surveyor Forgot Password Step 2: verify OTP + reset password --------
+exports.surveyorForgotPasswordReset = asyncHandler(async (event) => {
+  await ensureDb();
+  const body = validate(schemas.surveyorForgotPasswordReset)(event);
+  return await authController.surveyorForgotPasswordReset(body);
+});
+
 // -------- Login --------
 exports.login = asyncHandler(async (event) => {
   await ensureDb();

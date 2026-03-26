@@ -114,6 +114,25 @@ const schemas = {
     return { ...body, category };
   },
 
+  /**
+   * Surveyor forgot password (step 1): send OTP to phone.
+   * Body: phone
+   */
+  surveyorForgotPasswordStart(body) {
+    requireFields(body, ["phone"]);
+    return body;
+  },
+
+  /**
+   * Surveyor forgot password (step 2): verify OTP and reset password.
+   * Body: phone + otp + password (password must be exactly 4 chars)
+   */
+  surveyorForgotPasswordReset(body) {
+    requireFields(body, ["phone", "otp", "password"]);
+    validateExact4Password(body.password, "password");
+    return body;
+  },
+
   /** Login: email + password OR phone + password. */
   login(body) {
     requireFields(body, ["password"]);
