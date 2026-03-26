@@ -1,0 +1,5924 @@
+[{
+  "_id": {
+    "$oid": "6762aee7b8547a16e0f82c01"
+  },
+  "taluk_id": 10,
+  "name": "Holalkere",
+  "k_name": "ಹೊಳಲ್ಕೆರೆ",
+  "district": {
+    "$oid": "655c8c93d50c7eac36496119"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-18T11:15:51.109Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.143Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6762b53cb8547a16e0f89086"
+  },
+  "taluk_id": 11,
+  "name": "Nagamangala",
+  "k_name": "ನಾಗಮಂಗಲ",
+  "district": {
+    "$oid": "655c8ccdd50c7eac36496180"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-18T11:42:52.702Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.147Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6762b557b8547a16e0f892c2"
+  },
+  "taluk_id": 12,
+  "name": "Hosadurga",
+  "k_name": "ಹೊಸದುರ್ಗ",
+  "district": {
+    "$oid": "655c8c93d50c7eac36496119"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-18T11:43:19.384Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.150Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6762b759b8547a16e0f8952a"
+  },
+  "taluk_id": 13,
+  "name": "Badami",
+  "k_name": "ಬಾದಾಮಿ",
+  "district": {
+    "$oid": "655c8a14788ad54a9157d4f3"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-18T11:51:53.952Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.153Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6762b7c9b8547a16e0f89538"
+  },
+  "taluk_id": 14,
+  "name": "Bagalkot",
+  "k_name": "ಬಾಗಲಕೋಟ",
+  "district": {
+    "$oid": "655c8a14788ad54a9157d4f3"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-18T11:53:45.778Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.155Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6762b856b8547a16e0f89546"
+  },
+  "taluk_id": 15,
+  "name": "Pandavapura",
+  "k_name": "ಪಾಂಡವಪುರ",
+  "district": {
+    "$oid": "655c8ccdd50c7eac36496180"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-18T11:56:06.475Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.158Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6762b879b8547a16e0f8954e"
+  },
+  "taluk_id": 16,
+  "name": "Bilgi",
+  "k_name": "ಬೀಳಗಿ",
+  "district": {
+    "$oid": "655c8a14788ad54a9157d4f3"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-18T11:56:41.394Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.162Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6762b8a9b8547a16e0f89557"
+  },
+  "taluk_id": 17,
+  "name": "Hunagund",
+  "k_name": "ಹುನಗುಂದ",
+  "district": {
+    "$oid": "655c8a14788ad54a9157d4f3"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-18T11:57:29.380Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.165Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6762b911b8547a16e0f89561"
+  },
+  "taluk_id": 18,
+  "name": "Shrirangapattana",
+  "k_name": "ಶ್ರೀರಂಗಪಟ್ಟಣ",
+  "district": {
+    "$oid": "655c8ccdd50c7eac36496180"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-18T11:59:13.510Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.167Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6762b947b8547a16e0f8957b"
+  },
+  "taluk_id": 20,
+  "name": "Guledgudda",
+  "k_name": "ಗುಳೇದಗುಡ್ಡ",
+  "district": {
+    "$oid": "655c8a14788ad54a9157d4f3"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-18T12:00:07.335Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.170Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6762b962b8547a16e0f8958d"
+  },
+  "taluk_id": 22,
+  "name": "Jamkhandi",
+  "k_name": "ಜಮಖಂಡ",
+  "district": {
+    "$oid": "655c8a14788ad54a9157d4f3"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-18T12:00:34.819Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.172Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6762b980b8547a16e0f8959d"
+  },
+  "taluk_id": 23,
+  "name": "Mudhol",
+  "k_name": "ಮುಧೋಳ",
+  "district": {
+    "$oid": "655c8a14788ad54a9157d4f3"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-18T12:01:04.217Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.176Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6762b9cbb8547a16e0f895aa"
+  },
+  "taluk_id": 24,
+  "name": "Anekal",
+  "k_name": "ಆನೇಕಲ್",
+  "district": {
+    "$oid": "655c8c7ad50c7eac364960f6"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-18T12:02:19.012Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.179Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6762b9fab8547a16e0f895b3"
+  },
+  "taluk_id": 25,
+  "name": "Yelahanka",
+  "k_name": "ಯಲಹಂಕ",
+  "district": {
+    "$oid": "655c8c7ad50c7eac364960f6"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-18T12:03:06.815Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.181Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6762ba9cb8547a16e0f895c8"
+  },
+  "taluk_id": 26,
+  "name": "Rabkavi Banhatti",
+  "k_name": "ರಬಕವಿ ಬನಹಟ್ಟಿ",
+  "district": {
+    "$oid": "655c8a14788ad54a9157d4f3"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-18T12:05:48.994Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.184Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763a73914b1553ecbd8adaf"
+  },
+  "taluk_id": 28,
+  "name": "Hunsur",
+  "k_name": "ಹುಣಸೂರು",
+  "district": {
+    "$oid": "655c8cd1d50c7eac36496189"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T04:55:21.072Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.187Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763a75814b1553ecbd8adb8"
+  },
+  "taluk_id": 29,
+  "name": "Krishnarajanagara",
+  "k_name": "ಕೃಷ್ಣರಾಜನಗರ",
+  "district": {
+    "$oid": "655c8cd1d50c7eac36496189"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T04:55:52.738Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.189Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763a77114b1553ecbd8adc1"
+  },
+  "taluk_id": 30,
+  "name": "Mysuru",
+  "k_name": "ಮೈಸೂರು",
+  "district": {
+    "$oid": "655c8cd1d50c7eac36496189"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T04:56:17.062Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.193Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763a78314b1553ecbd8adca"
+  },
+  "taluk_id": 31,
+  "name": "Nanjangud",
+  "k_name": "ನಂಜನಗೂಡು",
+  "district": {
+    "$oid": "655c8cd1d50c7eac36496189"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T04:56:35.681Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.196Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763a79a14b1553ecbd8add3"
+  },
+  "taluk_id": 32,
+  "name": "Piriyapatna",
+  "k_name": "ಪಿರಿಯಾಪಟ್ಟಣ",
+  "district": {
+    "$oid": "655c8cd1d50c7eac36496189"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T04:56:58.523Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.198Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763a7b014b1553ecbd8addc"
+  },
+  "taluk_id": 33,
+  "name": "Saraguru",
+  "k_name": "ಸರಗೂರು",
+  "district": {
+    "$oid": "655c8cd1d50c7eac36496189"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T04:57:20.544Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.201Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763a7c214b1553ecbd8ade5"
+  },
+  "taluk_id": 34,
+  "name": "T.Narsipur",
+  "k_name": "ಟಿ.ನರಸೀಪುರ",
+  "district": {
+    "$oid": "655c8cd1d50c7eac36496189"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T04:57:38.866Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.203Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763a7dc14b1553ecbd8adee"
+  },
+  "taluk_id": 35,
+  "name": "Devadurga",
+  "k_name": "ದೇವದುರ್ಗವು",
+  "district": {
+    "$oid": "655c8cd5d50c7eac36496190"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T04:58:04.846Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.206Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763a7f614b1553ecbd8adf7"
+  },
+  "taluk_id": 36,
+  "name": "Lingsugur",
+  "k_name": "ಲಿಂಗಸೂಗೂರು",
+  "district": {
+    "$oid": "655c8cd5d50c7eac36496190"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T04:58:30.951Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.209Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763a81814b1553ecbd8ae00"
+  },
+  "taluk_id": 37,
+  "name": "Manvi",
+  "k_name": "ಮಾನ್ವಿ",
+  "district": {
+    "$oid": "655c8cd5d50c7eac36496190"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T04:59:04.505Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.212Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763a82f14b1553ecbd8ae09"
+  },
+  "taluk_id": 38,
+  "name": "Maski",
+  "k_name": "ಮಸ್ಕಿ",
+  "district": {
+    "$oid": "655c8cd5d50c7eac36496190"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T04:59:27.083Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.214Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763a84814b1553ecbd8ae12"
+  },
+  "taluk_id": 39,
+  "name": "Raichur",
+  "k_name": "ರಾಯಚೂರು",
+  "district": {
+    "$oid": "655c8cd5d50c7eac36496190"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T04:59:52.232Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.217Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763a8f114b1553ecbd8ae1b"
+  },
+  "taluk_id": 40,
+  "name": "Sindhanur",
+  "k_name": "ಸಿಂಧನೂರು",
+  "district": {
+    "$oid": "655c8cd5d50c7eac36496190"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:02:41.046Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.219Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763a90114b1553ecbd8ae24"
+  },
+  "taluk_id": 41,
+  "name": "Sirwar",
+  "k_name": "ಸಿರವಾರ",
+  "district": {
+    "$oid": "655c8cd5d50c7eac36496190"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:02:57.916Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.222Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763a91314b1553ecbd8ae2d"
+  },
+  "taluk_id": 42,
+  "name": "Channapatna",
+  "k_name": "ಚನ್ನಪಟ್ಟಣ",
+  "district": {
+    "$oid": "655c8cd9d50c7eac36496197"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:03:15.818Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.225Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763a92714b1553ecbd8ae36"
+  },
+  "taluk_id": 43,
+  "name": "Kanakapura",
+  "k_name": "ಕನಕಪುರ`",
+  "district": {
+    "$oid": "655c8cd9d50c7eac36496197"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:03:35.468Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.228Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763a93c14b1553ecbd8ae3f"
+  },
+  "taluk_id": 44,
+  "name": "Ramanagara",
+  "k_name": "ರಾಮನಗರ",
+  "district": {
+    "$oid": "655c8cd9d50c7eac36496197"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:03:56.149Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.231Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763a94c14b1553ecbd8ae55"
+  },
+  "taluk_id": 45,
+  "name": "Magadi",
+  "k_name": "ಮಾಗಡಿ",
+  "district": {
+    "$oid": "655c8cd9d50c7eac36496197"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:04:12.685Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.233Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763a95c14b1553ecbd8ae5e"
+  },
+  "taluk_id": 46,
+  "name": "Bhadravati",
+  "k_name": "ಭದ್ರಾವತಿ",
+  "district": {
+    "$oid": "655c8ce6d50c7eac3649619e"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:04:28.385Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.236Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763a96f14b1553ecbd8ae67"
+  },
+  "taluk_id": 47,
+  "name": "Hosanagara",
+  "k_name": "ಹೊಸನಗರ",
+  "district": {
+    "$oid": "655c8ce6d50c7eac3649619e"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:04:47.483Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.239Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763a97f14b1553ecbd8ae79"
+  },
+  "taluk_id": 48,
+  "name": "Sagar",
+  "k_name": "ಸಾಗರ",
+  "district": {
+    "$oid": "655c8ce6d50c7eac3649619e"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:05:03.706Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.242Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763a98e14b1553ecbd8ae83"
+  },
+  "taluk_id": 49,
+  "name": "Shikaripura",
+  "k_name": "ಶಿಕಾರಿಪುರ",
+  "district": {
+    "$oid": "655c8ce6d50c7eac3649619e"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:05:18.104Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.245Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763a99f14b1553ecbd8ae8c"
+  },
+  "taluk_id": 50,
+  "name": "Shivamogga",
+  "k_name": "ಶಿವಮೊಗ್ಗ",
+  "district": {
+    "$oid": "655c8ce6d50c7eac3649619e"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:05:35.555Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.247Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763a9b514b1553ecbd8ae95"
+  },
+  "taluk_id": 51,
+  "name": "Soraba",
+  "k_name": "ಸೊರಬ",
+  "district": {
+    "$oid": "655c8ce6d50c7eac3649619e"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:05:57.257Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.250Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763a9c714b1553ecbd8ae9e"
+  },
+  "taluk_id": 52,
+  "name": "Thirthahalli",
+  "k_name": "ತೀರ್ಥಹಳ್ಳಿ",
+  "district": {
+    "$oid": "655c8ce6d50c7eac3649619e"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:06:15.162Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.252Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763a9db14b1553ecbd8aea7"
+  },
+  "taluk_id": 53,
+  "name": "Chiknayakanhalli",
+  "k_name": "ಚಿಕ್ಕನಾಯಕನಹಳ್ಳಿ",
+  "district": {
+    "$oid": "655c8cf3d50c7eac364961ab"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:06:35.541Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.255Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763a9ea14b1553ecbd8aeb0"
+  },
+  "taluk_id": 54,
+  "name": "Gubbi",
+  "k_name": "ಗುಬ್ಬಿ",
+  "district": {
+    "$oid": "655c8cf3d50c7eac364961ab"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:06:50.042Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.258Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763a9fa14b1553ecbd8aeb9"
+  },
+  "taluk_id": 55,
+  "name": "Huliyar",
+  "k_name": "ಹುಳಿಯಾರು",
+  "district": {
+    "$oid": "655c8cf3d50c7eac364961ab"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:07:06.771Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.260Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763aa4814b1553ecbd8aecf"
+  },
+  "taluk_id": 56,
+  "name": "Bengaluru",
+  "k_name": "ಬೆಂಗಳೂರು",
+  "district": {
+    "$oid": "655c8c7ad50c7eac364960f6"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:08:24.212Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.263Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763aa4a14b1553ecbd8aed5"
+  },
+  "taluk_id": 57,
+  "name": "Koratagere",
+  "k_name": "ಕೊರಟಗೆರೆ",
+  "district": {
+    "$oid": "655c8cf3d50c7eac364961ab"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:08:26.075Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.266Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763aa5814b1553ecbd8aee2"
+  },
+  "taluk_id": 58,
+  "name": "Kunigal",
+  "k_name": "ಕುಣಿಗಲ್",
+  "district": {
+    "$oid": "655c8cf3d50c7eac364961ab"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:08:40.129Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.268Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763aa6614b1553ecbd8aeee"
+  },
+  "taluk_id": 59,
+  "name": "Madhugiri",
+  "k_name": "ಮಧುಗಿರಿ",
+  "district": {
+    "$oid": "655c8cf3d50c7eac364961ab"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:08:54.419Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.271Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763aa6b14b1553ecbd8aef7"
+  },
+  "taluk_id": 60,
+  "name": "Devanahalli",
+  "k_name": "ದೇವನಹಳ್ಳಿ",
+  "district": {
+    "$oid": "655c8c74d50c7eac364960ef"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:08:59.804Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.274Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763aa7a14b1553ecbd8af01"
+  },
+  "taluk_id": 61,
+  "name": "Pavagada",
+  "k_name": "ಪಾವಗಡ",
+  "district": {
+    "$oid": "655c8cf3d50c7eac364961ab"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:09:14.613Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.276Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763aa7f14b1553ecbd8af0a"
+  },
+  "taluk_id": 62,
+  "name": "Molakalmuru",
+  "k_name": "ಮೊಳಕಾಲ್ಮೂರು",
+  "district": {
+    "$oid": "655c8c93d50c7eac36496119"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:09:19.302Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.279Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763aa8814b1553ecbd8af13"
+  },
+  "taluk_id": 63,
+  "name": "Sira",
+  "k_name": "ಸಿರಾ",
+  "district": {
+    "$oid": "655c8cf3d50c7eac364961ab"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:09:28.020Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.282Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763aa8814b1553ecbd8af18"
+  },
+  "taluk_id": 64,
+  "name": "Doddaballapura",
+  "k_name": "ದೊಡ್ಡಬಳ್ಳಾಪುರ",
+  "district": {
+    "$oid": "655c8c74d50c7eac364960ef"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:09:28.990Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.285Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763aa9414b1553ecbd8af25"
+  },
+  "taluk_id": 65,
+  "name": "Tiptur",
+  "k_name": "ತಿಪಟೂರು",
+  "district": {
+    "$oid": "655c8cf3d50c7eac364961ab"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:09:40.917Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.288Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763aa9a14b1553ecbd8af2e"
+  },
+  "taluk_id": 66,
+  "name": "Bantwal",
+  "k_name": "ಬಂಟ್ವಾಳ",
+  "district": {
+    "$oid": "655c8c98d50c7eac36496120"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:09:46.635Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.290Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763aaa414b1553ecbd8af37"
+  },
+  "taluk_id": 67,
+  "name": "Tumakuru",
+  "k_name": "ತುಮಕೂರು",
+  "district": {
+    "$oid": "655c8cf3d50c7eac364961ab"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:09:56.385Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.293Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763aaa414b1553ecbd8af3c"
+  },
+  "taluk_id": 68,
+  "name": "Hoskote",
+  "k_name": "ಹೊಸಕೋಟೆ",
+  "district": {
+    "$oid": "655c8c74d50c7eac364960ef"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:09:56.890Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.296Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763aab114b1553ecbd8af49"
+  },
+  "taluk_id": 69,
+  "name": "Turuvekere",
+  "k_name": "ತುರುವೇಕೆರೆ",
+  "district": {
+    "$oid": "655c8cf3d50c7eac364961ab"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:10:09.762Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.298Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763aab914b1553ecbd8af52"
+  },
+  "taluk_id": 70,
+  "name": "Beltangadi",
+  "k_name": "ಬೆಳ್ತಂಗಡಿ",
+  "district": {
+    "$oid": "655c8c98d50c7eac36496120"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:10:17.752Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.301Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763aabb14b1553ecbd8af57"
+  },
+  "taluk_id": 71,
+  "name": "Nelamangala",
+  "k_name": "ನೆಲಮಂಗಲ",
+  "district": {
+    "$oid": "655c8c74d50c7eac364960ef"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:10:19.273Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.304Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763aabe14b1553ecbd8af5f"
+  },
+  "taluk_id": 72,
+  "name": "Udupi",
+  "k_name": "ಉಡುಪಿ",
+  "district": {
+    "$oid": "655c8cfad50c7eac364961b2"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:10:22.097Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.306Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763aacc14b1553ecbd8af6d"
+  },
+  "taluk_id": 73,
+  "name": "Bahmavara",
+  "k_name": "ಬ್ರಹ್ಮಾವರ",
+  "district": {
+    "$oid": "655c8cfad50c7eac364961b2"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:10:36.656Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.309Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763aad214b1553ecbd8af76"
+  },
+  "taluk_id": 74,
+  "name": "Mangaluru",
+  "k_name": "ಮಂಗಳೂರು",
+  "district": {
+    "$oid": "655c8c98d50c7eac36496120"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:10:42.162Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.312Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763aad914b1553ecbd8af7f"
+  },
+  "taluk_id": 75,
+  "name": "Karkal",
+  "k_name": "ಕಾರ್ಕಳ",
+  "district": {
+    "$oid": "655c8cfad50c7eac364961b2"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:10:49.476Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.316Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763aade14b1553ecbd8af88"
+  },
+  "taluk_id": 76,
+  "name": "Athni",
+  "k_name": "ಅಥಣಿ",
+  "district": {
+    "$oid": "655c8c70d50c7eac364960e8"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:10:54.909Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.318Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763aae514b1553ecbd8af91"
+  },
+  "taluk_id": 77,
+  "name": "Kaup",
+  "k_name": "ಕಾಪು",
+  "district": {
+    "$oid": "655c8cfad50c7eac364961b2"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:11:01.743Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.321Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763aae714b1553ecbd8af96"
+  },
+  "taluk_id": 78,
+  "name": "Mudubidare",
+  "k_name": "ಮೂಡುಬಿದಿರೆ",
+  "district": {
+    "$oid": "655c8c98d50c7eac36496120"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:11:03.634Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.324Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763aaf614b1553ecbd8afa3"
+  },
+  "taluk_id": 79,
+  "name": "Kundapura",
+  "k_name": "ಕುಂದಾಪುರ",
+  "district": {
+    "$oid": "655c8cfad50c7eac364961b2"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:11:18.278Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.326Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763aafc14b1553ecbd8afac"
+  },
+  "taluk_id": 80,
+  "name": "Kadaba",
+  "k_name": "ಕಡಬ",
+  "district": {
+    "$oid": "655c8c98d50c7eac36496120"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:11:24.328Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.329Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763ab0314b1553ecbd8afb5"
+  },
+  "taluk_id": 81,
+  "name": "Hebri",
+  "k_name": "ಹೆಬ್ರಿ",
+  "district": {
+    "$oid": "655c8cfad50c7eac364961b2"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:11:31.715Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.332Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763ab0d14b1553ecbd8afbe"
+  },
+  "taluk_id": 82,
+  "name": "Puttur",
+  "k_name": "ಪುತ್ತೂರು",
+  "district": {
+    "$oid": "655c8c98d50c7eac36496120"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:11:41.701Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.336Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763ab1014b1553ecbd8afc3"
+  },
+  "taluk_id": 83,
+  "name": "Byndoor",
+  "k_name": "ಬೈಂದೂರು",
+  "district": {
+    "$oid": "655c8cfad50c7eac364961b2"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:11:44.662Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.339Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763ab1b14b1553ecbd8afd0"
+  },
+  "taluk_id": 84,
+  "name": "Bailahongal",
+  "k_name": "ಬೈಲಹೊಂಗಲ",
+  "district": {
+    "$oid": "655c8c70d50c7eac364960e8"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:11:55.480Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.342Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ab1e14b1553ecbd8afd8"
+  },
+  "taluk_id": 85,
+  "name": "Sulya",
+  "k_name": "ಸುಳ್ಯ",
+  "district": {
+    "$oid": "655c8c98d50c7eac36496120"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:11:58.547Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.345Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763ab1f14b1553ecbd8afdd"
+  },
+  "taluk_id": 86,
+  "name": "Ankola",
+  "k_name": "ಅಂಕೋಲಾ",
+  "district": {
+    "$oid": "655c8cfed50c7eac364961b9"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:11:59.736Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.348Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ab2f14b1553ecbd8afeb"
+  },
+  "taluk_id": 87,
+  "name": "Bhatkal",
+  "k_name": "ಭಟ್ಕಳ",
+  "district": {
+    "$oid": "655c8cfed50c7eac364961b9"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:12:15.935Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.351Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ab3414b1553ecbd8aff4"
+  },
+  "taluk_id": 88,
+  "name": "Channagiri",
+  "k_name": "ಚನ್ನಗಿರಿ",
+  "district": {
+    "$oid": "655c8c9ed50c7eac36496127"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:12:20.048Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.353Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763ab3414b1553ecbd8aff9"
+  },
+  "taluk_id": 89,
+  "name": "Belagavi",
+  "k_name": "ಬೆಳಗಾವಿ",
+  "district": {
+    "$oid": "655c8c70d50c7eac364960e8"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:12:20.772Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.356Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ab4b14b1553ecbd8b00a"
+  },
+  "taluk_id": 90,
+  "name": "Davanagere",
+  "k_name": "ದಾವಣಗೆರೆ",
+  "district": {
+    "$oid": "655c8c9ed50c7eac36496127"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:12:43.609Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.359Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763ab4b14b1553ecbd8b00f"
+  },
+  "taluk_id": 91,
+  "name": "Dandeli",
+  "k_name": "ದಾಂಡೇಲಿ",
+  "district": {
+    "$oid": "655c8cfed50c7eac364961b9"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:12:43.869Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.361Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ab4d14b1553ecbd8b014"
+  },
+  "taluk_id": 92,
+  "name": "Chikodi",
+  "k_name": "ಚಿಕ್ಕೋಡಿ",
+  "district": {
+    "$oid": "655c8c70d50c7eac364960e8"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:12:45.915Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.364Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ab5914b1553ecbd8b025"
+  },
+  "taluk_id": 93,
+  "name": "Haliyal",
+  "k_name": "ಹಳಿಯಾಳ",
+  "district": {
+    "$oid": "655c8cfed50c7eac364961b9"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:12:57.115Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.367Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ab6314b1553ecbd8b02e"
+  },
+  "taluk_id": 94,
+  "name": "Harihar",
+  "k_name": "ಹರಿಹರ",
+  "district": {
+    "$oid": "655c8c9ed50c7eac36496127"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:13:07.623Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.369Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763ab6c14b1553ecbd8b037"
+  },
+  "taluk_id": 95,
+  "name": "Honnavar",
+  "k_name": "ಹೊನ್ನಾವರ",
+  "district": {
+    "$oid": "655c8cfed50c7eac364961b9"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:13:16.449Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.372Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ab6d14b1553ecbd8b03c"
+  },
+  "taluk_id": 96,
+  "name": "Gokak",
+  "k_name": "ಗೋಕಾಕ",
+  "district": {
+    "$oid": "655c8c70d50c7eac364960e8"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:13:17.357Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.376Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ab7a14b1553ecbd8b04e"
+  },
+  "taluk_id": 97,
+  "name": "Joida",
+  "k_name": "ಜೋಯ್ಡಾ",
+  "district": {
+    "$oid": "655c8cfed50c7eac364961b9"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:13:30.044Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.378Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ab7c14b1553ecbd8b053"
+  },
+  "taluk_id": 98,
+  "name": "Harappanahalli",
+  "k_name": "ಹರಪನಹಳ್ಳಿ",
+  "district": {
+    "$oid": "655c8d05d50c7eac364961c7"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:13:32.516Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.381Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ab8814b1553ecbd8b061"
+  },
+  "taluk_id": 99,
+  "name": "Karwar",
+  "k_name": "ಕಾರವಾರ",
+  "district": {
+    "$oid": "655c8cfed50c7eac364961b9"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:13:44.257Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.384Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ab9114b1553ecbd8b06a"
+  },
+  "taluk_id": 100,
+  "name": "Honnali",
+  "k_name": "ಹೊನ್ನಾಳಿ",
+  "district": {
+    "$oid": "655c8c9ed50c7eac36496127"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:13:53.010Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.387Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763ab9814b1553ecbd8b073"
+  },
+  "taluk_id": 101,
+  "name": "Hukkeri",
+  "k_name": "ಹುಕ್ಕೇರಿ",
+  "district": {
+    "$oid": "655c8c70d50c7eac364960e8"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:14:00.019Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.390Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763aba214b1553ecbd8b07c"
+  },
+  "taluk_id": 102,
+  "name": "Jagalur",
+  "k_name": "ಜಗಳೂರು",
+  "district": {
+    "$oid": "655c8c9ed50c7eac36496127"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:14:10.211Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.393Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763aba414b1553ecbd8b081"
+  },
+  "taluk_id": 103,
+  "name": "Kumta",
+  "k_name": "ಕುಮಟಾ",
+  "district": {
+    "$oid": "655c8cfed50c7eac364961b9"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:14:12.176Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.396Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763abb614b1553ecbd8b08e"
+  },
+  "taluk_id": 104,
+  "name": "Mundgod",
+  "k_name": "ಮುಂಡಗೋಡು",
+  "district": {
+    "$oid": "655c8cfed50c7eac364961b9"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:14:30.108Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.399Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763abb714b1553ecbd8b093"
+  },
+  "taluk_id": 105,
+  "name": "Nyamati",
+  "k_name": "ನ್ಯಾಮತಿ",
+  "district": {
+    "$oid": "655c8c9ed50c7eac36496127"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:14:31.589Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.401Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763abb714b1553ecbd8b098"
+  },
+  "taluk_id": 106,
+  "name": "Khanapur",
+  "k_name": "ಖಾನಾಪುರ",
+  "district": {
+    "$oid": "655c8c70d50c7eac364960e8"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:14:31.672Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.404Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763abc614b1553ecbd8b0ac"
+  },
+  "taluk_id": 107,
+  "name": "Siddapur",
+  "k_name": "ಸಿದ್ಧಾಪುರ",
+  "district": {
+    "$oid": "655c8cfed50c7eac364961b9"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:14:47.000Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.409Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763abd114b1553ecbd8b0b5"
+  },
+  "taluk_id": 108,
+  "name": "Annigeri",
+  "k_name": "ಅಣ್ಣಿಗೇರಿ",
+  "district": {
+    "$oid": "655c8ca3d50c7eac3649612e"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:14:57.828Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.416Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763abd514b1553ecbd8b0ba"
+  },
+  "taluk_id": 109,
+  "name": "Sirsi",
+  "k_name": "ಸಿರ್ಸಿ",
+  "district": {
+    "$oid": "655c8cfed50c7eac364961b9"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:15:01.051Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.420Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763abd614b1553ecbd8b0c2"
+  },
+  "taluk_id": 110,
+  "name": "Kagawad",
+  "k_name": "ಕಾಗವಾಡ",
+  "district": {
+    "$oid": "655c8c70d50c7eac364960e8"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:15:02.838Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.424Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763abe614b1553ecbd8b0d4"
+  },
+  "taluk_id": 111,
+  "name": "Alnavara",
+  "k_name": "ಅಳ್ನಾವರ",
+  "district": {
+    "$oid": "655c8ca3d50c7eac3649612e"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:15:18.121Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.428Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763abe714b1553ecbd8b0d9"
+  },
+  "taluk_id": 112,
+  "name": "Yellapur",
+  "k_name": "ಯಲ್ಲಾಪುರ",
+  "district": {
+    "$oid": "655c8cfed50c7eac364961b9"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:15:19.040Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.432Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763abf014b1553ecbd8b0e6"
+  },
+  "taluk_id": 113,
+  "name": "Mudalagi",
+  "k_name": "ಮೂಡಲಗಿ",
+  "district": {
+    "$oid": "655c8c70d50c7eac364960e8"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:15:28.154Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.436Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763abf414b1553ecbd8b0ee"
+  },
+  "taluk_id": 114,
+  "name": "Gurumitkal",
+  "k_name": "ಗುರ್ಮಿತ್ಕಲ್",
+  "district": {
+    "$oid": "655c8d3ed50c7eac364961d2"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:15:32.504Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.441Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763abf914b1553ecbd8b0f8"
+  },
+  "taluk_id": 115,
+  "name": "Dharwad",
+  "k_name": "ಧಾರವಾಡ",
+  "district": {
+    "$oid": "655c8ca3d50c7eac3649612e"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:15:37.277Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.444Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ac0114b1553ecbd8b100"
+  },
+  "taluk_id": 116,
+  "name": "Hunasagi",
+  "k_name": "ಹುಣಸಗಿ",
+  "district": {
+    "$oid": "655c8d3ed50c7eac364961d2"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:15:45.600Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.448Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ac0814b1553ecbd8b10a"
+  },
+  "taluk_id": 117,
+  "name": "Nippani",
+  "k_name": "ನಿಪ್ಪಾಣಿ",
+  "district": {
+    "$oid": "655c8c70d50c7eac364960e8"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:15:52.439Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.452Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ac0e14b1553ecbd8b112"
+  },
+  "taluk_id": 118,
+  "name": "Hubballi",
+  "k_name": "ಹುಬ್ಬಳ್ಳಿ",
+  "district": {
+    "$oid": "655c8ca3d50c7eac3649612e"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:15:58.067Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.455Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ac0f14b1553ecbd8b117"
+  },
+  "taluk_id": 119,
+  "name": "Shahapur",
+  "k_name": "ಶಹಾಪುರ",
+  "district": {
+    "$oid": "655c8d3ed50c7eac364961d2"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:15:59.620Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.460Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ac1f14b1553ecbd8b127"
+  },
+  "taluk_id": 120,
+  "name": "Shorapur",
+  "k_name": "ಶೋರಾಪುರ",
+  "district": {
+    "$oid": "655c8d3ed50c7eac364961d2"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:16:15.036Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.463Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ac2214b1553ecbd8b134"
+  },
+  "taluk_id": 121,
+  "name": "Hubballi city",
+  "k_name": "ಹುಬ್ಬಳ್ಳಿ ನಗರ",
+  "district": {
+    "$oid": "655c8ca3d50c7eac3649612e"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:16:18.433Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.466Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ac2d14b1553ecbd8b13e"
+  },
+  "taluk_id": 122,
+  "name": "Kittur",
+  "k_name": "ಕಿತ್ತೂರು",
+  "district": {
+    "$oid": "655c8c70d50c7eac364960e8"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:16:29.570Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.468Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ac2d14b1553ecbd8b143"
+  },
+  "taluk_id": 123,
+  "name": "vadagera",
+  "k_name": "ವಡಗೇರಾ",
+  "district": {
+    "$oid": "655c8d3ed50c7eac364961d2"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:16:29.598Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.470Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ac3614b1553ecbd8b14e"
+  },
+  "taluk_id": 124,
+  "name": "Kalghatgi",
+  "k_name": "ಕಲಘಟಗಿ",
+  "district": {
+    "$oid": "655c8ca3d50c7eac3649612e"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:16:38.445Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.473Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ac3f14b1553ecbd8b159"
+  },
+  "taluk_id": 125,
+  "name": "Yadgir",
+  "k_name": "ಯಾದಗಿರಿ",
+  "district": {
+    "$oid": "655c8d3ed50c7eac364961d2"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:16:47.794Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.475Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ac4a14b1553ecbd8b165"
+  },
+  "taluk_id": 126,
+  "name": "Kundgol",
+  "k_name": "ಕುಂದಗೋಳ",
+  "district": {
+    "$oid": "655c8ca3d50c7eac3649612e"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:16:58.509Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.478Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ac5414b1553ecbd8b178"
+  },
+  "taluk_id": 128,
+  "name": "Raybag",
+  "k_name": "ರಾಯಭಾಗ",
+  "district": {
+    "$oid": "655c8c70d50c7eac364960e8"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:17:08.105Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.480Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ac5d14b1553ecbd8b182"
+  },
+  "taluk_id": 129,
+  "name": "Navalgund",
+  "k_name": "ನವಲಗುಂದ",
+  "district": {
+    "$oid": "655c8ca3d50c7eac3649612e"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:17:17.784Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.483Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ac7b14b1553ecbd8b19d"
+  },
+  "taluk_id": 132,
+  "name": "Gadag-Betigeri",
+  "k_name": "ಗದಗ-ಬೆಟಗೇರಿ",
+  "district": {
+    "$oid": "655c8caad50c7eac36496135"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:17:47.039Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.485Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ac9014b1553ecbd8b1af"
+  },
+  "taluk_id": 134,
+  "name": "Ramdurg",
+  "k_name": "ರಾಮದುರ್ಗ",
+  "district": {
+    "$oid": "655c8c70d50c7eac364960e8"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:18:08.031Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.488Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ac9114b1553ecbd8b1b4"
+  },
+  "taluk_id": 135,
+  "name": "Mundargi",
+  "k_name": "ಮುಂಡರಗಿ",
+  "district": {
+    "$oid": "655c8caad50c7eac36496135"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:18:09.576Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.491Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763aca614b1553ecbd8b1d3"
+  },
+  "taluk_id": 138,
+  "name": "Nargund",
+  "k_name": "ನರಗುಂದ",
+  "district": {
+    "$oid": "655c8caad50c7eac36496135"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:18:30.800Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.495Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763acae14b1553ecbd8b1e5"
+  },
+  "taluk_id": 140,
+  "name": "Hagaribommanahalli",
+  "k_name": "ಹಗರಿಬೊಮ್ಮನಹಳ್ಳಿ",
+  "district": {
+    "$oid": "655c8d05d50c7eac364961c7"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:18:38.283Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.499Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763acb814b1553ecbd8b1f3"
+  },
+  "taluk_id": 141,
+  "name": "Gajendragad",
+  "k_name": "ಗಜೇಂದ್ರಗಡ",
+  "district": {
+    "$oid": "655c8caad50c7eac36496135"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:18:48.417Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.502Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763acca14b1553ecbd8b1ff"
+  },
+  "taluk_id": 142,
+  "name": "Ballari",
+  "k_name": "ಬಳ್ಳಾರಿ",
+  "district": {
+    "$oid": "655c8a80d50c7eac364960cc"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:19:06.754Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.505Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763accc14b1553ecbd8b204"
+  },
+  "taluk_id": 143,
+  "name": "Lakshmeshwar",
+  "k_name": "ಲಕ್ಷ್ಮೇಶ್ವರ",
+  "district": {
+    "$oid": "655c8caad50c7eac36496135"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:19:08.718Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.508Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ace114b1553ecbd8b215"
+  },
+  "taluk_id": 144,
+  "name": "Ron",
+  "k_name": "ರೋಣ",
+  "district": {
+    "$oid": "655c8caad50c7eac36496135"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:19:29.283Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.511Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763acf714b1553ecbd8b241"
+  },
+  "taluk_id": 146,
+  "name": "Shirhatti",
+  "k_name": "ಶಿರಹಟ್ಟಿ",
+  "district": {
+    "$oid": "655c8caad50c7eac36496135"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:19:51.116Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.513Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ad1314b1553ecbd8b250"
+  },
+  "taluk_id": 147,
+  "name": "Kampli",
+  "k_name": "ಕಂಪ್ಲಿ",
+  "district": {
+    "$oid": "655c8a80d50c7eac364960cc"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:20:19.465Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.515Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ad1314b1553ecbd8b255"
+  },
+  "taluk_id": 148,
+  "name": "afzalpur",
+  "k_name": "ಅಫಜಲ್ಪುರ",
+  "district": {
+    "$oid": "655c8cb8d50c7eac3649615a"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:20:19.618Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.517Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ad2614b1553ecbd8b266"
+  },
+  "taluk_id": 149,
+  "name": "Hosapete",
+  "k_name": "ಹೊಸಪೇಟೆ",
+  "district": {
+    "$oid": "655c8d05d50c7eac364961c7"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:20:38.759Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.520Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ad2714b1553ecbd8b26b"
+  },
+  "taluk_id": 150,
+  "name": "Aland",
+  "k_name": "ಆಳಂದ",
+  "district": {
+    "$oid": "655c8cb8d50c7eac3649615a"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:20:39.605Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.524Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ad3314b1553ecbd8b280"
+  },
+  "taluk_id": 152,
+  "name": "Kottur",
+  "k_name": "ಕೊಟ್ಟೂರು",
+  "district": {
+    "$oid": "655c8d05d50c7eac364961c7"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:20:51.613Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.526Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ad3b14b1553ecbd8b28b"
+  },
+  "taluk_id": 153,
+  "name": "Chincholi",
+  "k_name": "ಚಿಂಚೋಳಿ",
+  "district": {
+    "$oid": "655c8cb8d50c7eac3649615a"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:20:59.052Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.529Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ad4614b1553ecbd8b294"
+  },
+  "taluk_id": 154,
+  "name": "Hadagalli",
+  "k_name": "ಹೂವಿನಹಡಗಲಿ",
+  "district": {
+    "$oid": "655c8d05d50c7eac364961c7"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:21:10.404Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.533Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ad4914b1553ecbd8b29c"
+  },
+  "taluk_id": 155,
+  "name": "Kudligi",
+  "k_name": "ಕೂಡ್ಲಿಗಿ",
+  "district": {
+    "$oid": "655c8d05d50c7eac364961c7"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:21:13.943Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.539Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ad4e14b1553ecbd8b2a5"
+  },
+  "taluk_id": 156,
+  "name": "Chitapur",
+  "k_name": "ಚಿತ್ತಾಪುರ",
+  "district": {
+    "$oid": "655c8cb8d50c7eac3649615a"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:21:18.625Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.543Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ad7614b1553ecbd8b2cb"
+  },
+  "taluk_id": 160,
+  "name": "Kalaburagi",
+  "k_name": "ಕಲಬುರ್ಗಿ",
+  "district": {
+    "$oid": "655c8cb8d50c7eac3649615a"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:21:58.534Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.545Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ad7f14b1553ecbd8b2d3"
+  },
+  "taluk_id": 161,
+  "name": "Kurugodu",
+  "k_name": "ಕುರುಗೋಡು",
+  "district": {
+    "$oid": "655c8a80d50c7eac364960cc"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:22:07.318Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.547Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ad9114b1553ecbd8b2e7"
+  },
+  "taluk_id": 162,
+  "name": "Kamalapura",
+  "k_name": "ಕಮಲಾಪುರ",
+  "district": {
+    "$oid": "655c8cb8d50c7eac3649615a"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:22:25.931Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.550Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ad9514b1553ecbd8b2ef"
+  },
+  "taluk_id": 163,
+  "name": "Sanduru",
+  "k_name": "ಸಂಡೂರು",
+  "district": {
+    "$oid": "655c8a80d50c7eac364960cc"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:22:29.890Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.553Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ada814b1553ecbd8b2ff"
+  },
+  "taluk_id": 164,
+  "name": "Kalagi",
+  "k_name": "ಕಾಳಗಿ",
+  "district": {
+    "$oid": "655c8cb8d50c7eac3649615a"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:22:48.006Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.555Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763adad14b1553ecbd8b307"
+  },
+  "taluk_id": 165,
+  "name": "Siruguppa",
+  "k_name": "ಶಿರುಗುಪ್ಪ",
+  "district": {
+    "$oid": "655c8a80d50c7eac364960cc"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:22:53.413Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.558Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763adbd14b1553ecbd8b311"
+  },
+  "taluk_id": 166,
+  "name": "Jevargi",
+  "k_name": "ಜೇವರ್ಗಿ",
+  "district": {
+    "$oid": "655c8cb8d50c7eac3649615a"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:23:09.789Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.561Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763adc114b1553ecbd8b319"
+  },
+  "taluk_id": 167,
+  "name": "Bidar",
+  "k_name": "ಬೀದರ್",
+  "district": {
+    "$oid": "655c8c7fd50c7eac364960fd"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:23:13.633Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.563Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763add014b1553ecbd8b329"
+  },
+  "taluk_id": 168,
+  "name": "Sedam",
+  "k_name": "ಸೇಡಂ",
+  "district": {
+    "$oid": "655c8cb8d50c7eac3649615a"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:23:28.959Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.566Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763addc14b1553ecbd8b332"
+  },
+  "taluk_id": 169,
+  "name": "Basavakalyan",
+  "k_name": "ಬಸವಕಲ್ಯಾಣ",
+  "district": {
+    "$oid": "655c8c7fd50c7eac364960fd"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:23:40.621Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.569Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763addf14b1553ecbd8b337"
+  },
+  "taluk_id": 170,
+  "name": "Shahbad",
+  "k_name": "ಶಹಾಬಾದ್",
+  "district": {
+    "$oid": "655c8cb8d50c7eac3649615a"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:23:43.360Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.571Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763adf314b1553ecbd8b348"
+  },
+  "taluk_id": 171,
+  "name": "Yedrami",
+  "k_name": "ಯಡ್ರಾವಿ",
+  "district": {
+    "$oid": "655c8cb8d50c7eac3649615a"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:24:03.764Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.573Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763adf314b1553ecbd8b34a"
+  },
+  "taluk_id": 171,
+  "name": "Kamalnagar",
+  "k_name": "ಕಮಲನಗರ",
+  "district": {
+    "$oid": "655c8c7fd50c7eac364960fd"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:24:03.769Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.576Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ae0814b1553ecbd8b360"
+  },
+  "taluk_id": 172,
+  "name": "Alur",
+  "k_name": "ಆಲೂರು",
+  "district": {
+    "$oid": "655c8cb0d50c7eac36496140"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:24:24.761Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.579Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763ae1214b1553ecbd8b36d"
+  },
+  "taluk_id": 173,
+  "name": "Hulasoor",
+  "k_name": "ಹುಲಸೂರು",
+  "district": {
+    "$oid": "655c8c7fd50c7eac364960fd"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:24:34.516Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.582Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ae1c14b1553ecbd8b384"
+  },
+  "taluk_id": 174,
+  "name": "Arkalgud",
+  "k_name": "ಅರಕಲಗೂಡು",
+  "district": {
+    "$oid": "655c8cb0d50c7eac36496140"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:24:44.585Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.585Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763ae2814b1553ecbd8b38d"
+  },
+  "taluk_id": 175,
+  "name": "Chitgoppa",
+  "k_name": "ಚಿಟಗುಪ್ಪಾ",
+  "district": {
+    "$oid": "655c8c7fd50c7eac364960fd"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:24:56.202Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.587Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ae3114b1553ecbd8b39e"
+  },
+  "taluk_id": 176,
+  "name": "Arsikere",
+  "k_name": "ಅರಸೀಕೆರ",
+  "district": {
+    "$oid": "655c8cb0d50c7eac36496140"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:25:05.644Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.589Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763ae3f14b1553ecbd8b3a8"
+  },
+  "taluk_id": 177,
+  "name": "Bhalki",
+  "k_name": "ಭಾಲ್ಕಿ",
+  "district": {
+    "$oid": "655c8c7fd50c7eac364960fd"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:25:19.323Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.591Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ae4514b1553ecbd8b3b0"
+  },
+  "taluk_id": 178,
+  "name": "Belur",
+  "k_name": "ಬೇಲೂರು",
+  "district": {
+    "$oid": "655c8cb0d50c7eac36496140"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:25:25.021Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.594Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763ae5314b1553ecbd8b3c5"
+  },
+  "taluk_id": 180,
+  "name": "Channarayapattana",
+  "k_name": "ಚನ್ನರಾಯಪಟ್ಟಣ",
+  "district": {
+    "$oid": "655c8cb0d50c7eac36496140"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:25:39.308Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.596Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763ae5814b1553ecbd8b3cd"
+  },
+  "taluk_id": 181,
+  "name": "Homnabad",
+  "k_name": "ಹುಮ್ನಾಬಾದ್",
+  "district": {
+    "$oid": "655c8c7fd50c7eac364960fd"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:25:44.573Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.598Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ae6414b1553ecbd8b3d7"
+  },
+  "taluk_id": 182,
+  "name": "Hassan",
+  "k_name": "ಹಾಸನ",
+  "district": {
+    "$oid": "655c8cb0d50c7eac36496140"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:25:56.711Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.601Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763ae6e14b1553ecbd8b3e3"
+  },
+  "taluk_id": 183,
+  "name": "Aurad",
+  "k_name": "ಔರಾದ್",
+  "district": {
+    "$oid": "655c8c7fd50c7eac364960fd"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:26:06.277Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.603Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763ae7414b1553ecbd8b400"
+  },
+  "taluk_id": 184,
+  "name": "Holenarsipur",
+  "k_name": "ಹೊಳೆನರಸೀಪುರ",
+  "district": {
+    "$oid": "655c8cb0d50c7eac36496140"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:26:12.127Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.605Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763ae8514b1553ecbd8b40b"
+  },
+  "taluk_id": 185,
+  "name": "Sakleshpur",
+  "k_name": "ಸಕಲೇಶಪುರ",
+  "district": {
+    "$oid": "655c8cb0d50c7eac36496140"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:26:29.554Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.608Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763ae8c14b1553ecbd8b418"
+  },
+  "taluk_id": 186,
+  "name": "Vijayapura",
+  "k_name": "ವಿಜಯಪುರ",
+  "district": {
+    "$oid": "655c8d02d50c7eac364961c0"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:26:36.216Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.610Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763ae9714b1553ecbd8b423"
+  },
+  "taluk_id": 187,
+  "name": "Byadgi",
+  "k_name": "ಬ್ಯಾಡಗಿ",
+  "district": {
+    "$oid": "655c8cb5d50c7eac36496153"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:26:47.289Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.612Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763aea014b1553ecbd8b4bd"
+  },
+  "taluk_id": 188,
+  "name": "Indi",
+  "k_name": "ಇಂಡಿ",
+  "district": {
+    "$oid": "655c8d02d50c7eac364961c0"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:26:56.252Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.614Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763aeab14b1553ecbd8b4c6"
+  },
+  "taluk_id": 189,
+  "name": "Hangal",
+  "k_name": "ಹಾನಗಲ್",
+  "district": {
+    "$oid": "655c8cb5d50c7eac36496153"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:27:07.767Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.617Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763aeba14b1553ecbd8b4cf"
+  },
+  "taluk_id": 190,
+  "name": "Muddebihal",
+  "k_name": "ಮುದ್ದೇಬಿಹಾಳ",
+  "district": {
+    "$oid": "655c8d02d50c7eac364961c0"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:27:22.550Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.619Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763aebc14b1553ecbd8b4d4"
+  },
+  "taluk_id": 191,
+  "name": "Haveri",
+  "k_name": "ಹಾವೇರಿ",
+  "district": {
+    "$oid": "655c8cb5d50c7eac36496153"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:27:24.471Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.621Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763aece14b1553ecbd8b4e1"
+  },
+  "taluk_id": 192,
+  "name": "Hirekerur",
+  "k_name": "ಹಿರೇಕೆರೂರ",
+  "district": {
+    "$oid": "655c8cb5d50c7eac36496153"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:27:42.154Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.624Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763aed214b1553ecbd8b4e9"
+  },
+  "taluk_id": 193,
+  "name": "Babaleshwar",
+  "k_name": "ಬಬಲೇಶ್ವರ",
+  "district": {
+    "$oid": "655c8d02d50c7eac364961c0"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:27:46.886Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.627Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763aeed14b1553ecbd8b4f6"
+  },
+  "taluk_id": 194,
+  "name": "Nidagundi",
+  "k_name": "ನಿಡಗುಂದಿ",
+  "district": {
+    "$oid": "655c8d02d50c7eac364961c0"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:28:13.443Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.629Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763aef514b1553ecbd8b4fe"
+  },
+  "taluk_id": 195,
+  "name": "Ranibennur",
+  "k_name": "ರಾಣಿಬೆನ್ನೂರು",
+  "district": {
+    "$oid": "655c8cb5d50c7eac36496153"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:28:21.239Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.632Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763af0614b1553ecbd8b508"
+  },
+  "taluk_id": 196,
+  "name": "Tikota",
+  "k_name": "ತಿಕೋಟಾ",
+  "district": {
+    "$oid": "655c8d02d50c7eac364961c0"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:28:38.043Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.635Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763af0814b1553ecbd8b50d"
+  },
+  "taluk_id": 197,
+  "name": "Rattihalli",
+  "k_name": "ರಟ್ಟೀಹಳ್ಳಿ",
+  "district": {
+    "$oid": "655c8cb5d50c7eac36496153"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:28:40.145Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.637Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763af1e14b1553ecbd8b51a"
+  },
+  "taluk_id": 198,
+  "name": "Savanur",
+  "k_name": "ಸವಣೂರು",
+  "district": {
+    "$oid": "655c8cb5d50c7eac36496153"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:29:02.398Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.639Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763af1f14b1553ecbd8b51f"
+  },
+  "taluk_id": 199,
+  "name": "Devara Hippargi",
+  "k_name": "ದೇವರ ಹಿಪ್ಪರ",
+  "district": {
+    "$oid": "655c8d02d50c7eac364961c0"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:29:03.810Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.642Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763af2f14b1553ecbd8b52c"
+  },
+  "taluk_id": 200,
+  "name": "Shiggaon",
+  "k_name": "ಶಿಗ್ಗಾಂವ",
+  "district": {
+    "$oid": "655c8cb5d50c7eac36496153"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:29:19.619Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.644Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763af3414b1553ecbd8b534"
+  },
+  "taluk_id": 201,
+  "name": "Talikote",
+  "k_name": "ತಾಳಿಕೋಟಿ",
+  "district": {
+    "$oid": "655c8d02d50c7eac364961c0"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:29:24.871Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.647Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763af4d14b1553ecbd8b53e"
+  },
+  "taluk_id": 202,
+  "name": "Madikeri",
+  "k_name": "ಮಡಿಕೇರಿ",
+  "district": {
+    "$oid": "655c8cbcd50c7eac36496161"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:29:49.157Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.649Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763af4d14b1553ecbd8b543"
+  },
+  "taluk_id": 203,
+  "name": "Chadchan",
+  "k_name": "ಚಡಚಣವು",
+  "district": {
+    "$oid": "655c8d02d50c7eac364961c0"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:29:49.927Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.652Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763af5d14b1553ecbd8b550"
+  },
+  "taluk_id": 204,
+  "name": "Somvarpet",
+  "k_name": "ಸೋಮವಾರಪೇಟೆ",
+  "district": {
+    "$oid": "655c8cbcd50c7eac36496161"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:30:05.843Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.654Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763af6f14b1553ecbd8b561"
+  },
+  "taluk_id": 206,
+  "name": "Virajpet",
+  "k_name": "ವಿರಾಜಪೇಟೆ",
+  "district": {
+    "$oid": "655c8cbcd50c7eac36496161"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:30:23.404Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.657Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763af7c14b1553ecbd8b56b"
+  },
+  "taluk_id": 207,
+  "name": "Sindagi",
+  "k_name": "ಸಿಂದಗಿ",
+  "district": {
+    "$oid": "655c8d02d50c7eac364961c0"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:30:36.383Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.660Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763af8714b1553ecbd8b574"
+  },
+  "taluk_id": 208,
+  "name": "Bangarapet",
+  "k_name": "ಬಂಗಾರಪೇಟೆ",
+  "district": {
+    "$oid": "655c8cc1d50c7eac3649616c"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:30:47.124Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.662Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763af9614b1553ecbd8b57d"
+  },
+  "taluk_id": 209,
+  "name": "Basavana Bagewadi",
+  "k_name": "ಬಸವಣ ಬಾಗೇವಾಡಿ",
+  "district": {
+    "$oid": "655c8d02d50c7eac364961c0"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:31:02.990Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.665Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6763af9c14b1553ecbd8b585"
+  },
+  "taluk_id": 210,
+  "name": "Kolar",
+  "k_name": "ಕೋಲಾರ",
+  "district": {
+    "$oid": "655c8cc1d50c7eac3649616c"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:31:08.776Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.668Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763afac14b1553ecbd8b597"
+  },
+  "taluk_id": 211,
+  "name": "K.G.F",
+  "k_name": "ಕೆ.ಜಿ.ಎಫ್",
+  "district": {
+    "$oid": "655c8cc1d50c7eac3649616c"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:31:24.389Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.670Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763afbb14b1553ecbd8b5a0"
+  },
+  "taluk_id": 212,
+  "name": "Chamarajnagar",
+  "k_name": "ಚಾಮರಾಜನಗರ",
+  "district": {
+    "$oid": "655c8c83d50c7eac36496104"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:31:39.496Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.674Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763afc114b1553ecbd8b5a8"
+  },
+  "taluk_id": 213,
+  "name": "Malur",
+  "k_name": "ಮಾಲೂರು",
+  "district": {
+    "$oid": "655c8cc1d50c7eac3649616c"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:31:45.395Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.677Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763afd414b1553ecbd8b5b2"
+  },
+  "taluk_id": 214,
+  "name": "Mulbagal",
+  "k_name": "ಮುಳಬಾಗಿಲು",
+  "district": {
+    "$oid": "655c8cc1d50c7eac3649616c"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:32:04.552Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.681Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763afd714b1553ecbd8b5b7"
+  },
+  "taluk_id": 215,
+  "name": "Gundlupete",
+  "k_name": "ಗುಂಡ್ಲುಪೇಟೆ",
+  "district": {
+    "$oid": "655c8c83d50c7eac36496104"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:32:07.504Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.684Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763afe714b1553ecbd8b5c4"
+  },
+  "taluk_id": 216,
+  "name": "Srinivaspur",
+  "k_name": "ಶ್ರೀನಿವಾಸಪುರ",
+  "district": {
+    "$oid": "655c8cc1d50c7eac3649616c"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:32:23.534Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.687Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763afea14b1553ecbd8b5c9"
+  },
+  "taluk_id": 217,
+  "name": "Kollegala",
+  "k_name": "ಕೊಳ್ಳೇಗಾಲ",
+  "district": {
+    "$oid": "655c8c83d50c7eac36496104"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:32:26.895Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.691Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763b00f14b1553ecbd8b5dd"
+  },
+  "taluk_id": 218,
+  "name": "Hanur",
+  "k_name": "ಹನೂರು",
+  "district": {
+    "$oid": "655c8c83d50c7eac36496104"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:33:03.006Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.696Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763b02014b1553ecbd8b679"
+  },
+  "taluk_id": 219,
+  "name": "Gangawati",
+  "k_name": "ಗಂಗಾವತಿ",
+  "district": {
+    "$oid": "655c8cc6d50c7eac36496175"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:33:20.090Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.700Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763b02714b1553ecbd8b682"
+  },
+  "taluk_id": 220,
+  "name": "Yelandur",
+  "k_name": "ಯಳಂದೂರು",
+  "district": {
+    "$oid": "655c8c83d50c7eac36496104"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:33:27.368Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.706Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763b03214b1553ecbd8b68b"
+  },
+  "taluk_id": 221,
+  "name": "Kanakagiri",
+  "k_name": "ಕನಕಗಿರಿ",
+  "district": {
+    "$oid": "655c8cc6d50c7eac36496175"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:33:38.529Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.710Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763b04214b1553ecbd8b694"
+  },
+  "taluk_id": 222,
+  "name": "Bagepalli",
+  "k_name": "ಬಾಗೇಪಲ್ಲಿ",
+  "district": {
+    "$oid": "655c8c88d50c7eac3649610b"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:33:54.042Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.715Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763b04614b1553ecbd8b69c"
+  },
+  "taluk_id": 223,
+  "name": "Kuknur",
+  "k_name": "ಕುಕನೂರು",
+  "district": {
+    "$oid": "655c8cc6d50c7eac36496175"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:33:58.773Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.719Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763b05714b1553ecbd8b6a6"
+  },
+  "taluk_id": 224,
+  "name": "Karatagi",
+  "k_name": "ಕಾರಟಗಿ",
+  "district": {
+    "$oid": "655c8cc6d50c7eac36496175"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:34:15.157Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.724Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763b05b14b1553ecbd8b6ae"
+  },
+  "taluk_id": 225,
+  "name": "Chikballapur",
+  "k_name": "ಚಿಕ್ಕಬಳ್ಳಾಪುರ",
+  "district": {
+    "$oid": "655c8c88d50c7eac3649610b"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:34:19.009Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.730Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763b07614b1553ecbd8b6bb"
+  },
+  "taluk_id": 226,
+  "name": "Koppal",
+  "k_name": "ಕೊಪ್ಪಳ",
+  "district": {
+    "$oid": "655c8cc6d50c7eac36496175"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:34:46.357Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.735Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763b07914b1553ecbd8b6c0"
+  },
+  "taluk_id": 227,
+  "name": "Chintamani",
+  "k_name": "ಚಿಂತಾಮಣಿ",
+  "district": {
+    "$oid": "655c8c88d50c7eac3649610b"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:34:49.482Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.741Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763b08814b1553ecbd8b6cd"
+  },
+  "taluk_id": 228,
+  "name": "Kushtagi",
+  "k_name": "ಕುಷ್ಟಗಿ",
+  "district": {
+    "$oid": "655c8cc6d50c7eac36496175"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:35:04.177Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.746Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763b09014b1553ecbd8b6d6"
+  },
+  "taluk_id": 229,
+  "name": "Gauribidanur",
+  "k_name": "ಗೌರಿಬಿದನೂರು",
+  "district": {
+    "$oid": "655c8c88d50c7eac3649610b"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:35:12.224Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.751Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763b0a714b1553ecbd8b6e2"
+  },
+  "taluk_id": 230,
+  "name": "Gudibanda",
+  "k_name": "ಗುಡಿಬಂಡೆ",
+  "district": {
+    "$oid": "655c8c88d50c7eac3649610b"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:35:35.553Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.756Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763b0bb14b1553ecbd8b72d"
+  },
+  "taluk_id": 231,
+  "name": "Yelbarga",
+  "k_name": "ಯಲಬುರ್ಗಾ",
+  "district": {
+    "$oid": "655c8cc6d50c7eac36496175"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:35:55.219Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.761Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "6763b0be14b1553ecbd8b735"
+  },
+  "taluk_id": 232,
+  "name": "Sidlaghatta",
+  "k_name": "ಶಿಡ್ಲಘಟ್ಟ",
+  "district": {
+    "$oid": "655c8c88d50c7eac3649610b"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:35:58.618Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.766Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763b0cf14b1553ecbd8b73f"
+  },
+  "taluk_id": 233,
+  "name": "Krishnarajpet",
+  "k_name": "ಕೃಷ್ಣರಾಜಪೇಟೆ",
+  "district": {
+    "$oid": "655c8ccdd50c7eac36496180"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:36:15.703Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.771Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763b0da14b1553ecbd8b748"
+  },
+  "taluk_id": 234,
+  "name": "Chikkamagaluru",
+  "k_name": "ಚಿಕ್ಕಮಗಳೂರು",
+  "district": {
+    "$oid": "655c8c8ed50c7eac36496112"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:36:26.829Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.777Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763b0e414b1553ecbd8b751"
+  },
+  "taluk_id": 235,
+  "name": "Maddur",
+  "k_name": "ಮದ್ದೂರು",
+  "district": {
+    "$oid": "655c8ccdd50c7eac36496180"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:36:36.093Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.782Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763b0ef14b1553ecbd8b75a"
+  },
+  "taluk_id": 236,
+  "name": "Kadur",
+  "k_name": "ಕಡೂರು",
+  "district": {
+    "$oid": "655c8c8ed50c7eac36496112"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:36:47.463Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.786Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763b10014b1553ecbd8b765"
+  },
+  "taluk_id": 237,
+  "name": "Malavalli",
+  "k_name": "ಮಳವಳ್ಳಿ",
+  "district": {
+    "$oid": "655c8ccdd50c7eac36496180"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:37:04.034Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.792Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763b10714b1553ecbd8b772"
+  },
+  "taluk_id": 238,
+  "name": "Koppa",
+  "k_name": "ಕೊಪ್ಪ",
+  "district": {
+    "$oid": "655c8c8ed50c7eac36496112"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:37:11.633Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.797Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763b11014b1553ecbd8b77a"
+  },
+  "taluk_id": 239,
+  "name": "Mandya",
+  "k_name": "ಮಂಡ್ಯ",
+  "district": {
+    "$oid": "655c8ccdd50c7eac36496180"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:37:20.721Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.802Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763b11e14b1553ecbd8b786"
+  },
+  "taluk_id": 240,
+  "name": "Mudigere",
+  "k_name": "ಮೂಡಿಗೆರೆ",
+  "district": {
+    "$oid": "655c8c8ed50c7eac36496112"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:37:34.717Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.807Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763b13414b1553ecbd8b793"
+  },
+  "taluk_id": 241,
+  "name": "Narasimharajapura",
+  "k_name": "ನರಸಿಂಹರಾಜಪುರ",
+  "district": {
+    "$oid": "655c8c8ed50c7eac36496112"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:37:56.515Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.814Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763b14c14b1553ecbd8b7cc"
+  },
+  "taluk_id": 243,
+  "name": "Sringeri",
+  "k_name": "ಶೃಂಗೇರಿ",
+  "district": {
+    "$oid": "655c8c8ed50c7eac36496112"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:38:20.976Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.819Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763b17014b1553ecbd8b7d8"
+  },
+  "taluk_id": 244,
+  "name": "Ajjampura",
+  "k_name": "ಅಜ್ಜಂಪುರ",
+  "district": {
+    "$oid": "655c8c8ed50c7eac36496112"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:38:56.477Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.824Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763b18814b1553ecbd8b7f1"
+  },
+  "taluk_id": 245,
+  "name": "Tarikere",
+  "k_name": "ತರೀಕೆರೆ",
+  "district": {
+    "$oid": "655c8c8ed50c7eac36496112"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:39:20.718Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.831Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6763b1a914b1553ecbd8b81b"
+  },
+  "taluk_id": 246,
+  "name": "Challakere",
+  "k_name": "ಚಳ್ಳಕೆರೆ",
+  "district": {
+    "$oid": "655c8c93d50c7eac36496119"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:39:53.700Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.836Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763b1bd14b1553ecbd8b82c"
+  },
+  "taluk_id": 247,
+  "name": "Chitradurga",
+  "k_name": "ಚಿತ್ರದುರ್ಗ",
+  "district": {
+    "$oid": "655c8c93d50c7eac36496119"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:40:13.597Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.842Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6763b1d014b1553ecbd8b846"
+  },
+  "taluk_id": 248,
+  "name": "Hiriyur",
+  "k_name": "ಹಿರಿಯೂರು",
+  "district": {
+    "$oid": "655c8c93d50c7eac36496119"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2024-12-19T05:40:32.951Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.849Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "678b7fa60001364faf891880"
+  },
+  "taluk_id": 259,
+  "name": "Manchenahalli",
+  "k_name": "ಮಂಚೇನಹಳ್ಳಿ",
+  "district": {
+    "$oid": "655c8c88d50c7eac3649610b"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-01-18T10:17:10.840Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.854Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "678f8c46d91c7609b0ac335c"
+  },
+  "taluk_id": 266,
+  "name": "Kushalnagar",
+  "k_name": "ಕುಶಾಲನಗರ",
+  "district": {
+    "$oid": "655c8cbcd50c7eac36496161"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-01-21T12:00:06.667Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.861Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6790c47a20bc9b3d4fffd908"
+  },
+  "taluk_id": 267,
+  "name": "Kalasa",
+  "k_name": "ಕಳಸ",
+  "district": {
+    "$oid": "655c8c8ed50c7eac36496112"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-01-22T10:12:10.423Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.867Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6790c94e20bc9b3d4fffd961"
+  },
+  "taluk_id": 268,
+  "name": "Gadag",
+  "k_name": "Gadag++++",
+  "district": {
+    "$oid": "655c8caad50c7eac36496135"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-01-22T10:32:46.463Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.872Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "67932c954375aefb2a11e0cf"
+  },
+  "taluk_id": 269,
+  "name": "Ponnampet",
+  "k_name": "ಪೊನ್ನಂಪೇಟೆ",
+  "district": {
+    "$oid": "655c8cbcd50c7eac36496161"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-01-24T06:00:53.045Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.878Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "67933a294375aefb2a11e242"
+  },
+  "taluk_id": 270,
+  "name": "Teradala",
+  "k_name": "ತೇರದಾಳ",
+  "district": {
+    "$oid": "655c8a14788ad54a9157d4f3"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-01-24T06:58:49.203Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.885Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "679341194375aefb2a11e3b8"
+  },
+  "taluk_id": 271,
+  "name": "ILAKAL",
+  "k_name": "ಇಳಕಲ್",
+  "district": {
+    "$oid": "655c8a14788ad54a9157d4f3"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-01-24T07:28:25.129Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.891Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "679dd39cc9af918015466388"
+  },
+  "taluk_id": 276,
+  "name": "Yaragatti ",
+  "k_name": "ಯರಗಟ್ಟಿ",
+  "district": {
+    "$oid": "655c8c70d50c7eac364960e8"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-02-01T07:56:12.548Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.898Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "679e08fac9af91801547878c"
+  },
+  "taluk_id": 277,
+  "name": "Test Taluka",
+  "k_name": "Test Taluka",
+  "district": {
+    "$oid": "679e07e8c9af91801547870b"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-02-01T11:43:54.534Z"
+  },
+  "updatedAt": {
+    "$date": "2025-02-01T11:43:54.534Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "67a258dff83e6f11235c96c1"
+  },
+  "taluk_id": 278,
+  "name": "test_taluk",
+  "k_name": "test_taluk",
+  "district": {
+    "$oid": "67a258bff83e6f11235c96b3"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-02-04T18:13:51.462Z"
+  },
+  "updatedAt": {
+    "$date": "2025-02-04T18:13:51.462Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "67a9a827e0e5ec98052c88af"
+  },
+  "taluk_id": 279,
+  "name": "Ullala",
+  "k_name": "ಉಳ್ಳಾಲ",
+  "district": {
+    "$oid": "655c8c98d50c7eac36496120"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-02-10T07:17:59.960Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.908Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "67ac7eb0e346cca233acc1b6"
+  },
+  "taluk_id": 280,
+  "name": "Tesr Hosadurga",
+  "k_name": "Test Hosadurga",
+  "district": {
+    "$oid": "67ac7e58e346cca233acbf6c"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-02-12T10:57:52.623Z"
+  },
+  "updatedAt": {
+    "$date": "2025-02-12T10:57:52.623Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "67b70c9da3332951baeba51c"
+  },
+  "taluk_id": 281,
+  "name": "Savadatti",
+  "k_name": "ಸವದತ್ತಿ",
+  "district": {
+    "$oid": "655c8c70d50c7eac364960e8"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-02-20T11:06:05.950Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.917Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "67b81e1abc655abfad089b12"
+  },
+  "taluk_id": 282,
+  "name": "Kukanoor",
+  "k_name": "ಕುಕನೂರು",
+  "district": {
+    "$oid": "655c8cc6d50c7eac36496175"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-02-21T06:32:58.379Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.922Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "67bd81b07b8ec2be75cd1d6b"
+  },
+  "taluk_id": 283,
+  "name": "H D Kote",
+  "k_name": "ಎಚ್ ಡಿ ಕೋಟೆ",
+  "district": {
+    "$oid": "655c8cd1d50c7eac36496189"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-02-25T08:39:12.914Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.928Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "67c035c5a151849fda8b25a9"
+  },
+  "taluk_id": 284,
+  "name": "Saligrama",
+  "k_name": "ಸಾಲಿಗ್ರಾಮ",
+  "district": {
+    "$oid": "655c8cd1d50c7eac36496189"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-02-27T09:52:05.855Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.934Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "67e78a2bfdf4ccbbd1e830e3"
+  },
+  "taluk_id": 285,
+  "name": "Testmalur",
+  "k_name": "Testmalur",
+  "district": {
+    "$oid": "67e78942fdf4ccbbd1e82ac3"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-03-29T05:50:35.681Z"
+  },
+  "updatedAt": {
+    "$date": "2025-03-29T05:50:35.681Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "67e78a2cfdf4ccbbd1e830e8"
+  },
+  "taluk_id": 286,
+  "name": "Testmalur",
+  "k_name": "Testmalur",
+  "district": {
+    "$oid": "67e78942fdf4ccbbd1e82ac3"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-03-29T05:50:36.869Z"
+  },
+  "updatedAt": {
+    "$date": "2025-03-29T05:50:36.869Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "67ed0fcad309381ba76cf028"
+  },
+  "taluk_id": 287,
+  "name": "Supa",
+  "k_name": "ಸೂಪಾ",
+  "district": {
+    "$oid": "655c8cfed50c7eac364961b9"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-04-02T10:22:02.386Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.945Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "67ff886eb2f33f81ab1bbf3a"
+  },
+  "taluk_id": 288,
+  "name": "Harohalli",
+  "k_name": "ಹಾರೋಹಳ್ಳಿ",
+  "district": {
+    "$oid": "655c8cd9d50c7eac36496197"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-04-16T10:37:34.747Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.950Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a15"
+  },
+  "division_id": 1
+},
+{
+  "_id": {
+    "$oid": "6800de8fc87dad512048155e"
+  },
+  "taluk_id": 289,
+  "name": "KOLHAR",
+  "k_name": "ಕೊಲ್ಹಾರ",
+  "district": {
+    "$oid": "655c8d02d50c7eac364961c0"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-04-17T10:57:19.219Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.956Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6800dec1c87dad5120481662"
+  },
+  "taluk_id": 290,
+  "name": "Almel",
+  "k_name": "ಅಲ್ಮೆಲ್",
+  "district": {
+    "$oid": "655c8d02d50c7eac364961c0"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-04-17T10:58:09.872Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.963Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a17"
+  },
+  "division_id": 3
+},
+{
+  "_id": {
+    "$oid": "6800deddc87dad512048166b"
+  },
+  "taluk_id": 291,
+  "name": "Mulki",
+  "k_name": "ಮೂಲ್ಕಿ",
+  "district": {
+    "$oid": "655c8c98d50c7eac36496120"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-04-17T10:58:37.985Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.968Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a16"
+  },
+  "division_id": 2
+},
+{
+  "_id": {
+    "$oid": "6800df03c87dad5120481674"
+  },
+  "taluk_id": 292,
+  "name": "Arakera",
+  "k_name": "ಅರಕೇರಾ",
+  "district": {
+    "$oid": "655c8cd5d50c7eac36496190"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-04-17T10:59:15.364Z"
+  },
+  "updatedAt": {
+    "$date": "2025-08-19T08:15:35.974Z"
+  },
+  "__v": 0,
+  "division": {
+    "$oid": "6895cfb4e7499c347d879a18"
+  },
+  "division_id": 4
+},
+{
+  "_id": {
+    "$oid": "68076b21bb38f0ef9d24d432"
+  },
+  "taluk_id": 293,
+  "name": "T_ Gundlupet",
+  "k_name": "ಟಿ_ಗುಂಡ್ಲುಪೇಟೆ",
+  "district": {
+    "$oid": "68076a98bb38f0ef9d24d423"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-04-22T10:10:41.306Z"
+  },
+  "updatedAt": {
+    "$date": "2025-04-22T10:10:41.306Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "68076d76bb38f0ef9d24d48f"
+  },
+  "taluk_id": 294,
+  "name": "T Gundlupet",
+  "k_name": "ಟಿ_ ಗುಂಡ್ಲುಪೇಟೆ",
+  "district": {
+    "$oid": "68076a98bb38f0ef9d24d423"
+  },
+  "is_active": true,
+  "is_archived": false,
+  "createdAt": {
+    "$date": "2025-04-22T10:20:38.769Z"
+  },
+  "updatedAt": {
+    "$date": "2025-04-22T10:20:38.769Z"
+  },
+  "__v": 0
+}]

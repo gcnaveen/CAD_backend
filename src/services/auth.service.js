@@ -223,6 +223,68 @@ class AuthService {
   }
 
   /**
+   * Surveyor forgot password - step 1: send OTP to phone.
+   * Body: { phone }
+   */
+  async surveyorForgotPasswordStart(payload) {
+    const { phone } = payload;
+    if (!phone) {
+      throw new BadRequestError("phone is required");
+    }
+
+    const normalizedPhone = String(phone).trim();
+
+    const user = await User.findOne({ "auth.phone": normalizedPhone }).select("role status");
+    if (!user) {
+      throw new UnauthorizedError("No user found with this phone number");
+    }
+    if (user.role !== SURVEYOR_ROLE) {
+      throw new BadRequestError("This account does not use surveyor OTP login");
+    }
+    if (user.status !== USER_STATUS.ACTIVE) {
+      throw new UnauthorizedError("User account is not active");
+    }
+
+    const result = await otpService.issueOtp(normalizedPhone, user);
+    return { ...result, otpRequired: true };
+  }
+
+  /**
+   * Surveyor forgot password - step 2: verify OTP and reset password.
+   * Body: { phone, otp, password }
+   */
+  async surveyorForgotPasswordReset(payload) {
+    const { phone, otp, password } = payload;
+
+    const normalizedPhone = String(phone).trim();
+    const verifiedUser = await otpService.verifyOtp(normalizedPhone, String(otp).trim());
+
+    if (verifiedUser.role !== SURVEYOR_ROLE) {
+      throw new BadRequestError("User is not a surveyor");
+    }
+    if (verifiedUser.status !== USER_STATUS.ACTIVE) {
+      throw new UnauthorizedError("User account is not active");
+    }
+
+    // Pre-validate hook requires otpVerified=true for surveyors; verifyOtp sets it.
+    // Also require profile exists so we don't accidentally enable password-only accounts.
+    if (!verifiedUser.surveyorProfile) {
+      throw new ForbiddenError("Complete registration/profile before resetting password");
+    }
+
+    verifiedUser.auth.password = password;
+    await verifiedUser.save();
+
+    const token = generateToken(verifiedUser);
+    return {
+      user: verifiedUser,
+      token,
+      message: "Password reset successful",
+      otpRequired: false,
+    };
+  }
+
+  /**
    * Login: email + password (Super Admin / Admin / CAD) OR phone + password (Surveyor).
    * Returns user + token.
    */

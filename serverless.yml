@@ -77,6 +77,12 @@ functions:
           path: /api/auth/surveyor/complete
           method: post
       - httpApi:
+          path: /api/auth/surveyor/forgot-password/start
+          method: post
+      - httpApi:
+          path: /api/auth/surveyor/forgot-password/reset
+          method: post
+      - httpApi:
           path: /api/auth/login
           method: post
       - httpApi:

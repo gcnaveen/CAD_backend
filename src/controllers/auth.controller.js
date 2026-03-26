@@ -35,6 +35,23 @@ async function surveyorCompleteRegistration(payload) {
 }
 
 /**
+ * Surveyor forgot password step 1: send OTP to phone.
+ */
+async function surveyorForgotPasswordStart(payload) {
+  const result = await authService.surveyorForgotPasswordStart(payload);
+  return ok(result);
+}
+
+/**
+ * Surveyor forgot password step 2: verify OTP and reset password.
+ * Returns user + token.
+ */
+async function surveyorForgotPasswordReset(payload) {
+  const result = await authService.surveyorForgotPasswordReset(payload);
+  return ok(result);
+}
+
+/**
  * Login with email + password. Returns { user, token }.
  */
 async function login(payload) {
@@ -47,5 +64,7 @@ module.exports = {
   surveyorSendOtp,
   surveyorVerifyOtp,
   surveyorCompleteRegistration,
+  surveyorForgotPasswordStart,
+  surveyorForgotPasswordReset,
   login,
 };

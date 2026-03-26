@@ -13,7 +13,9 @@
     "info": "serverless info",
     "info:dev": "serverless info --stage dev",
     "info:prod": "serverless info --stage prod",
-    "invoke:test": "serverless invoke local -f testApi"
+    "invoke:test": "serverless invoke local -f testApi",
+    "seed:tno": "node tno/seed-districts-taluks-hoblis.js",
+    "seed:tno:dry-run": "node tno/seed-districts-taluks-hoblis.js --dry-run"
   },
   "keywords": [
     "serverless",

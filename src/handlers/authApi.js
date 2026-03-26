@@ -25,6 +25,12 @@ exports.handler = asyncHandler(async (event) => {
     case "POST /api/auth/surveyor/complete":
       return authHandler.surveyorCompleteRegistration(event);
 
+    case "POST /api/auth/surveyor/forgot-password/start":
+      return authHandler.surveyorForgotPasswordStart(event);
+
+    case "POST /api/auth/surveyor/forgot-password/reset":
+      return authHandler.surveyorForgotPasswordReset(event);
+
     case "POST /api/auth/login":
       return authHandler.login(event);
 
