@@ -22,23 +22,13 @@ function idFromRef(ref) {
   return ref._id != null ? ref._id : ref;
 }
 
-async function getNotificationCadUserIds(assignmentDoc) {
+/**
+ * CAD users to include in assignment notification targetUsers (never CadCenter fan-out).
+ * Only the assigned CAD gets user-targeted notifications; legacy pool (no assignee) → admins only.
+ */
+function getNotificationCadUserIds(assignmentDoc) {
   const assignedId = idFromRef(assignmentDoc?.assignedTo);
-  if (assignedId) return [assignedId];
-  if (assignmentDoc?.cadCenter) return getCadUserIdsByCenter(assignmentDoc.cadCenter);
-  return [];
-}
-
-async function getCadUserIdsByCenter(cadCenterId) {
-  const users = await User.find({
-    role: USER_ROLES.CAD,
-    status: USER_STATUS.ACTIVE,
-    deletedAt: null,
-    "cadProfile.cadCenter": cadCenterId,
-  })
-    .select("_id")
-    .lean();
-  return users.map((u) => u._id);
+  return assignedId ? [assignedId] : [];
 }
 
 async function notifyAssignmentEvent({
@@ -53,7 +43,7 @@ async function notifyAssignmentEvent({
     const sketch = assignmentDoc?.surveyorSketchUpload
       ? await SurveyorSketchUpload.findById(assignmentDoc.surveyorSketchUpload).select("_id surveyor surveyNo status applicationId").lean()
       : null;
-    const cadUserIds = await getNotificationCadUserIds(assignmentDoc);
+    const cadUserIds = getNotificationCadUserIds(assignmentDoc);
     const targetUsers = [
       ...(sketch?.surveyor ? [sketch.surveyor] : []),
       ...cadUserIds,

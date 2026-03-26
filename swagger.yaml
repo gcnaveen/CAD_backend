@@ -2133,8 +2133,9 @@ paths:
       tags: [Notifications]
       summary: List Notifications
       description: |
-        Get role-based notifications for the logged-in user.
-        Admin/Super Admin receive all important flow updates (uploads, assignments, status changes).
+        **ADMIN** and **SUPER_ADMIN** see the full notification feed (all rows).
+        **CAD**, **SURVEYOR**, and other roles only see notifications where their user id is in `targetUsers` (personal inbox). Role alone does not grant access — avoids cross-user leakage.
+        When creating notifications in backend, put the intended recipients in `targetUsers`; `targetRoles` on documents is metadata only for this API.
       operationId: listNotifications
       security:
         - bearerAuth: []
