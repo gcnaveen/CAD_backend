@@ -6,6 +6,7 @@ const surveyDraftController = require("../controllers/surveyDraft.controller");
 const surveySketchAssignmentController = require("../controllers/assignment/surveySketchAssignment.controller");
 const surveySketchAssignmentFlowController = require("../controllers/config/surveySketchAssignmentFlow.controller");
 const notificationController = require("../controllers/notification.controller");
+const cadInterestController = require("../controllers/cadInterest.controller");
 const { parsePagination } = require("../utils/pagination");
 const authService = require("../services/auth.service");
 const { validate, schemas, validObjectId } = require("../middleware/validator");
@@ -114,6 +115,25 @@ exports.surveyorForgotPasswordReset = asyncHandler(async (event) => {
   await ensureDb();
   const body = validate(schemas.surveyorForgotPasswordReset)(event);
   return await authController.surveyorForgotPasswordReset(body);
+});
+
+// -------- Public CAD Interest Form --------
+exports.createCadInterest = asyncHandler(async (event) => {
+  await ensureDb();
+  const body = validate(schemas.cadInterestCreate)(event);
+  return await cadInterestController.createCadInterest(body);
+});
+
+// -------- Admin list CAD Interests --------
+exports.listCadInterests = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const q = getQueryParams(event);
+  const options = {
+    page: q.page,
+    limit: q.limit,
+  };
+  return await cadInterestController.listCadInterests(user, options);
 });
 
 // -------- Login --------

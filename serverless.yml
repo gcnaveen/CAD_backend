@@ -86,6 +86,12 @@ functions:
           path: /api/auth/login
           method: post
       - httpApi:
+          path: /api/cad-interest
+          method: post
+      - httpApi:
+          path: /api/cad-interest
+          method: get
+      - httpApi:
           path: /api/users
           method: post
       - httpApi:

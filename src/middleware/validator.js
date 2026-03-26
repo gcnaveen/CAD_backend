@@ -133,6 +133,39 @@ const schemas = {
     return body;
   },
 
+  /** Public CAD interest form submission. */
+  cadInterestCreate(body) {
+    requireFields(body, ["name", "email", "phone", "address", "skills", "yearsOfExperience"]);
+    const name = String(body.name).trim();
+    const email = String(body.email).toLowerCase().trim();
+    const phone = String(body.phone).trim();
+    const address = String(body.address).trim();
+
+    if (!name) throw new BadRequestError("name must be non-empty");
+    if (!email) throw new BadRequestError("email must be non-empty");
+    if (!phone) throw new BadRequestError("phone must be non-empty");
+    if (!address) throw new BadRequestError("address must be non-empty");
+
+    const skills = Array.isArray(body.skills)
+      ? body.skills.map((s) => String(s).trim()).filter(Boolean)
+      : String(body.skills || "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+    if (!skills.length) {
+      throw new BadRequestError("skills must be a non-empty array or comma-separated string");
+    }
+
+    const yearsOfExperience = Number(body.yearsOfExperience);
+    if (!Number.isFinite(yearsOfExperience) || yearsOfExperience < 0 || yearsOfExperience > 60) {
+      throw new BadRequestError("yearsOfExperience must be a number between 0 and 60");
+    }
+
+    const resumeUrl = body.resumeUrl != null && body.resumeUrl !== "" ? String(body.resumeUrl).trim() : undefined;
+
+    return { name, email, phone, address, skills, yearsOfExperience, resumeUrl };
+  },
+
   /** Login: email + password OR phone + password. */
   login(body) {
     requireFields(body, ["password"]);
