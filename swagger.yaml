@@ -320,6 +320,186 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /api/cad-interest:
+    post:
+      tags: [Authentication]
+      summary: Submit CAD Interest Form (Public)
+      description: |
+        Public endpoint to collect CAD interest form submissions.
+        Saves form data in a separate `CadInterest` collection.
+      operationId: createCadInterest
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CadInterestCreateRequest"
+            example:
+              name: "Ravi Kumar"
+              email: "ravi@example.com"
+              phone: "9876543210"
+              address: "Mysuru, Karnataka"
+              skills: ["AutoCAD", "Civil 3D", "Revit"]
+              yearsOfExperience: 5
+              resumeUrl: "https://storage.example.com/resume/ravi.pdf"
+      responses:
+        "200":
+          description: CAD interest submitted (existing submission updated)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                      name:
+                        type: string
+                      email:
+                        type: string
+                      phone:
+                        type: string
+                      address:
+                        type: string
+                      skills:
+                        type: array
+                        items:
+                          type: string
+                      yearsOfExperience:
+                        type: number
+                      resumeUrl:
+                        type: string
+                        nullable: true
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
+        "201":
+          description: CAD interest submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                      name:
+                        type: string
+                      email:
+                        type: string
+                      phone:
+                        type: string
+                      address:
+                        type: string
+                      skills:
+                        type: array
+                        items:
+                          type: string
+                      yearsOfExperience:
+                        type: number
+                      resumeUrl:
+                        type: string
+                        nullable: true
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+    get:
+      tags: [Authentication]
+      summary: List CAD Interests (Admin only)
+      description: |
+        Admin/Super Admin can view CAD interest submissions with pagination.
+      operationId: listCadInterests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          required: false
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          required: false
+      responses:
+        "200":
+          description: List of CAD interests with meta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                        name:
+                          type: string
+                        email:
+                          type: string
+                        phone:
+                          type: string
+                        address:
+                          type: string
+                        skills:
+                          type: array
+                          items:
+                            type: string
+                        yearsOfExperience:
+                          type: number
+                        resumeUrl:
+                          type: string
+                          nullable: true
+                        createdAt:
+                          type: string
+                          format: date-time
+                        updatedAt:
+                          type: string
+                          format: date-time
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      limit: { type: integer }
+                      total: { type: integer }
+                      totalPages: { type: integer }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   # -------- User Management (Super Admin / Admin only) --------
   /api/users:
     post:
@@ -2664,6 +2844,42 @@ components:
             otpRequired:
               type: boolean
               example: true
+
+    CadInterestCreateRequest:
+      type: object
+      required: [name, email, phone, address, skills, yearsOfExperience]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          example: "Ravi Kumar"
+        email:
+          type: string
+          format: email
+          example: "ravi@example.com"
+        phone:
+          type: string
+          minLength: 6
+          example: "9876543210"
+        address:
+          type: string
+          minLength: 1
+          example: "Mysuru, Karnataka"
+        skills:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          example: ["AutoCAD", "Civil 3D", "Revit"]
+        yearsOfExperience:
+          type: number
+          minimum: 0
+          maximum: 60
+          example: 5
+        resumeUrl:
+          type: string
+          nullable: true
+          example: "https://storage.example.com/resume/ravi.pdf"
 
     LoginRequest:
       type: object

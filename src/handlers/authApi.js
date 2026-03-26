@@ -34,6 +34,12 @@ exports.handler = asyncHandler(async (event) => {
     case "POST /api/auth/login":
       return authHandler.login(event);
 
+    case "POST /api/cad-interest":
+      return authHandler.createCadInterest(event);
+
+    case "GET /api/cad-interest":
+      return authHandler.listCadInterests(event);
+
     case "POST /api/users":
       return authHandler.createUser(event);
     case "GET /api/users":
