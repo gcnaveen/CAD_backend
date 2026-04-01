@@ -268,9 +268,9 @@ class AuthService {
 
     // Pre-validate hook requires otpVerified=true for surveyors; verifyOtp sets it.
     // Also require profile exists so we don't accidentally enable password-only accounts.
-    if (!verifiedUser.surveyorProfile) {
-      throw new ForbiddenError("Complete registration/profile before resetting password");
-    }
+    // if (!verifiedUser.surveyorProfile) {
+    //   throw new ForbiddenError("Complete registration/profile before resetting password");
+    // }
 
     verifiedUser.auth.password = password;
     await verifiedUser.save();
