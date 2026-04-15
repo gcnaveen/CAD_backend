@@ -15,7 +15,24 @@ const {
   BadRequestError,
   ForbiddenError,
 } = require("../../utils/errors");
-const { USER_ROLES, USER_STATUS, SURVEY_SKETCH_ASSIGNMENT_STATUS, SURVEY_SKETCH_STATUS } = require("../../config/constants");
+const {
+  USER_ROLES,
+  USER_STATUS,
+  SURVEY_SKETCH_ASSIGNMENT_STATUS,
+  SURVEY_SKETCH_STATUS,
+  CAD_WALLET_ENTRY_KIND,
+} = require("../../config/constants");
+const sketchPaymentPricing = require("../sketchPaymentPricing.service");
+const phonePeSketchPayment = require("../phonePeSketchPayment.service");
+const cadWalletService = require("../cadWallet.service");
+
+// CAD must accept within this window after assignment; otherwise it is auto-rejected.
+const AUTO_REJECT_AFTER_MS = 2 * 60 * 60 * 1000; // 2 hours
+const ACTIVE_ASSIGNMENT_STATUSES = [
+  SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED,
+  SURVEY_SKETCH_ASSIGNMENT_STATUS.IN_PROGRESS,
+  SURVEY_SKETCH_ASSIGNMENT_STATUS.ON_HOLD,
+];
 
 function idFromRef(ref) {
   if (ref == null) return null;
@@ -95,6 +112,11 @@ async function create(payload, assignedBy) {
       code: "SURVEY_SKETCH_NOT_FOUND",
     });
   }
+  if (sketch.status === SURVEY_SKETCH_STATUS.PAYMENT_PENDING) {
+    throw new BadRequestError("Survey sketch payment is not completed yet.", {
+      code: "SKETCH_PAYMENT_PENDING",
+    });
+  }
 
   let cadCenterToStore = null;
   let initialAssignedTo = null;
@@ -138,14 +160,56 @@ async function create(payload, assignedBy) {
 
   const existing = await SurveySketchAssignment.findOne({
     surveyorSketchUpload: surveyorSketchUploadId,
-    status: { $nin: [SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED] },
-  }).lean();
+    status: { $in: ACTIVE_ASSIGNMENT_STATUSES },
+  });
 
   if (existing) {
-    throw new ConflictError(
-      "This survey sketch is already assigned. Cancel the existing assignment first or reassign via update.",
-      { code: "ALREADY_ASSIGNED", assignmentId: existing._id }
-    );
+    const isUnderRevision = sketch.status === SURVEY_SKETCH_STATUS.UNDER_REVISION;
+
+    // Rule: if sketch is UNDER_REVISION, admin/super-admin can always reassign.
+    if (isUnderRevision) {
+      // If current active assignment is still ASSIGNED, reuse it and retarget.
+      if (existing.status === SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED) {
+        existing.assignedTo = initialAssignedTo || null;
+        existing.cadCenter = cadCenterToStore || null;
+        existing.assignedBy = assignedBy._id;
+        existing.assignedAt = new Date();
+        existing.dueDate = dueDate ? new Date(dueDate) : existing.dueDate || null;
+        existing.notes = notes ? String(notes).trim().slice(0, 1000) : existing.notes || null;
+        await existing.save();
+
+        const reassigned = await SurveySketchAssignment.findById(existing._id)
+          .populate("surveyorSketchUpload", "applicationId surveyNo status")
+          .populate("cadCenter", "name code")
+          .populate("assignedTo", "name auth")
+          .populate("assignedBy", "name")
+          .lean();
+
+        await notifyAssignmentEvent({
+          type: "SURVEY_SKETCH_ASSIGNED",
+          title: "Survey sketch reassigned",
+          message: initialAssignedTo
+            ? "Revision assignment was reassigned to a CAD user."
+            : "Revision assignment was reassigned to a CAD center.",
+          assignmentDoc: reassigned || existing,
+          createdBy: assignedBy?._id,
+        });
+
+        return reassigned;
+      }
+
+      // If current active assignment already moved forward (IN_PROGRESS/ON_HOLD),
+      // close it and create a fresh reassignment.
+      existing.status = SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED;
+      await existing.save();
+    }
+
+    if (!isUnderRevision) {
+      throw new ConflictError(
+        "This survey sketch already has an active assignment. If CAD rejected, wait until that assignment is CANCELLED and the sketch is PENDING, then POST again with the same surveyorSketchUploadId and a new assignedCadUserId. Or PATCH the assignment: set status CANCELLED, or change assignedCadUserId while status is ASSIGNED.",
+        { code: "ALREADY_ASSIGNED", assignmentId: existing._id }
+      );
+    }
   }
 
   const doc = new SurveySketchAssignment({
@@ -246,12 +310,42 @@ async function getById(assignmentId) {
 }
 
 /**
- * Update assignment status (and optional assignedTo, dueDate, notes).
+ * Update assignment status (and optional assignedCadUserId while ASSIGNED, dueDate, notes).
  */
 async function update(assignmentId, updates, actor) {
   const doc = await SurveySketchAssignment.findById(assignmentId);
   if (!doc) {
     throw new NotFoundError("Assignment not found", { code: "ASSIGNMENT_NOT_FOUND" });
+  }
+
+  let reassignedCad = false;
+  if (updates.assignedCadUserId !== undefined) {
+    if (updates.status === SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED) {
+      throw new BadRequestError("Cannot set assignedCadUserId when cancelling the assignment", {
+        code: "CONFLICTING_REASSIGN_AND_CANCEL",
+      });
+    }
+    if (doc.status !== SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED) {
+      throw new BadRequestError(
+        "assignedCadUserId can only be changed while the assignment is ASSIGNED (before the CAD accepts). After CAD rejects, create a new assignment with POST.",
+        { code: "REASSIGN_USER_ONLY_WHEN_ASSIGNED", currentStatus: doc.status }
+      );
+    }
+    const cadUser = await User.findOne({
+      _id: updates.assignedCadUserId,
+      role: USER_ROLES.CAD,
+      status: USER_STATUS.ACTIVE,
+      deletedAt: null,
+    }).lean();
+    if (!cadUser) {
+      throw new BadRequestError("assignedCadUserId must be an active CAD user", {
+        code: "INVALID_ASSIGNED_CAD_USER",
+      });
+    }
+    doc.assignedTo = cadUser._id;
+    doc.cadCenter = null;
+    doc.assignedAt = new Date();
+    reassignedCad = true;
   }
 
   const allowed = {};
@@ -261,8 +355,6 @@ async function update(assignmentId, updates, actor) {
       allowed.completedAt = new Date();
     }
   }
-  // assignedToUserId – commented out for now; uncomment if assigning to a specific CAD user is required
-  // if (updates.assignedTo !== undefined) allowed.assignedTo = updates.assignedTo || null;
   if (updates.dueDate !== undefined) allowed.dueDate = updates.dueDate ? new Date(updates.dueDate) : null;
   if (updates.notes !== undefined) allowed.notes = updates.notes ? String(updates.notes).trim().slice(0, 1000) : null;
 
@@ -281,13 +373,25 @@ async function update(assignmentId, updates, actor) {
     .populate("assignedTo", "name auth")
     .populate("assignedBy", "name")
     .lean();
-  await notifyAssignmentEvent({
-    type: "SURVEY_SKETCH_ASSIGNMENT_UPDATED",
-    title: "Assignment updated",
-    message: `Assignment status updated to ${doc.status}.`,
-    assignmentDoc: populated || doc,
-    createdBy: actor?._id,
-  });
+
+  const hasOtherUpdates = Object.keys(allowed).length > 0;
+  if (reassignedCad) {
+    await notifyAssignmentEvent({
+      type: "SURVEY_SKETCH_ASSIGNED",
+      title: "Survey sketch reassigned",
+      message: "A pending assignment was assigned to a different CAD user.",
+      assignmentDoc: populated || doc,
+      createdBy: actor?._id,
+    });
+  } else if (hasOtherUpdates) {
+    await notifyAssignmentEvent({
+      type: "SURVEY_SKETCH_ASSIGNMENT_UPDATED",
+      title: "Assignment updated",
+      message: `Assignment status updated to ${doc.status}.`,
+      assignmentDoc: populated || doc,
+      createdBy: actor?._id,
+    });
+  }
   return populated;
 }
 
@@ -295,8 +399,8 @@ const CAD_ASSIGNMENT_RESPONSE_ACTION = Object.freeze({ ACCEPT: "accept", REJECT:
 
 /**
  * Accept or reject an assignment (CAD user only).
- * Accept: status ASSIGNED → IN_PROGRESS, assignedTo = cadUser (if not already set).
- * Reject: status → CANCELLED, survey sketch status → PENDING (so admin can reassign).
+ * Accept: status ASSIGNED -> IN_PROGRESS, assignedTo = cadUser (if not already set).
+ * Reject: status ASSIGNED/IN_PROGRESS -> CANCELLED, survey sketch status -> PENDING (so admin can reassign).
  * Eligible if: assignment is pre-assigned to this CAD user, or (legacy) pool at their cadCenter.
  */
 async function respondToAssignment(assignmentId, cadUser, action) {
@@ -330,14 +434,35 @@ async function respondToAssignment(assignmentId, cadUser, action) {
     );
   }
 
-  if (doc.status !== SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED) {
+  const isRejectRequest = action === CAD_ASSIGNMENT_RESPONSE_ACTION.REJECT;
+  if (isRejectRequest) {
+    const rejectableStatuses = [
+      SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED,
+      SURVEY_SKETCH_ASSIGNMENT_STATUS.IN_PROGRESS,
+    ];
+    if (!rejectableStatuses.includes(doc.status)) {
+      throw new BadRequestError(
+        `Reject is allowed only for ASSIGNED or IN_PROGRESS assignments. Current status: ${doc.status}`,
+        { code: "INVALID_STATUS_FOR_REJECT", currentStatus: doc.status }
+      );
+    }
+  } else if (doc.status !== SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED) {
     throw new BadRequestError(
-      `Only assignments with status ASSIGNED can be accepted or rejected. Current status: ${doc.status}`,
-      { code: "INVALID_STATUS_FOR_RESPONSE", currentStatus: doc.status }
+      `Accept is allowed only when assignment status is ASSIGNED. Current status: ${doc.status}`,
+      { code: "INVALID_STATUS_FOR_ACCEPT", currentStatus: doc.status }
     );
   }
 
-  const isAccept = action === CAD_ASSIGNMENT_RESPONSE_ACTION.ACCEPT;
+  // Expiration safeguard: if CAD didn't accept within 2 hours, treat as auto-reject.
+  let effectiveAction = action;
+  if (doc.assignedAt && doc.assignedAt instanceof Date) {
+    const ageMs = Date.now() - doc.assignedAt.getTime();
+    if (ageMs > AUTO_REJECT_AFTER_MS) {
+      effectiveAction = CAD_ASSIGNMENT_RESPONSE_ACTION.REJECT;
+    }
+  }
+
+  const isAccept = effectiveAction === CAD_ASSIGNMENT_RESPONSE_ACTION.ACCEPT;
 
   if (isAccept) {
     doc.status = SURVEY_SKETCH_ASSIGNMENT_STATUS.IN_PROGRESS;
@@ -347,6 +472,7 @@ async function respondToAssignment(assignmentId, cadUser, action) {
     await doc.save();
   } else {
     doc.status = SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED;
+    doc.rejectedByCad = cadUser._id;
     await doc.save();
     if (doc.surveyorSketchUpload) {
       await SurveyorSketchUpload.findByIdAndUpdate(doc.surveyorSketchUpload, {
@@ -463,7 +589,7 @@ async function autoAssignFromFlow(surveyorSketchUploadId, assignedByUserId) {
 
   const existing = await SurveySketchAssignment.findOne({
     surveyorSketchUpload: surveyorSketchUploadId,
-    status: { $nin: [SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED] },
+    status: { $in: ACTIVE_ASSIGNMENT_STATUSES },
   }).lean();
   if (existing) return existing;
 
@@ -501,6 +627,9 @@ async function autoAssignFromFlow(surveyorSketchUploadId, assignedByUserId) {
  * Assignments visible to this CAD user: explicitly assigned to them, or unclaimed pool at their center (legacy).
  */
 async function listForCadUser(cadUser, options = {}) {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - AUTO_REJECT_AFTER_MS);
+
   const userCenterId =
     cadUser.cadProfile?.cadCenter != null ? cadUser.cadProfile.cadCenter : null;
   const orClauses = [{ assignedTo: cadUser._id }];
@@ -515,6 +644,20 @@ async function listForCadUser(cadUser, options = {}) {
     filter.status = options.status;
   } else {
     filter.status = { $ne: SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED };
+  }
+
+  // UX safeguard: hide expired ASSIGNED work (assignedAt older than 2h).
+  // Cron job will enforce the same rule by setting these assignments to CANCELLED.
+  const shouldHideExpiredAssigned =
+    options.status == null || options.status === SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED;
+  if (shouldHideExpiredAssigned) {
+    filter.$and = filter.$and || [];
+    filter.$and.push({
+      $or: [
+        { status: { $ne: SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED } },
+        { status: SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED, assignedAt: { $gt: cutoff } },
+      ],
+    });
   }
 
   const limit = Math.min(100, Math.max(1, parseInt(options.limit, 10) || 20));
@@ -537,6 +680,45 @@ async function listForCadUser(cadUser, options = {}) {
 }
 
 /**
+ * Auto-reject CAD assignments that stayed ASSIGNED for more than 2 hours.
+ * - SurveySketchAssignment: ASSIGNED -> CANCELLED
+ * - SurveyorSketchUpload: status -> PENDING (admin can reassign)
+ */
+async function autoRejectExpiredAssignments({ now = new Date(), limit = 250 } = {}) {
+  const cutoff = new Date(now.getTime() - AUTO_REJECT_AFTER_MS);
+
+  const expired = await SurveySketchAssignment.find({
+    status: SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED,
+    assignedAt: { $lte: cutoff },
+  })
+    .select("_id surveyorSketchUpload assignedTo assignedAt")
+    .limit(Math.max(1, limit))
+    .lean();
+
+  if (!expired.length) {
+    return { rejectedCount: 0 };
+  }
+
+  const ids = expired.map((e) => e._id);
+  const uploadIds = expired.map((e) => e.surveyorSketchUpload).filter(Boolean);
+
+  await Promise.all([
+    SurveySketchAssignment.updateMany(
+      { _id: { $in: ids }, status: SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED },
+      { $set: { status: SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED } }
+    ),
+    uploadIds.length
+      ? SurveyorSketchUpload.updateMany(
+          { _id: { $in: uploadIds } },
+          { $set: { status: SURVEY_SKETCH_STATUS.PENDING } }
+        )
+      : Promise.resolve(),
+  ]);
+
+  return { rejectedCount: expired.length };
+}
+
+/**
  * CAD uploads finished sketch URL (after presign PUT). Sets upload.cadDeliverable, assignment COMPLETED, sketch CAD_DELIVERED.
  */
 async function deliverCadSketch(assignmentId, cadUser, fileMeta) {
@@ -549,9 +731,12 @@ async function deliverCadSketch(assignmentId, cadUser, fileMeta) {
       code: "NOT_ASSIGNED_CAD_USER",
     });
   }
-  if (doc.status !== SURVEY_SKETCH_ASSIGNMENT_STATUS.IN_PROGRESS) {
+  if (
+    doc.status !== SURVEY_SKETCH_ASSIGNMENT_STATUS.IN_PROGRESS &&
+    doc.status !== SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED
+  ) {
     throw new BadRequestError(
-      `Deliverable can only be submitted while assignment is IN_PROGRESS. Current: ${doc.status}`,
+      `Deliverable can only be submitted while assignment is ASSIGNED or IN_PROGRESS. Current: ${doc.status}`,
       { code: "INVALID_STATUS_FOR_DELIVER", currentStatus: doc.status }
     );
   }
@@ -565,14 +750,50 @@ async function deliverCadSketch(assignmentId, cadUser, fileMeta) {
     uploadedAt: new Date(),
   };
 
-  await SurveyorSketchUpload.findByIdAndUpdate(uploadId, {
-    cadDeliverable,
-    status: SURVEY_SKETCH_STATUS.CAD_DELIVERED,
+  const uploadDoc = await SurveyorSketchUpload.findById(uploadId);
+  if (!uploadDoc) {
+    throw new NotFoundError("Survey sketch upload not found", { code: "SURVEY_SKETCH_NOT_FOUND" });
+  }
+  if (!Array.isArray(uploadDoc.cadDeliverableHistory)) {
+    uploadDoc.cadDeliverableHistory = [];
+  }
+  // Preserve previously submitted CAD files; never drop older entries.
+  if (uploadDoc.cadDeliverable && uploadDoc.cadDeliverableHistory.length === 0) {
+    uploadDoc.cadDeliverableHistory.push({
+      revisionNo: 0,
+      isRevision: false,
+      deliverable: uploadDoc.cadDeliverable,
+      submittedBy: doc.assignedTo || cadUser._id,
+      submittedAt: uploadDoc.cadDeliverable.uploadedAt || new Date(),
+    });
+  }
+  const nextBaseSubmissionNo = uploadDoc.cadDeliverableHistory.filter((h) => !h?.isRevision).length;
+  uploadDoc.cadDeliverableHistory.push({
+    revisionNo: nextBaseSubmissionNo,
+    isRevision: false,
+    deliverable: cadDeliverable,
+    submittedBy: cadUser._id,
+    submittedAt: new Date(),
   });
+  uploadDoc.cadDeliverable = cadDeliverable;
+  uploadDoc.status = SURVEY_SKETCH_STATUS.CAD_DELIVERED;
+  await uploadDoc.save();
 
   doc.status = SURVEY_SKETCH_ASSIGNMENT_STATUS.COMPLETED;
   doc.completedAt = new Date();
   await doc.save();
+
+  try {
+    await cadWalletService.recordPendingEarningIfConfigured({
+      cadUserId: cadUser._id,
+      assignmentId: doc._id,
+      surveyorSketchUploadId: uploadId,
+      kind: CAD_WALLET_ENTRY_KIND.INITIAL_DELIVERY,
+      revisionNo: 0,
+    });
+  } catch (wErr) {
+    logger.error("cadWallet initial delivery record failed", wErr, { assignmentId: String(doc._id) });
+  }
 
   const sketch = await SurveyorSketchUpload.findById(uploadId).select("surveyor applicationId surveyNo").lean();
   try {
@@ -611,6 +832,470 @@ async function deliverCadSketch(assignmentId, cadUser, fileMeta) {
   return populated;
 }
 
+async function commitRevisionToUploadAndAssign(uploadDoc, surveyor, payload, nextRevisionNo, latestCompleted) {
+  const revisionRequest = {
+    revisionNo: nextRevisionNo,
+    remarks: payload.remarks || null,
+    audio: payload.audio || null,
+    status: "REQUESTED",
+    requestedBy: surveyor._id,
+    requestedAt: new Date(),
+    resolvedAt: null,
+  };
+  if (!Array.isArray(uploadDoc.revisionRequests)) {
+    uploadDoc.revisionRequests = [];
+  }
+  uploadDoc.revisionRequests.push(revisionRequest);
+  uploadDoc.status = SURVEY_SKETCH_STATUS.UNDER_REVISION;
+  await uploadDoc.save();
+
+  const reassignment = new SurveySketchAssignment({
+    surveyorSketchUpload: uploadDoc._id,
+    cadCenter: null,
+    assignedTo: latestCompleted.assignedTo,
+    status: SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED,
+    assignedBy: latestCompleted.assignedBy || surveyor._id,
+    notes: `Auto-assigned for revision request #${nextRevisionNo}`,
+  });
+  await reassignment.save();
+
+  return SurveyorSketchUpload.findById(uploadDoc._id)
+    .populate("surveyor", "name role")
+    .populate("district", "code name")
+    .populate("taluka", "code name")
+    .populate("hobli", "code name")
+    .populate("village", "code name")
+    .lean();
+}
+
+async function markRevisionPaymentFailed(merchantOrderId, phonepeResponse) {
+  const m = String(merchantOrderId).match(/^rev_([a-f0-9]{24})_(\d+)$/i);
+  if (!m) return;
+  const uploadId = m[1];
+  await SurveyorSketchUpload.findByIdAndUpdate(uploadId, {
+    $set: {
+      "pendingRevisionPayment.status": "FAILED",
+      ...(phonepeResponse != null ? { "pendingRevisionPayment.phonepeResponse": phonepeResponse } : {}),
+    },
+  });
+}
+
+/**
+ * PhonePe callback: apply pending revision #2+ after payment success.
+ */
+async function completeRevisionAfterPayment(merchantOrderId, phonepeResponse = {}) {
+  const m = String(merchantOrderId).match(/^rev_([a-f0-9]{24})_(\d+)$/i);
+  if (!m) return null;
+  const uploadId = m[1];
+  const revisionNo = parseInt(m[2], 10);
+
+  const uploadDoc = await SurveyorSketchUpload.findById(uploadId);
+  if (!uploadDoc) return null;
+
+  const already = uploadDoc.revisionRequests?.some((r) => r.revisionNo === revisionNo);
+  if (already) {
+    return SurveyorSketchUpload.findById(uploadId)
+      .populate("surveyor", "name role")
+      .populate("district", "code name")
+      .populate("taluka", "code name")
+      .populate("hobli", "code name")
+      .populate("village", "code name")
+      .lean();
+  }
+
+  const pending = uploadDoc.pendingRevisionPayment;
+  if (!pending || pending.status !== "PENDING" || pending.revisionNo !== revisionNo) {
+    return null;
+  }
+
+  const latestCompleted = await SurveySketchAssignment.findOne({
+    surveyorSketchUpload: uploadId,
+    status: SURVEY_SKETCH_ASSIGNMENT_STATUS.COMPLETED,
+    assignedTo: { $ne: null },
+  })
+    .sort({ completedAt: -1, assignedAt: -1, createdAt: -1 })
+    .select("_id assignedTo assignedBy")
+    .lean();
+  if (!latestCompleted?.assignedTo) return null;
+
+  const surveyor = await User.findById(uploadDoc.surveyor);
+  if (!surveyor) return null;
+
+  const payload = { remarks: pending.remarks, audio: pending.audio || null };
+
+  const chargedPaise = pending.amountPaise != null ? Math.round(Number(pending.amountPaise)) : null;
+  const paidAmountPaise =
+    phonePeSketchPayment.extractPaidAmountPaise(phonepeResponse) ??
+    (chargedPaise != null && Number.isFinite(chargedPaise) ? chargedPaise : null);
+
+  const feePaymentEntry = {
+    revisionNo,
+    merchantOrderId: pending.merchantOrderId || merchantOrderId,
+    chargedAmountPaise: chargedPaise,
+    paidAmountPaise,
+    planAmountRupees: pending.planAmountRupees != null ? Number(pending.planAmountRupees) : null,
+    discountRupees: pending.discountRupees != null ? Number(pending.discountRupees) : null,
+    paidAt: new Date(),
+    phonepeResponse: phonepeResponse && typeof phonepeResponse === "object" ? phonepeResponse : null,
+  };
+
+  await SurveyorSketchUpload.findByIdAndUpdate(uploadId, { $unset: { pendingRevisionPayment: 1 } });
+  const fresh = await SurveyorSketchUpload.findById(uploadId);
+  if (!fresh) return null;
+
+  const result = await commitRevisionToUploadAndAssign(fresh, surveyor, payload, revisionNo, latestCompleted);
+
+  await SurveyorSketchUpload.findByIdAndUpdate(uploadId, { $push: { revisionFeePayments: feePaymentEntry } });
+
+  return result;
+}
+
+async function requestSketchRevision(uploadId, surveyor, payload) {
+  let uploadDoc = await SurveyorSketchUpload.findById(uploadId);
+  if (!uploadDoc) {
+    throw new NotFoundError("Survey sketch upload not found", { code: "SURVEY_SKETCH_NOT_FOUND" });
+  }
+  if (String(uploadDoc.surveyor) !== String(surveyor._id)) {
+    throw new ForbiddenError("You can request revision only for your own sketch", {
+      code: "NOT_YOUR_SKETCH",
+    });
+  }
+  if (!uploadDoc.cadDeliverable) {
+    throw new BadRequestError("CAD has not delivered a sketch yet", {
+      code: "NO_CAD_DELIVERABLE",
+    });
+  }
+
+  const pendingPay = uploadDoc.pendingRevisionPayment;
+  if (pendingPay?.status === "PENDING") {
+    const staleMs = Math.max(
+      60_000,
+      parseInt(process.env.REVISION_PAYMENT_PENDING_STALE_MS || String(24 * 60 * 60 * 1000), 10) || 24 * 60 * 60 * 1000
+    );
+    const requestedAtMs = pendingPay.requestedAt ? new Date(pendingPay.requestedAt).getTime() : 0;
+    const isStale = requestedAtMs > 0 && Date.now() - requestedAtMs > staleMs;
+
+    if (isStale) {
+      await SurveyorSketchUpload.findByIdAndUpdate(uploadId, { $unset: { pendingRevisionPayment: 1 } });
+      uploadDoc = await SurveyorSketchUpload.findById(uploadId);
+    } else {
+      // Payment still pending: never return 409 — always issue (or re-issue) checkout so the client can pay.
+      if (payload.remarks !== undefined) {
+        uploadDoc.pendingRevisionPayment.remarks = payload.remarks;
+      }
+      if (payload.audio !== undefined) {
+        uploadDoc.pendingRevisionPayment.audio = payload.audio;
+      }
+      if (payload.remarks !== undefined || payload.audio !== undefined) {
+        await uploadDoc.save();
+      }
+
+      const phonePe = phonePeSketchPayment;
+      if (!phonePe.isPhonePeConfigured()) {
+        throw new BadRequestError("Revision fee is configured but PhonePe is not configured.", {
+          code: "PHONEPE_NOT_CONFIGURED",
+        });
+      }
+      const merchantOrderId = pendingPay.merchantOrderId;
+      const revisionFeePaise = Number(pendingPay.amountPaise);
+      if (!merchantOrderId || !Number.isFinite(revisionFeePaise) || revisionFeePaise <= 0) {
+        await SurveyorSketchUpload.findByIdAndUpdate(uploadId, { $unset: { pendingRevisionPayment: 1 } });
+        throw new BadRequestError("Pending revision payment data is invalid; please submit the revision request again.", {
+          code: "REVISION_PAYMENT_CORRUPT",
+        });
+      }
+      let checkoutPageUrl;
+      try {
+        const pr = await phonePe.initiatePay(merchantOrderId, revisionFeePaise);
+        checkoutPageUrl = pr.redirectUrl;
+      } catch (pe) {
+        logger.error("PhonePe initiatePay failed for pending revision (resume checkout)", pe, { uploadId: String(uploadId) });
+        if (pe instanceof BadRequestError) throw pe;
+        throw new BadRequestError(pe?.message || "Payment gateway error", { code: "PHONEPE_INIT_FAILED" });
+      }
+      const lean = await SurveyorSketchUpload.findById(uploadId)
+        .populate("surveyor", "name role")
+        .populate("district", "code name")
+        .populate("taluka", "code name")
+        .populate("hobli", "code name")
+        .populate("village", "code name")
+        .lean();
+      return {
+        data: lean,
+        meta: {
+          payment: {
+            requiresPayment: true,
+            checkoutPageUrl,
+            redirectUrl: checkoutPageUrl,
+            merchantOrderId,
+            amountPaise: revisionFeePaise,
+            revisionNo: pendingPay.revisionNo,
+            planAmountRupees: pendingPay.planAmountRupees ?? null,
+            discountRupees: pendingPay.discountRupees ?? null,
+            payableRupees:
+              revisionFeePaise != null && Number.isFinite(revisionFeePaise) ? revisionFeePaise / 100 : null,
+            message: payload.retryPayment
+              ? "Retrying checkout for your pending revision payment."
+              : "Complete payment to submit this revision. Checkout link refreshed.",
+          },
+        },
+      };
+    }
+  }
+
+  const existingRevisionAssignment = await SurveySketchAssignment.findOne({
+    surveyorSketchUpload: uploadId,
+    status: {
+      $in: [
+        SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED,
+        SURVEY_SKETCH_ASSIGNMENT_STATUS.IN_PROGRESS,
+        SURVEY_SKETCH_ASSIGNMENT_STATUS.ON_HOLD,
+      ],
+    },
+  }).select("_id status").lean();
+  if (existingRevisionAssignment) {
+    throw new ConflictError(
+      "A revision assignment is already active for this sketch.",
+      { code: "REVISION_ASSIGNMENT_ALREADY_ACTIVE", assignmentId: existingRevisionAssignment._id }
+    );
+  }
+
+  const latestCompleted = await SurveySketchAssignment.findOne({
+    surveyorSketchUpload: uploadId,
+    status: SURVEY_SKETCH_ASSIGNMENT_STATUS.COMPLETED,
+    assignedTo: { $ne: null },
+  })
+    .sort({ completedAt: -1, assignedAt: -1, createdAt: -1 })
+    .select("_id assignedTo assignedBy")
+    .lean();
+  if (!latestCompleted?.assignedTo) {
+    throw new BadRequestError(
+      "No previously completed CAD assignment found to auto-reassign for revision.",
+      { code: "NO_COMPLETED_ASSIGNMENT_FOR_REVISION" }
+    );
+  }
+
+  const nextRevisionNo = (uploadDoc.revisionRequests?.length || 0) + 1;
+  const phonePe = phonePeSketchPayment;
+  const resolvedRevision = await sketchPaymentPricing.resolveSketchRevisionFee();
+  const revisionFeePaise = resolvedRevision.feePaise;
+  const mustPay = nextRevisionNo >= 2 && revisionFeePaise > 0;
+
+  if (mustPay) {
+    if (!phonePe.isPhonePeConfigured()) {
+      throw new BadRequestError("Revision fee is configured but PhonePe is not configured.", {
+        code: "PHONEPE_NOT_CONFIGURED",
+      });
+    }
+    const merchantOrderId = `rev_${uploadId}_${nextRevisionNo}`;
+    uploadDoc.pendingRevisionPayment = {
+      revisionNo: nextRevisionNo,
+      remarks: payload.remarks || null,
+      audio: payload.audio || null,
+      status: "PENDING",
+      merchantOrderId,
+      amountPaise: revisionFeePaise,
+      planAmountRupees: resolvedRevision.planAmountRupees,
+      discountRupees: resolvedRevision.discountRupees,
+      requestedAt: new Date(),
+    };
+    await uploadDoc.save();
+    let checkoutPageUrl;
+    try {
+      const pr = await phonePe.initiatePay(merchantOrderId, revisionFeePaise);
+      checkoutPageUrl = pr.redirectUrl;
+    } catch (pe) {
+      logger.error("PhonePe initiatePay failed for sketch revision", pe, { uploadId: String(uploadId) });
+      await SurveyorSketchUpload.findByIdAndUpdate(uploadId, { $unset: { pendingRevisionPayment: 1 } });
+      if (pe instanceof BadRequestError) throw pe;
+      throw new BadRequestError(pe?.message || "Payment gateway error", { code: "PHONEPE_INIT_FAILED" });
+    }
+    const lean = await SurveyorSketchUpload.findById(uploadId)
+      .populate("surveyor", "name role")
+      .populate("district", "code name")
+      .populate("taluka", "code name")
+      .populate("hobli", "code name")
+      .populate("village", "code name")
+      .lean();
+    return {
+      data: lean,
+      meta: {
+        payment: {
+          requiresPayment: true,
+          checkoutPageUrl,
+          redirectUrl: checkoutPageUrl,
+          merchantOrderId,
+          amountPaise: revisionFeePaise,
+          revisionNo: nextRevisionNo,
+          planAmountRupees: resolvedRevision.planAmountRupees,
+          discountRupees: resolvedRevision.discountRupees,
+          payableRupees: resolvedRevision.payableRupees,
+          pricingSource: resolvedRevision.source,
+        },
+      },
+    };
+  }
+
+  const data = await commitRevisionToUploadAndAssign(uploadDoc, surveyor, payload, nextRevisionNo, latestCompleted);
+  return {
+    data,
+    meta: {
+      payment: {
+        requiresPayment: false,
+        revisionNo: nextRevisionNo,
+        message:
+          nextRevisionNo >= 2
+            ? "No checkout URL: set SKETCH_REVISION_FEE_PAISE > 0 and PUBLIC_API_BASE_URL to charge for revision #2+."
+            : "First revision is free; no payment required.",
+      },
+    },
+  };
+}
+
+async function deliverCadSketchRevision(assignmentId, cadUser, fileMeta) {
+  const doc = await SurveySketchAssignment.findById(assignmentId);
+  if (!doc) {
+    throw new NotFoundError("Assignment not found", { code: "ASSIGNMENT_NOT_FOUND" });
+  }
+  if (String(doc.assignedTo) !== String(cadUser._id)) {
+    throw new ForbiddenError("Only the assigned CAD user can submit revision deliverable", {
+      code: "NOT_ASSIGNED_CAD_USER",
+    });
+  }
+  if (
+    doc.status !== SURVEY_SKETCH_ASSIGNMENT_STATUS.COMPLETED &&
+    doc.status !== SURVEY_SKETCH_ASSIGNMENT_STATUS.IN_PROGRESS
+  ) {
+    throw new BadRequestError(
+      `Revision deliverable can be submitted only for IN_PROGRESS or COMPLETED assignment. Current: ${doc.status}`,
+      { code: "INVALID_STATUS_FOR_REVISION_DELIVER", currentStatus: doc.status }
+    );
+  }
+
+  const uploadDoc = await SurveyorSketchUpload.findById(doc.surveyorSketchUpload);
+  if (!uploadDoc) {
+    throw new NotFoundError("Survey sketch upload not found", { code: "SURVEY_SKETCH_NOT_FOUND" });
+  }
+  if (!uploadDoc.cadDeliverable) {
+    throw new BadRequestError(
+      "Base CAD deliverable not found. Submit initial deliverable first.",
+      { code: "BASE_CAD_DELIVERABLE_MISSING" }
+    );
+  }
+
+  const revisedDeliverable = {
+    url: String(fileMeta.url).trim(),
+    fileName: fileMeta.fileName != null ? String(fileMeta.fileName).trim() : null,
+    mimeType: fileMeta.mimeType != null ? String(fileMeta.mimeType).trim() : null,
+    size: fileMeta.size != null && fileMeta.size !== "" ? Number(fileMeta.size) : null,
+    uploadedAt: new Date(),
+  };
+
+  if (!Array.isArray(uploadDoc.cadDeliverableHistory)) {
+    uploadDoc.cadDeliverableHistory = [];
+  }
+  if (!uploadDoc.cadDeliverableHistory.length && uploadDoc.cadDeliverable) {
+    uploadDoc.cadDeliverableHistory.push({
+      revisionNo: 0,
+      isRevision: false,
+      deliverable: uploadDoc.cadDeliverable,
+      submittedBy: doc.assignedTo || null,
+      submittedAt: uploadDoc.cadDeliverable.uploadedAt || new Date(),
+    });
+  }
+
+  const nextRevisionNo = uploadDoc.cadDeliverableHistory.filter((h) => h?.isRevision).length + 1;
+  uploadDoc.cadDeliverableHistory.push({
+    revisionNo: nextRevisionNo,
+    isRevision: true,
+    deliverable: revisedDeliverable,
+    submittedBy: cadUser._id,
+    submittedAt: new Date(),
+  });
+  uploadDoc.cadDeliverable = revisedDeliverable;
+  uploadDoc.status = SURVEY_SKETCH_STATUS.CAD_DELIVERED;
+
+  if (Array.isArray(uploadDoc.revisionRequests)) {
+    const lastOpen = [...uploadDoc.revisionRequests].reverse().find((r) => r.status === "REQUESTED");
+    if (lastOpen) {
+      lastOpen.status = "RESOLVED";
+      lastOpen.resolvedAt = new Date();
+    }
+  }
+
+  await uploadDoc.save();
+
+  doc.status = SURVEY_SKETCH_ASSIGNMENT_STATUS.COMPLETED;
+  doc.completedAt = new Date();
+  await doc.save();
+
+  try {
+    await cadWalletService.recordPendingEarningIfConfigured({
+      cadUserId: cadUser._id,
+      assignmentId: doc._id,
+      surveyorSketchUploadId: doc.surveyorSketchUpload,
+      kind: CAD_WALLET_ENTRY_KIND.REVISION_DELIVERY,
+      revisionNo: nextRevisionNo,
+    });
+  } catch (wErr) {
+    logger.error("cadWallet revision delivery record failed", wErr, { assignmentId: String(doc._id) });
+  }
+
+  return SurveySketchAssignment.findById(doc._id)
+    .populate("surveyorSketchUpload", "applicationId surveyNo status cadDeliverable cadDeliverableHistory revisionRequests")
+    .populate("cadCenter", "name code")
+    .populate("assignedTo", "name auth")
+    .populate("assignedBy", "name")
+    .lean();
+}
+
+/**
+ * CAD dashboard: assignment counts scoped to this user (see JSDoc on return fields).
+ */
+async function getCadDashboardStats(cadUser) {
+  const uid = cadUser._id;
+  const touched = { $or: [{ assignedTo: uid }, { rejectedByCad: uid }] };
+
+  const [
+    totalOrders,
+    inProgressOrders,
+    acceptedOrders,
+    rejectedOrders,
+  ] = await Promise.all([
+    SurveySketchAssignment.countDocuments(touched),
+    SurveySketchAssignment.countDocuments({
+      assignedTo: uid,
+      status: {
+        $in: [
+          SURVEY_SKETCH_ASSIGNMENT_STATUS.IN_PROGRESS,
+          SURVEY_SKETCH_ASSIGNMENT_STATUS.ON_HOLD,
+        ],
+      },
+    }),
+    SurveySketchAssignment.countDocuments({
+      assignedTo: uid,
+      status: {
+        $in: [
+          SURVEY_SKETCH_ASSIGNMENT_STATUS.IN_PROGRESS,
+          SURVEY_SKETCH_ASSIGNMENT_STATUS.ON_HOLD,
+          SURVEY_SKETCH_ASSIGNMENT_STATUS.COMPLETED,
+        ],
+      },
+    }),
+    SurveySketchAssignment.countDocuments({
+      rejectedByCad: uid,
+      status: SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED,
+    }),
+  ]);
+
+  return {
+    totalOrders,
+    acceptedOrders,
+    rejectedOrders,
+    inProgressOrders,
+  };
+}
+
 module.exports = {
   create,
   listByCadCenter,
@@ -620,6 +1305,12 @@ module.exports = {
   update,
   respondToAssignment,
   deliverCadSketch,
+  requestSketchRevision,
+  completeRevisionAfterPayment,
+  markRevisionPaymentFailed,
+  deliverCadSketchRevision,
   listAll,
   autoAssignFromFlow,
+  autoRejectExpiredAssignments,
+  getCadDashboardStats,
 };

@@ -27,6 +27,11 @@ async function listByCadCenter(cadCenterId, options) {
   });
 }
 
+async function getCadDashboardStats(cadUser) {
+  const data = await surveySketchAssignmentService.getCadDashboardStats(cadUser);
+  return ok(data);
+}
+
 async function listForCadUser(cadUser, options) {
   const result = await surveySketchAssignmentService.listForCadUser(cadUser, options);
   const limit = Math.min(100, Math.max(1, parseInt(options.limit, 10) || 20));
@@ -61,13 +66,26 @@ async function deliverCadSketch(assignmentId, cadUser, payload) {
   return ok(data);
 }
 
+async function requestSketchRevision(uploadId, surveyor, payload) {
+  const result = await surveySketchAssignmentService.requestSketchRevision(uploadId, surveyor, payload);
+  return ok(result.data, result.meta);
+}
+
+async function deliverCadSketchRevision(assignmentId, cadUser, payload) {
+  const data = await surveySketchAssignmentService.deliverCadSketchRevision(assignmentId, cadUser, payload);
+  return ok(data);
+}
+
 module.exports = {
   createAssignment,
   getAssignment,
   listByCadCenter,
+  getCadDashboardStats,
   listForCadUser,
   listAll,
   updateAssignment,
   respondToAssignment,
   deliverCadSketch,
+  requestSketchRevision,
+  deliverCadSketchRevision,
 };

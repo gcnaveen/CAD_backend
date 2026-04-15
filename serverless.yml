@@ -9,9 +9,15 @@ custom:
   nodeEnv:
     dev: development
     prod: production
+  # Single resolved bucket name for both Lambda env and IAM (must match or presigned PUT → 403 loops).
+  s3Bucket:
+    dev: caddrawing
+    prod: caddrawing
+  s3BucketFromStage: ${self:custom.s3Bucket.${self:provider.stage}, 'caddrawing'}
+  s3BucketName: ${env:S3_BUCKET, self:custom.s3BucketFromStage}
 
 provider:
-  name: aws
+  name: aws 
   runtime: nodejs20.x
   region: ${opt:region, 'ap-south-1'}
   stage: ${opt:stage, 'dev'}
@@ -24,46 +30,63 @@ provider:
   environment:
     NODE_ENV: ${self:custom.nodeEnv.${self:provider.stage}, 'development'}
     STAGE: ${self:provider.stage}
+    # S3 presigned PUT: default SDK behavior (WHEN_SUPPORTED) adds checksum query params browsers cannot satisfy → 403.
+    AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
     MONGODB_URI: ${env:MONGODB_URI, ''}
     MONGODB_URI_STANDARD: ${env:MONGODB_URI_STANDARD, ''}
     MONGODB_DISCOVER_PRIMARY: 'false'
     # Production: set JWT_SECRET via env or SSM; do not use default in prod
     JWT_SECRET: ${env:JWT_SECRET, 'change-me'}
     JWT_EXPIRES_IN: ${env:JWT_EXPIRES_IN, '24h'}
-    # S3 bucket for sketches, CAD drawings, audio, documents
-    S3_BUCKET: ${env:S3_BUCKET, 'caddrawing'}
+    # Must match iamRoleStatements S3 Resource ARNs (see custom.s3BucketName).
+    S3_BUCKET: ${self:custom.s3BucketName}
     OTP_TEST_MODE: ${env:OTP_TEST_MODE, 'false'}
+    # PhonePe sketch checkout: checkout URL is returned only when fee env > 0 and credentials + PUBLIC_API_BASE_URL are set.
+    PUBLIC_API_BASE_URL: ${env:PUBLIC_API_BASE_URL, ''}
+    PHONEPE_CLIENT_ID: ${env:PHONEPE_CLIENT_ID, env:CLIENT_ID, ''}
+    PHONEPE_CLIENT_SECRET: ${env:PHONEPE_CLIENT_SECRET, env:CLIENT_SECRET, ''}
+    PHONEPE_CLIENT_VERSION: ${env:PHONEPE_CLIENT_VERSION, env:CLIENT_VERSION, '1'}
+    PHONEPE_ENV: ${env:PHONEPE_ENV, 'SANDBOX'}
+    SKETCH_UPLOAD_FEE_PAISE: ${env:SKETCH_UPLOAD_FEE_PAISE, '0'}
+    SKETCH_REVISION_FEE_PAISE: ${env:SKETCH_REVISION_FEE_PAISE, '0'}
+    PHONEPE_SUCCESS_REDIRECT_URL: ${env:PHONEPE_SUCCESS_REDIRECT_URL, 'http://localhost:5173/payment-success'}
+    PHONEPE_FAILURE_REDIRECT_URL: ${env:PHONEPE_FAILURE_REDIRECT_URL, 'http://localhost:5173/payment-failure'}
+    # Abandoned revision checkout: clear pendingRevisionPayment after this many ms (default 24h) so surveyor can retry.
+    REVISION_PAYMENT_PENDING_STALE_MS: ${env:REVISION_PAYMENT_PENDING_STALE_MS, '86400000'}
 
   httpApi:
     cors: true
 
-  # S3: presigned URLs + multipart upload (bucket from S3_BUCKET env, default caddrawing)
+  # S3: presigned PUT + delete (same bucket as S3_BUCKET). No PutObjectAcl — buckets often use "Bucket owner enforced".
   iamRoleStatements:
     - Effect: Allow
       Action:
         - s3:PutObject
-        - s3:PutObjectAcl
-      Resource: arn:aws:s3:::${env:S3_BUCKET, 'caddrawing'}/*
+      Resource: arn:aws:s3:::${self:custom.s3BucketName}/*
     - Effect: Allow
       Action:
         - s3:GetObject
-      Resource: arn:aws:s3:::${env:S3_BUCKET, 'caddrawing'}/*
+      Resource: arn:aws:s3:::${self:custom.s3BucketName}/*
     - Effect: Allow
       Action:
         - s3:CreateMultipartUpload
         - s3:UploadPart
         - s3:CompleteMultipartUpload
         - s3:AbortMultipartUpload
-      Resource: arn:aws:s3:::${env:S3_BUCKET, 'caddrawing'}/*
+      Resource: arn:aws:s3:::${self:custom.s3BucketName}/*
     - Effect: Allow
       Action:
         - s3:DeleteObject
-      Resource: arn:aws:s3:::${env:S3_BUCKET, 'caddrawing'}/*
+      Resource: arn:aws:s3:::${self:custom.s3BucketName}/*
+  # Presigned browser PUT also needs S3 bucket CORS (PUT + Content-Type) on custom.s3BucketName — configure in AWS console.
 
 functions:
   authApi:
     handler: src/handlers/authApi.handler
     events:
+      - httpApi:
+          path: /api/payments/phonepe/callback
+          method: get
       - httpApi:
           path: /api/auth/superadmin/register
           method: post
@@ -119,8 +142,17 @@ functions:
           path: /api/surveyor/sketch-uploads
           method: get
       - httpApi:
+          path: /api/surveyor/orders
+          method: get
+      - httpApi:
+          path: /api/surveyor/sketch-pricing
+          method: get
+      - httpApi:
           path: /api/surveyor/sketch-uploads/{uploadId}
           method: get
+      - httpApi:
+          path: /api/surveyor/sketch-uploads/{uploadId}/revision-request
+          method: post
       - httpApi:
           path: /api/surveyor/sketch-drafts
           method: post
@@ -155,13 +187,31 @@ functions:
           path: /api/cad/assignments
           method: get
       - httpApi:
+          path: /api/cad/dashboard
+          method: get
+      - httpApi:
+          path: /api/cad/dashboard/stats
+          method: get
+      - httpApi:
+          path: /api/cad/wallet
+          method: get
+      - httpApi:
+          path: /api/cad/wallet/transactions
+          method: get
+      - httpApi:
           path: /api/cad/sketch-uploads/{uploadId}
           method: get
       - httpApi:
           path: /api/cad/assignments/{assignmentId}/accept
           method: post
       - httpApi:
+          path: /api/cad/assignments/{assignmentId}/reject
+          method: post
+      - httpApi:
           path: /api/cad/assignments/{assignmentId}/deliver
+          method: post
+      - httpApi:
+          path: /api/cad/assignments/{assignmentId}/deliver-revision
           method: post
       - httpApi:
           path: /api/admin/survey-sketch-assignment-flow
@@ -169,6 +219,18 @@ functions:
       - httpApi:
           path: /api/admin/survey-sketch-assignment-flow
           method: patch
+      - httpApi:
+          path: /api/admin/survey-sketch-pricing
+          method: get
+      - httpApi:
+          path: /api/admin/survey-sketch-pricing
+          method: patch
+      - httpApi:
+          path: /api/admin/cad-wallet-entries/{entryId}/mark-paid
+          method: post
+      - httpApi:
+          path: /api/admin/cad-wallet-entries/{entryId}/record-payment
+          method: post
       - httpApi:
           path: /api/notifications
           method: get
@@ -277,6 +339,11 @@ functions:
       - httpApi:
           path: /api/upload/delete
           method: post
+
+  assignmentAutoReject:
+    handler: src/handlers/assignmentAutoReject.handler
+    events:
+      - schedule: rate(5 minutes)
 
   swaggerApi:
     handler: src/handlers/swaggerApi.handler

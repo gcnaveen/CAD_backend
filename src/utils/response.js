@@ -62,6 +62,15 @@ function created(data, meta) {
   return json(201, { success: true, data, ...(meta ? { meta } : null) });
 }
 
+/** Browser redirect (PhonePe return URL, OAuth, etc.). */
+function redirect(url, statusCode = 302) {
+  const base = {
+    Location: String(url),
+    ...defaultCorsHeaders(),
+  };
+  return response(statusCode, "", { headers: base });
+}
+
 /**
  * error(...) supports both:
  * - error(statusCode, message)
@@ -93,5 +102,6 @@ module.exports = {
   text,
   ok,
   created,
+  redirect,
   error,
 };

@@ -1,7 +1,14 @@
 /**
  * S3 utility – presigned PUT URLs for images and audio
- * Bucket: caddrawing. Folders: images | audio only.
- * Production: strict key format, no path traversal, configurable bucket/region.
+ * Folders: uploads/images | uploads/audio only.
+ *
+ * Browser uploads need:
+ * 1) Bucket CORS: allow PUT from your origin; AllowedHeaders must include content-type.
+ * 2) PUT must include header Content-Type exactly equal to the contentType you sent to POST /api/upload/image|audio
+ *    (same string after normalization, e.g. audio/webm). Omitting it or using blob default mismatch → 403.
+ * 3) Lambda IAM + env S3_BUCKET must target the same bucket (see serverless custom.s3BucketName).
+ * 4) SDK default request checksums (WHEN_SUPPORTED) add x-amz-checksum-* to presigned URLs; browsers cannot send those → 403.
+ *    This client uses WHEN_REQUIRED; serverless sets AWS_REQUEST_CHECKSUM_CALCULATION=WHEN_REQUIRED on Lambda too.
  */
 
 const { S3Client, PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
@@ -16,7 +23,16 @@ const UPLOADS_PREFIX = "uploads";
 /** Only two folder types supported. */
 const UPLOAD_FOLDER_TYPES = Object.freeze(["images", "audio"]);
 
-const s3Client = new S3Client({ region: REGION });
+/**
+ * Presigned PUT must NOT use WHEN_SUPPORTED request checksums: the SDK would add
+ * x-amz-checksum-* to the signed URL; browsers cannot send those → 403.
+ * WHEN_REQUIRED skips checksum for PutObject (not required) so only host (+ hoisted content-type) is signed.
+ */
+const s3Client = new S3Client({
+  region: REGION,
+  requestChecksumCalculation: "WHEN_REQUIRED",
+  responseChecksumValidation: "WHEN_REQUIRED",
+});
 
 /**
  * Sanitize filename for S3 key: strip path, limit length, allow only safe chars.
@@ -55,12 +71,17 @@ function buildUploadKey(folderType, entityId, fileName) {
  * @returns {Promise<string>}
  */
 async function getPresignedPutUrl(key, contentType, expiresIn = 900) {
+  const ct = contentType || "application/octet-stream";
   const command = new PutObjectCommand({
     Bucket: BUCKET,
     Key: key,
-    ContentType: contentType || "application/octet-stream",
+    ContentType: ct,
   });
-  return getSignedUrl(s3Client, command, { expiresIn });
+  // Include content-type in the signature so S3 rejects mismatches clearly; requires the browser to send the same header.
+  return getSignedUrl(s3Client, command, {
+    expiresIn,
+    signableHeaders: new Set(["content-type"]),
+  });
 }
 
 /**

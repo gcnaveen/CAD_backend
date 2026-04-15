@@ -30,6 +30,39 @@ const UserSchema = new mongoose.Schema({
     required: true,
   },
 
+  // -------- CAD extended profile fields (stored on User directly) --------
+  // NOTE: These are intended for CAD users only; service layer enforces role checks.
+  personalDetails: {
+    firstName: { type: String, trim: true, default: null },
+    lastName: { type: String, trim: true, default: null },
+    phone: { type: String, trim: true, default: null },
+    email: { type: String, trim: true, default: null },
+    address: { type: String, trim: true, default: null },
+    profilePhotoUrl: { type: String, trim: true, default: null },
+  },
+  kycDetails: {
+    aadhaarPhotoUrl: { type: String, trim: true, default: null },
+  },
+  bankDetails: {
+    accountNumber: { type: String, trim: true, default: null },
+    accountHolderName: { type: String, trim: true, default: null },
+    bankName: { type: String, trim: true, default: null },
+    branchName: { type: String, trim: true, default: null },
+    ifscCode: { type: String, trim: true, default: null },
+  },
+  upiDetails: {
+    upiId: { type: String, trim: true, default: null },
+  },
+  professionalDetails: {
+    skills: [{ type: String, trim: true }],
+    experienceYears: { type: Number, min: 0, default: null },
+    resumeUrl: { type: String, trim: true, default: null },
+  },
+  documents: {
+    addressProofUrl: { type: String, trim: true, default: null },
+  },
+  profileCompleted: { type: Boolean, default: false },
+
   cadProfile: {
     type: CadProfileSchema,
     default: null,

@@ -10,6 +10,7 @@ const {
   SURVEY_SKETCH_STATUS,
   SURVEY_SKETCH_DOCUMENT_KEYS,
 } = require("../../config/constants");
+const { pickSurveyDocumentRaw } = require("../../utils/surveyDocumentKeys");
 
 // -------- Document reference (one per survey record type) --------
 const SurveyDocumentSchema = new mongoose.Schema(
@@ -24,6 +25,34 @@ const SurveyDocumentSchema = new mongoose.Schema(
     size: { type: Number, default: null },
     /** When the file was uploaded (server or client timestamp). */
     uploadedAt: { type: Date, default: () => new Date() },
+  },
+  { _id: false }
+);
+
+const CadDeliverableVersionSchema = new mongoose.Schema(
+  {
+    revisionNo: { type: Number, required: true, min: 0 },
+    isRevision: { type: Boolean, default: false },
+    deliverable: { type: SurveyDocumentSchema, required: true },
+    submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    submittedAt: { type: Date, default: () => new Date() },
+  },
+  { _id: false }
+);
+
+const RevisionRequestSchema = new mongoose.Schema(
+  {
+    revisionNo: { type: Number, required: true, min: 1 },
+    remarks: { type: String, trim: true, default: null, maxlength: 2000 },
+    audio: { type: SurveyDocumentSchema, default: null },
+    status: {
+      type: String,
+      enum: ["REQUESTED", "RESOLVED"],
+      default: "REQUESTED",
+    },
+    requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    requestedAt: { type: Date, default: () => new Date() },
+    resolvedAt: { type: Date, default: null },
   },
   { _id: false }
 );
@@ -111,6 +140,9 @@ const SurveyorSketchUploadSchema = new mongoose.Schema(
     is_kharabuttar: { type: Boolean, default: false },
     is_mulapatra: { type: Boolean, default: false },
 
+    /** Whether this sketch involves superimpose workflow (frontend flag). */
+    isSuperimpose: { type: Boolean, default: false },
+
     /** Optional audio file (e.g. audio remarks, voice notes). Single file: url, fileName?, mimeType?, size?, uploadedAt?. */
     audio: {
       type: SurveyDocumentSchema,
@@ -128,6 +160,16 @@ const SurveyorSketchUploadSchema = new mongoose.Schema(
       type: SurveyDocumentSchema,
       default: null,
     },
+    /** History of all CAD deliverables including first submit and revisions. */
+    cadDeliverableHistory: {
+      type: [CadDeliverableVersionSchema],
+      default: () => [],
+    },
+    /** Surveyor revision requests. */
+    revisionRequests: {
+      type: [RevisionRequestSchema],
+      default: () => [],
+    },
 
     /** Optional notes or text (e.g. "If joint flat, provide all survey no. details"). Max 2000 chars. */
     others: {
@@ -143,6 +185,58 @@ const SurveyorSketchUploadSchema = new mongoose.Schema(
       enum: Object.values(SURVEY_SKETCH_STATUS),
       default: SURVEY_SKETCH_STATUS.PENDING,
       index: true,
+    },
+
+    /** PhonePe payment for initial sketch submission (when fee > 0). */
+    sketchPayment: {
+      status: {
+        type: String,
+        enum: ["NONE", "PENDING", "COMPLETED", "FAILED"],
+        default: "NONE",
+      },
+      merchantOrderId: { type: String, default: null, index: true },
+      amountPaise: { type: Number, default: null },
+      /** Snapshot at checkout: admin plan (₹) and discount (₹) if pricing source was admin. */
+      planAmountRupees: { type: Number, default: null },
+      discountRupees: { type: Number, default: null },
+      /** Amount actually charged (paise), from PhonePe when available, else equals amountPaise. */
+      paidAmountPaise: { type: Number, default: null },
+      phonepeResponse: { type: mongoose.Schema.Types.Mixed, default: null },
+      paidAt: { type: Date, default: null },
+    },
+
+    /** When revision #2+ requires payment: payload held until PhonePe succeeds. */
+    pendingRevisionPayment: {
+      revisionNo: { type: Number, default: null },
+      remarks: { type: String, trim: true, default: null, maxlength: 2000 },
+      audio: { type: SurveyDocumentSchema, default: null },
+      status: {
+        type: String,
+        enum: ["PENDING", "COMPLETED", "FAILED"],
+      },
+      merchantOrderId: { type: String, default: null },
+      amountPaise: { type: Number, default: null },
+      planAmountRupees: { type: Number, default: null },
+      discountRupees: { type: Number, default: null },
+      requestedAt: { type: Date, default: null },
+      phonepeResponse: { type: mongoose.Schema.Types.Mixed, default: null },
+    },
+
+    /** Paid revision fees (#2+) after PhonePe success (audit). */
+    revisionFeePayments: {
+      type: [
+        {
+          revisionNo: { type: Number, required: true },
+          merchantOrderId: { type: String, default: null },
+          chargedAmountPaise: { type: Number, default: null },
+          paidAmountPaise: { type: Number, default: null },
+          planAmountRupees: { type: Number, default: null },
+          discountRupees: { type: Number, default: null },
+          paidAt: { type: Date, default: () => new Date() },
+          phonepeResponse: { type: mongoose.Schema.Types.Mixed, default: null },
+        },
+      ],
+      default: () => [],
     },
 
     /** Optional rejection/approval note from reviewer. */
@@ -264,7 +358,7 @@ SurveyorSketchUploadSchema.pre("save", async function (next) {
 function documentsFromPayload(payload) {
   const map = new Map();
   for (const key of SURVEY_SKETCH_DOCUMENT_KEYS) {
-    const raw = payload[key];
+    const raw = pickSurveyDocumentRaw(payload, key);
     if (!raw) continue;
     const entry =
       typeof raw === "string"

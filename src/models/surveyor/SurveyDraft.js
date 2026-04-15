@@ -49,6 +49,7 @@ const SurveyDraftSchema = new mongoose.Schema(
     is_akarabandu: { type: Boolean, default: false },
     is_kharabuttar: { type: Boolean, default: false },
     is_mulapatra: { type: Boolean, default: false },
+    isSuperimpose: { type: Boolean, default: false },
 
     audio: { type: SurveyDocumentSchema, default: null },
     other_documents: { type: [SurveyDocumentSchema], default: () => [] },

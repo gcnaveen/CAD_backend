@@ -3,7 +3,7 @@
  * POST /api/upload/image  – presigned URL for image
  * POST /api/upload/audio  – presigned URL for audio
  * POST /api/upload/delete – delete by key or fileUrl
- * Bucket: caddrawing. Auth: Surveyor, CAD, Admin, Super Admin.
+ * Bucket: caddrawing. Image/audio upload are public; delete requires auth.
  */
 
 const { connectDB } = require("../config/db");
@@ -36,15 +36,13 @@ exports.handler = asyncHandler(async (event) => {
 
   switch (routeKey) {
     case "POST /api/upload/image": {
-      const { user } = await uploadAuth()(event);
       const params = validate(schemas.uploadImage)(event);
-      return await uploadController.getImageUploadUrl(params, user);
+      return await uploadController.getImageUploadUrl(params, null);
     }
 
     case "POST /api/upload/audio": {
-      const { user } = await uploadAuth()(event);
       const params = validate(schemas.uploadAudio)(event);
-      return await uploadController.getAudioUploadUrl(params, user);
+      return await uploadController.getAudioUploadUrl(params, null);
     }
 
     case "POST /api/upload/delete": {

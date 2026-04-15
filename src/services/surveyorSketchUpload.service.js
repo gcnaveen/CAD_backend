@@ -5,6 +5,7 @@
 
 const SurveyorSketchUpload = require("../models/surveyor/SurveyorSketchUpload");
 const SurveySketchAssignment = require("../models/assignment/SurveySketchAssignment");
+const SurveyDraft = require("../models/surveyor/SurveyDraft");
 const User = require("../models/user/User");
 const District = require("../models/masters/District");
 const Taluka = require("../models/masters/Taluka");
@@ -12,15 +13,117 @@ const Hobli = require("../models/masters/Hobli");
 const Village = require("../models/masters/Village");
 const surveySketchAssignmentService = require("./assignment/surveySketchAssignment.service");
 const flowService = require("./config/surveySketchAssignmentFlow.service");
+const sketchPaymentPricing = require("./sketchPaymentPricing.service");
+const phonePeSketchPayment = require("./phonePeSketchPayment.service");
 const notificationService = require("./notification.service");
-const { USER_ROLES, SURVEY_SKETCH_ASSIGNMENT_STATUS } = require("../config/constants");
+const { USER_ROLES, SURVEY_SKETCH_ASSIGNMENT_STATUS, SURVEY_SKETCH_STATUS } = require("../config/constants");
 const { ForbiddenError, NotFoundError, BadRequestError } = require("../utils/errors");
-const mongoose = require("mongoose");
 const logger = require("../utils/logger");
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
+
+/** After a sketch is in workflow PENDING (not PAYMENT_PENDING): auto-assign + surveyor notification. */
+async function postSubmitNotifyAndAutoAssign(docId, surveyorRef) {
+  try {
+    const flow = await flowService.getAutoAssignState();
+    if (flow.enabled && flow.updatedBy) {
+      await surveySketchAssignmentService.autoAssignFromFlow(docId, flow.updatedBy);
+    }
+  } catch (autoAssignError) {
+    logger.error("Auto assignment flow failed after sketch creation", autoAssignError, {
+      surveyorSketchUploadId: String(docId),
+    });
+  }
+
+  const latest = await SurveyorSketchUpload.findById(docId).lean();
+  try {
+    const sid = surveyorRef._id != null ? surveyorRef._id : surveyorRef;
+    await notificationService.create({
+      type: "SURVEY_SKETCH_UPLOADED",
+      title: "Survey sketch uploaded",
+      message: `Sketch ${latest?.applicationId || ""} uploaded and submitted.`,
+      entityType: "SurveyorSketchUpload",
+      entityId: docId,
+      targetRoles: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN],
+      targetUsers: [sid],
+      createdBy: sid,
+      data: {
+        surveyNo: latest?.surveyNo,
+        status: latest?.status,
+      },
+    });
+  } catch (notificationError) {
+    logger.error("Failed to create upload notification", notificationError, {
+      surveyorSketchUploadId: String(docId),
+    });
+  }
+  return latest;
+}
+
+/**
+ * PhonePe callback: move upload from PAYMENT_PENDING → PENDING and run auto-assign + notification.
+ * Idempotent if payment already marked COMPLETED.
+ */
+async function completeSketchUploadAfterPayment(uploadId, phonepeResponse) {
+  const upload = await SurveyorSketchUpload.findById(uploadId);
+  if (!upload) return null;
+  if (upload.sketchPayment?.status === "COMPLETED") {
+    return SurveyorSketchUpload.findById(uploadId).lean();
+  }
+
+  upload.status = SURVEY_SKETCH_STATUS.PENDING;
+  upload.sketchPayment = upload.sketchPayment || {};
+  upload.sketchPayment.status = "COMPLETED";
+  upload.sketchPayment.phonepeResponse = phonepeResponse;
+  upload.sketchPayment.paidAt = new Date();
+  const paidPaise =
+    phonePeSketchPayment.extractPaidAmountPaise(phonepeResponse) ?? upload.sketchPayment.amountPaise ?? null;
+  if (paidPaise != null && Number.isFinite(Number(paidPaise))) {
+    upload.sketchPayment.paidAmountPaise = Math.round(Number(paidPaise));
+  }
+  await upload.save();
+
+  await postSubmitNotifyAndAutoAssign(upload._id, { _id: upload.surveyor });
+  return SurveyorSketchUpload.findById(uploadId).lean();
+}
+
+async function markSketchPaymentFailed(uploadId, phonepeResponse) {
+  await SurveyorSketchUpload.findByIdAndUpdate(uploadId, {
+    $set: {
+      "sketchPayment.status": "FAILED",
+      ...(phonepeResponse != null ? { "sketchPayment.phonepeResponse": phonepeResponse } : {}),
+    },
+  });
+}
+
+/** When several assignment rows exist per sketch (e.g. cancelled then reassigned), show the active one, else latest. */
+function pickDisplayAssignmentForUpload(rows) {
+  if (!rows?.length) return null;
+  const active = rows.filter((a) => a.status !== SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED);
+  const pool = active.length ? active : rows;
+  return [...pool].sort((a, b) => {
+    const ta = a.assignedAt ? new Date(a.assignedAt).getTime() : 0;
+    const tb = b.assignedAt ? new Date(b.assignedAt).getTime() : 0;
+    return tb - ta;
+  })[0];
+}
+ 
+const SURVEYOR_ORDER_BUCKETS = Object.freeze({
+  ALL: "all",
+  ACTIVE: "active",
+  COMPLETED: "completed",
+  CANCELLED: "cancelled",
+});
+
+
+
+const ORDER_BUCKET_TO_STATUSES = Object.freeze({
+  [SURVEYOR_ORDER_BUCKETS.ACTIVE]: ["PAYMENT_PENDING", "PENDING", "ASSIGNED", "CAD_DELIVERED", "UNDER_REVISION"],
+  [SURVEYOR_ORDER_BUCKETS.COMPLETED]: ["APPROVED"],
+  [SURVEYOR_ORDER_BUCKETS.CANCELLED]: ["REJECTED"],
+});
 
 /**
  * Create a new survey sketch upload. Surveyor must be the authenticated user.
@@ -102,47 +205,83 @@ async function create(surveyor, payload) {
       others: payload.others ?? null,
     });
 
+  async function cleanupDraftIfRequested() {
+    if (!payload.draftId) return;
+    await SurveyDraft.findOneAndUpdate(
+      { _id: payload.draftId, surveyor: surveyor._id, deletedAt: null },
+      { $set: { deletedAt: new Date() } }
+    );
+  }
+
   const MAX_RETRIES = 4;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
     const doc = createDoc();
     try {
       await doc.save();
-      try {
-        const flow = await flowService.getAutoAssignState();
-        if (flow.enabled) {
-          await surveySketchAssignmentService.autoAssignFromFlow(doc._id, flow.updatedBy);
+
+      const phonePe = phonePeSketchPayment;
+      const resolved = await sketchPaymentPricing.resolveSketchUploadFee();
+      const feePaise = resolved.feePaise;
+      if (feePaise > 0) {
+        if (!phonePe.isPhonePeConfigured()) {
+          throw new BadRequestError("Sketch upload fee is configured but PhonePe is not configured.", {
+            code: "PHONEPE_NOT_CONFIGURED",
+          });
         }
-      } catch (autoAssignError) {
-        // Do not fail sketch submission if auto-assign logic fails.
-        logger.error("Auto assignment flow failed after sketch creation", autoAssignError, {
-          surveyorSketchUploadId: String(doc._id),
-        });
-      }
-
-      const latest = await SurveyorSketchUpload.findById(doc._id).lean();
-      try {
-        const targetUsers = [surveyor._id];
-        await notificationService.create({
-          type: "SURVEY_SKETCH_UPLOADED",
-          title: "Survey sketch uploaded",
-          message: `Sketch ${latest?.applicationId || doc.applicationId || ""} uploaded and submitted.`,
-          entityType: "SurveyorSketchUpload",
-          entityId: doc._id,
-          targetRoles: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN],
-          targetUsers,
-          createdBy: surveyor._id,
-          data: {
-            surveyNo: latest?.surveyNo || doc.surveyNo,
-            status: latest?.status || doc.status,
+        const merchantOrderId = `sketch_${doc._id}`;
+        doc.status = SURVEY_SKETCH_STATUS.PAYMENT_PENDING;
+        doc.sketchPayment = {
+          status: "PENDING",
+          merchantOrderId,
+          amountPaise: feePaise,
+          planAmountRupees: resolved.planAmountRupees,
+          discountRupees: resolved.discountRupees,
+        };
+        await doc.save();
+        let checkoutPageUrl;
+        try {
+          const pr = await phonePe.initiatePay(merchantOrderId, feePaise);
+          checkoutPageUrl = pr.redirectUrl;
+        } catch (pe) {
+          logger.error("PhonePe initiatePay failed for sketch upload", pe, { uploadId: String(doc._id) });
+          await SurveyorSketchUpload.findByIdAndUpdate(doc._id, { $set: { "sketchPayment.status": "FAILED" } });
+          if (pe instanceof BadRequestError) throw pe;
+          throw new BadRequestError(pe?.message || "Payment gateway error", { code: "PHONEPE_INIT_FAILED" });
+        }
+        await cleanupDraftIfRequested();
+        const latestPaid = await SurveyorSketchUpload.findById(doc._id).lean();
+        return {
+          data: latestPaid || (doc.toJSON ? doc.toJSON() : doc),
+          meta: {
+            payment: {
+              requiresPayment: true,
+              checkoutPageUrl,
+              redirectUrl: checkoutPageUrl,
+              merchantOrderId,
+              amountPaise: feePaise,
+              planAmountRupees: resolved.planAmountRupees,
+              discountRupees: resolved.discountRupees,
+              payableRupees: resolved.payableRupees,
+              pricingSource: resolved.source,
+            },
           },
-        });
-      } catch (notificationError) {
-        logger.error("Failed to create upload notification", notificationError, {
-          surveyorSketchUploadId: String(doc._id),
-        });
+        };
       }
 
-      return latest || (doc.toJSON ? doc.toJSON() : doc);
+      await postSubmitNotifyAndAutoAssign(doc._id, surveyor);
+      await cleanupDraftIfRequested();
+      const latest = await SurveyorSketchUpload.findById(doc._id).lean();
+      return {
+        data: latest || (doc.toJSON ? doc.toJSON() : doc),
+        meta: {
+          payment: {
+            requiresPayment: false,
+            feePaise: 0,
+            message:
+              "No checkout URL: set SKETCH_UPLOAD_FEE_PAISE > 0 and PUBLIC_API_BASE_URL on the server to enable PhonePe for new uploads.",
+          },
+        },
+      };
     } catch (err) {
       const isDuplicateApplicationId =
         err?.code === 11000 &&
@@ -304,7 +443,6 @@ async function list(actor, options = {}) {
  * Each item has shape { ...upload, assignment: assignmentDoc | null }.
  */
 async function listAllWithAssignment(options = {}) {
-  const SurveySketchAssignment = require("../models/assignment/SurveySketchAssignment");
   const page = Math.max(1, parseInt(options.page, 10) || DEFAULT_PAGE);
   const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(options.limit, 10) || DEFAULT_LIMIT));
   const skip = (page - 1) * limit;
@@ -332,11 +470,15 @@ async function listAllWithAssignment(options = {}) {
     .populate("assignedBy", "name")
     .lean();
 
-  const assignmentByUploadId = {};
-  assignments.forEach((a) => {
+  const listsByUpload = {};
+  for (const a of assignments) {
     const id = a.surveyorSketchUpload?.toString?.() || String(a.surveyorSketchUpload);
-    assignmentByUploadId[id] = a;
-  });
+    (listsByUpload[id] ||= []).push(a);
+  }
+  const assignmentByUploadId = {};
+  for (const [uploadId, list] of Object.entries(listsByUpload)) {
+    assignmentByUploadId[uploadId] = pickDisplayAssignmentForUpload(list);
+  }
 
   const data = uploads.map((upload) => ({
     ...upload,
@@ -349,10 +491,81 @@ async function listAllWithAssignment(options = {}) {
   };
 }
 
+/**
+ * Surveyor-facing order list with tab counts.
+ * Buckets:
+ * - all
+ * - active: PAYMENT_PENDING, PENDING, ASSIGNED, CAD_DELIVERED, UNDER_REVISION
+ * - completed: APPROVED
+ * - cancelled: REJECTED
+ */
+async function listOrdersForSurveyor(actor, options = {}) {
+  if (actor.role !== USER_ROLES.SURVEYOR) {
+    throw new ForbiddenError("Only surveyors can access orders");
+  }
+
+  const page = Math.max(1, parseInt(options.page, 10) || DEFAULT_PAGE);
+  const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(options.limit, 10) || DEFAULT_LIMIT));
+  const skip = (page - 1) * limit;
+  const bucket = String(options.bucket || SURVEYOR_ORDER_BUCKETS.ALL).toLowerCase().trim();
+  const selectedBucket = Object.values(SURVEYOR_ORDER_BUCKETS).includes(bucket)
+    ? bucket
+    : SURVEYOR_ORDER_BUCKETS.ALL;
+
+  const baseFilter = { surveyor: actor._id };
+  const listFilter = { ...baseFilter };
+  if (selectedBucket !== SURVEYOR_ORDER_BUCKETS.ALL) {
+    listFilter.status = { $in: ORDER_BUCKET_TO_STATUSES[selectedBucket] || [] };
+  }
+
+  const [data, total, byStatus] = await Promise.all([
+    SurveyorSketchUpload.find(listFilter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("district", "code name")
+      .populate("taluka", "code name")
+      .populate("hobli", "code name")
+      .populate("village", "code name")
+      .lean(),
+    SurveyorSketchUpload.countDocuments(listFilter),
+    SurveyorSketchUpload.aggregate([
+      { $match: baseFilter },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]),
+  ]);
+
+  const statusCount = {};
+  byStatus.forEach((r) => {
+    statusCount[r._id] = r.count;
+  });
+  const activeCount = ORDER_BUCKET_TO_STATUSES[SURVEYOR_ORDER_BUCKETS.ACTIVE]
+    .reduce((sum, s) => sum + (statusCount[s] || 0), 0);
+  const completedCount = ORDER_BUCKET_TO_STATUSES[SURVEYOR_ORDER_BUCKETS.COMPLETED]
+    .reduce((sum, s) => sum + (statusCount[s] || 0), 0);
+  const cancelledCount = ORDER_BUCKET_TO_STATUSES[SURVEYOR_ORDER_BUCKETS.CANCELLED]
+    .reduce((sum, s) => sum + (statusCount[s] || 0), 0);
+  const allCount = Object.values(statusCount).reduce((sum, n) => sum + n, 0);
+
+  return {
+    data,
+    meta: { page, limit, total, bucket: selectedBucket },
+    counts: {
+      all: allCount,
+      active: activeCount,
+      completed: completedCount,
+      cancelled: cancelledCount,
+    },
+  };
+}
+
 module.exports = {
   create,
   getById,
   getByIdForCad,
   list,
+  listOrdersForSurveyor,
   listAllWithAssignment,
+  completeSketchUploadAfterPayment,
+  markSketchPaymentFailed,
 };

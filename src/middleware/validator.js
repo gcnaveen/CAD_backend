@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const { BadRequestError } = require("../utils/errors");
+const { pickSurveyDocumentRaw } = require("../utils/surveyDocumentKeys");
 
 const STATUS_ENUM = ["ACTIVE", "INACTIVE"];
 
@@ -59,6 +60,22 @@ function validateExact4Password(password, field = "password") {
       errors: [{ field, message: "Must be exactly 4 characters" }],
     });
   }
+}
+
+function parseRupeesToPaise(raw, field = "amountRupees") {
+  if (raw === undefined) return undefined;
+  if (raw === null || raw === "") {
+    throw new BadRequestError(`${field} must be a number`, {
+      errors: [{ field, message: "Invalid value" }],
+    });
+  }
+  const n = typeof raw === "number" ? raw : Number(String(raw).trim());
+  if (!Number.isFinite(n) || n < 0) {
+    throw new BadRequestError(`${field} must be a non-negative number`, {
+      errors: [{ field, message: "Invalid value" }],
+    });
+  }
+  return Math.round(n * 100);
 }
 
 const schemas = {
@@ -226,6 +243,28 @@ const schemas = {
    */
   userPatch(body) {
     const updates = {};
+    const asTrimmed = (v) => String(v).trim();
+    const hasAny = (obj) => obj && typeof obj === "object" && Object.keys(obj).length > 0;
+    const normalizeNullableString = (v) => {
+      const s = asTrimmed(v);
+      return s ? s : null;
+    };
+    const assertHttpUrlOrNull = (value, fieldName) => {
+      const s = normalizeNullableString(value);
+      if (s === null) return null;
+      // common browser placeholder path; never a real URL
+      if (/^([a-zA-Z]:\\|\\\\|\/)/.test(s) || s.toLowerCase().includes("fakepath")) {
+        throw new BadRequestError(`${fieldName} must be an uploaded URL (not a local file path)`, {
+          errors: [{ field: fieldName, message: "Invalid URL" }],
+        });
+      }
+      if (!/^https?:\/\//i.test(s)) {
+        throw new BadRequestError(`${fieldName} must be a valid http(s) URL`, {
+          errors: [{ field: fieldName, message: "Invalid URL" }],
+        });
+      }
+      return s;
+    };
     if (body.firstName !== undefined) {
       updates.firstName = String(body.firstName).trim();
     }
@@ -241,6 +280,85 @@ const schemas = {
     }
     if (body.cadCenter !== undefined) {
       updates.cadCenter = validObjectId(body.cadCenter, "cadCenter");
+    }
+    if (body.personalDetails !== undefined) {
+      const p = body.personalDetails;
+      if (!p || typeof p !== "object") throw new BadRequestError("personalDetails must be an object");
+      const personalDetails = {};
+      if (p.firstName !== undefined) personalDetails.firstName = normalizeNullableString(p.firstName);
+      if (p.lastName !== undefined) personalDetails.lastName = normalizeNullableString(p.lastName);
+      if (p.phone !== undefined) personalDetails.phone = normalizeNullableString(p.phone);
+      if (p.email !== undefined) {
+        const email = normalizeNullableString(p.email);
+        personalDetails.email = email ? String(email).toLowerCase() : null;
+      }
+      if (p.address !== undefined) personalDetails.address = normalizeNullableString(p.address);
+      if (p.profilePhotoUrl !== undefined) {
+        personalDetails.profilePhotoUrl = assertHttpUrlOrNull(p.profilePhotoUrl, "personalDetails.profilePhotoUrl");
+      }
+      if (hasAny(personalDetails)) updates.personalDetails = personalDetails;
+    }
+    if (body.kycDetails !== undefined) {
+      const k = body.kycDetails;
+      if (!k || typeof k !== "object") throw new BadRequestError("kycDetails must be an object");
+      const kycDetails = {};
+      if (k.aadhaarPhotoUrl !== undefined) {
+        kycDetails.aadhaarPhotoUrl = assertHttpUrlOrNull(k.aadhaarPhotoUrl, "kycDetails.aadhaarPhotoUrl");
+      }
+      if (hasAny(kycDetails)) updates.kycDetails = kycDetails;
+    }
+    if (body.bankDetails !== undefined) {
+      const b = body.bankDetails;
+      if (!b || typeof b !== "object") throw new BadRequestError("bankDetails must be an object");
+      const bankDetails = {};
+      if (b.accountNumber !== undefined) bankDetails.accountNumber = asTrimmed(b.accountNumber);
+      if (b.accountHolderName !== undefined) bankDetails.accountHolderName = asTrimmed(b.accountHolderName);
+      if (b.bankName !== undefined) bankDetails.bankName = asTrimmed(b.bankName);
+      if (b.branchName !== undefined) bankDetails.branchName = asTrimmed(b.branchName);
+      if (b.ifscCode !== undefined) bankDetails.ifscCode = asTrimmed(b.ifscCode).toUpperCase();
+      if (hasAny(bankDetails)) updates.bankDetails = bankDetails;
+    }
+    if (body.upiDetails !== undefined) {
+      const u = body.upiDetails;
+      if (!u || typeof u !== "object") throw new BadRequestError("upiDetails must be an object");
+      const upiDetails = {};
+      if (u.upiId !== undefined) upiDetails.upiId = asTrimmed(u.upiId).toLowerCase();
+      if (hasAny(upiDetails)) updates.upiDetails = upiDetails;
+    }
+    if (body.professionalDetails !== undefined) {
+      const p = body.professionalDetails;
+      if (!p || typeof p !== "object") throw new BadRequestError("professionalDetails must be an object");
+      const professionalDetails = {};
+      if (p.skills !== undefined) {
+        if (!Array.isArray(p.skills)) throw new BadRequestError("professionalDetails.skills must be an array");
+        professionalDetails.skills = p.skills.map((s) => asTrimmed(s)).filter(Boolean);
+      }
+      if (p.experienceYears !== undefined) {
+        const years = Number(p.experienceYears);
+        if (!Number.isFinite(years) || years < 0) {
+          throw new BadRequestError("professionalDetails.experienceYears must be a non-negative number");
+        }
+        professionalDetails.experienceYears = years;
+      }
+      if (p.resumeUrl !== undefined) {
+        professionalDetails.resumeUrl = assertHttpUrlOrNull(p.resumeUrl, "professionalDetails.resumeUrl");
+      }
+      if (hasAny(professionalDetails)) updates.professionalDetails = professionalDetails;
+    }
+    if (body.documents !== undefined) {
+      const d = body.documents;
+      if (!d || typeof d !== "object") throw new BadRequestError("documents must be an object");
+      const documents = {};
+      if (d.addressProofUrl !== undefined) {
+        documents.addressProofUrl = assertHttpUrlOrNull(d.addressProofUrl, "documents.addressProofUrl");
+      }
+      if (hasAny(documents)) updates.documents = documents;
+    }
+    if (body.profileCompleted !== undefined) {
+      if (typeof body.profileCompleted !== "boolean") {
+        throw new BadRequestError("profileCompleted must be a boolean");
+      }
+      updates.profileCompleted = body.profileCompleted;
     }
     if (body.district !== undefined) {
       updates.district = validObjectId(body.district, "district");
@@ -528,6 +646,42 @@ const schemas = {
     };
   },
 
+  /** Surveyor: request sketch revision with optional remarks/audio. */
+  sketchRevisionRequest(body) {
+    const payload = {};
+    const retryPayment =
+      body.retryPayment === true ||
+      String(body.retryPayment || "").toLowerCase() === "true" ||
+      body.retry_payment === true ||
+      String(body.retry_payment || "").toLowerCase() === "true";
+    if (retryPayment) payload.retryPayment = true;
+
+    if (body.remarks !== undefined) {
+      payload.remarks = String(body.remarks).trim().slice(0, 2000) || null;
+    }
+    if (body.audio !== undefined && body.audio !== null) {
+      const raw = body.audio;
+      if (typeof raw !== "object") {
+        throw new BadRequestError("audio must be an object");
+      }
+      const url = String(raw.url ?? "").trim();
+      if (!url) {
+        throw new BadRequestError("audio.url is required when audio is provided");
+      }
+      payload.audio = {
+        url,
+        fileName: raw.fileName != null ? String(raw.fileName).trim() : undefined,
+        mimeType: raw.mimeType != null ? String(raw.mimeType).trim() : undefined,
+        size: raw.size !== undefined && raw.size !== null ? raw.size : undefined,
+      };
+    }
+    const hasContent = payload.remarks !== undefined || payload.audio !== undefined;
+    if (!payload.retryPayment && !hasContent) {
+      throw new BadRequestError("At least one of remarks or audio is required");
+    }
+    return payload;
+  },
+
   /** CAD: respond to assignment – body optional; action "accept" | "reject", default "accept". */
   cadAssignmentRespond(body) {
     const action = (body?.action != null && body?.action !== "")
@@ -553,10 +707,9 @@ const schemas = {
       }
       updates.status = s;
     }
-    // assignedToUserId – commented out for now; uncomment if assigning to a specific CAD user is required
-    // if (body.assignedToUserId !== undefined) {
-    //   updates.assignedTo = body.assignedToUserId ? validObjectId(body.assignedToUserId, "assignedToUserId") : null;
-    // }
+    if (body.assignedCadUserId !== undefined && body.assignedCadUserId !== null && body.assignedCadUserId !== "") {
+      updates.assignedCadUserId = validObjectId(String(body.assignedCadUserId).trim(), "assignedCadUserId");
+    }
     if (body.dueDate !== undefined) {
       if (body.dueDate === null || body.dueDate === "") {
         updates.dueDate = null;
@@ -573,12 +726,53 @@ const schemas = {
     return updates;
   },
 
-  surveySketchAssignmentFlowUpdate(body) {
-    if (body?.autoAssignEnabled === undefined) {
-      throw new BadRequestError("autoAssignEnabled is required", {
-        errors: [{ field: "autoAssignEnabled", message: "Required" }],
+  /**
+   * Admin CAD wallet: either payFull (settle remaining balance) or a single tranche in paise or rupees.
+   * Do not send payFull together with amountPaise / amountRupees.
+   */
+  adminCadWalletRecordPayment(body) {
+    const payFull =
+      body.payFull === true ||
+      body.payFull === "true" ||
+      String(body.payFull || "").toLowerCase().trim() === "true";
+    let amountPaise;
+    if (body.amountPaise !== undefined && body.amountPaise !== null && body.amountPaise !== "") {
+      const n = typeof body.amountPaise === "number" ? body.amountPaise : parseInt(String(body.amountPaise), 10);
+      if (!Number.isFinite(n) || n <= 0) {
+        throw new BadRequestError("amountPaise must be a positive integer", {
+          errors: [{ field: "amountPaise", message: "Invalid value" }],
+        });
+      }
+      amountPaise = n;
+    }
+    if (body.amountRupees !== undefined && body.amountRupees !== null && body.amountRupees !== "") {
+      if (amountPaise !== undefined) {
+        throw new BadRequestError("Send only one of amountPaise or amountRupees", {
+          errors: [{ field: "body", message: "Conflicting amount fields" }],
+        });
+      }
+      amountPaise = parseRupeesToPaise(body.amountRupees, "amountRupees");
+      if (amountPaise <= 0) {
+        throw new BadRequestError("amountRupees must be greater than zero", {
+          errors: [{ field: "amountRupees", message: "Invalid value" }],
+        });
+      }
+    }
+    if (payFull && amountPaise !== undefined) {
+      throw new BadRequestError("Do not send amount with payFull", {
+        errors: [{ field: "body", message: "Use payFull alone or a partial amount, not both" }],
       });
     }
+    if (!payFull && amountPaise === undefined) {
+      throw new BadRequestError("Provide payFull: true or amountPaise / amountRupees", {
+        errors: [{ field: "body", message: "Missing payment instruction" }],
+      });
+    }
+    return payFull ? { payFull: true } : { payFull: false, amountPaise };
+  },
+
+  surveySketchAssignmentFlowUpdate(body) {
+    requireFields(body, ["autoAssignEnabled"]);
     const raw = body.autoAssignEnabled;
     const normalized =
       raw === true || raw === false
@@ -596,16 +790,47 @@ const schemas = {
     return { autoAssignEnabled: normalized };
   },
 
+  /** Admin: standard sketch upload / revision pricing (rupees). At least one field. */
+  adminSketchPricingUpdate(body) {
+    const out = {};
+    const rupeeFields = [
+      "sketchUploadPlanAmountRupees",
+      "sketchUploadDiscountRupees",
+      "sketchRevisionPlanAmountRupees",
+      "sketchRevisionDiscountRupees",
+    ];
+    for (const field of rupeeFields) {
+      if (body[field] === undefined) continue;
+      if (body[field] === null) {
+        out[field] = null;
+        continue;
+      }
+      const n = typeof body[field] === "number" ? body[field] : Number(String(body[field]).trim());
+      if (!Number.isFinite(n) || n < 0) {
+        throw new BadRequestError(`${field} must be null or a non-negative number`, {
+          errors: [{ field, message: "Invalid value" }],
+        });
+      }
+      out[field] = n;
+    }
+    if (Object.keys(out).length === 0) {
+      throw new BadRequestError("At least one pricing field is required", {
+        errors: [{ field: "body", message: "Empty update" }],
+      });
+    }
+    return out;
+  },
+
   // -------- Surveyor Sketch Upload --------
   /**
    * Create surveyor sketch upload (survey info + document URLs).
-   * Required: surveyType, district, taluka, hobli, village, surveyNo, singleUpload.
-   * Note: media document fields are optional.
-   * Optional: others (string, max 2000). surveyor is set from auth, not body.
+   * Required: surveyType, district, taluka, hobli, village, surveyNo.
+   * At least one upload field is required: singleUpload OR known doc keys.
+   * Optional: draftId (to cleanup submitted draft), others (string, max 2000).
    */
   surveyorSketchUploadCreate(body) {
     const { SURVEY_SKETCH_DOCUMENT_KEYS } = require("../config/constants");
-    requireFields(body, ["surveyType", "district", "taluka", "hobli", "village", "surveyNo", "singleUpload"]);
+    requireFields(body, ["surveyType", "district", "taluka", "hobli", "village", "surveyNo"]);
 
     const surveyType = String(body.surveyType).toLowerCase().trim();
     if (!["joint_flat", "single_flat"].includes(surveyType)) {
@@ -628,7 +853,7 @@ const schemas = {
 
     const documents = {};
     for (const key of SURVEY_SKETCH_DOCUMENT_KEYS) {
-      const raw = body[key];
+      const raw = pickSurveyDocumentRaw(body, key);
       if (raw == null || raw === "") continue;
       const url = typeof raw === "string" ? raw.trim() : (raw.url || raw.path || "").toString().trim();
       if (!url) continue;
@@ -648,13 +873,9 @@ const schemas = {
       typeof singleUploadRaw === "string"
         ? singleUploadRaw.trim()
         : (singleUploadRaw?.url || singleUploadRaw?.path || "").toString().trim();
-    if (!singleUploadUrl) {
-      throw new BadRequestError("singleUpload is required and must have a non-empty url", {
-        errors: [{ field: "singleUpload", message: "Required" }],
-      });
-    }
-    const singleUpload =
-      typeof singleUploadRaw === "string"
+    const singleUpload = !singleUploadUrl
+      ? null
+      : typeof singleUploadRaw === "string"
         ? { url: singleUploadUrl }
         : {
             url: singleUploadUrl,
@@ -663,6 +884,20 @@ const schemas = {
             size: singleUploadRaw.size != null ? Number(singleUploadRaw.size) : null,
             uploadedAt: singleUploadRaw.uploadedAt ? new Date(singleUploadRaw.uploadedAt) : new Date(),
           };
+
+    if (!singleUpload && Object.keys(documents).length === 0) {
+      throw new BadRequestError(
+        "Provide at least one upload: singleUpload or one of moolaTippani/hissaTippani/atlas/rrPakkabook/kharabu",
+        {
+          errors: [
+            {
+              field: "singleUpload",
+              message: "Either singleUpload or any known document key is required",
+            },
+          ],
+        }
+      );
+    }
 
     let others = null;
     if (body.others != null && body.others !== "") {
@@ -744,6 +979,10 @@ const schemas = {
       indicators[field] = body[field] === true || body[field] === "true";
     }
 
+    // Optional isSuperimpose boolean flag
+    const isSuperimpose =
+      body.isSuperimpose === true || body.isSuperimpose === "true" ? true : undefined;
+
     // Auto-set to true when the corresponding separate file was uploaded
     for (const [docKey, flagName] of Object.entries(DOC_KEY_TO_FLAG)) {
       if (documents[docKey]) {
@@ -758,9 +997,11 @@ const schemas = {
       hobli,
       village,
       surveyNo,
+      draftId: body.draftId != null && body.draftId !== "" ? validObjectId(body.draftId, "draftId") : undefined,
       documents,
-      singleUpload,
+      singleUpload: singleUpload || undefined,
       ...indicators,
+      isSuperimpose,
       audio: audio || undefined,
       others: others || undefined,
       other_documents: other_documents.length ? other_documents : undefined,
@@ -793,9 +1034,9 @@ const schemas = {
     const documents = {};
     let hasAnyDocumentField = false;
     for (const key of SURVEY_SKETCH_DOCUMENT_KEYS) {
-      if (body[key] === undefined) continue;
+      const raw = pickSurveyDocumentRaw(body, key);
+      if (raw === undefined) continue;
       hasAnyDocumentField = true;
-      const raw = body[key];
       if (raw == null || raw === "") continue;
       const url = typeof raw === "string" ? raw.trim() : (raw.url || raw.path || "").toString().trim();
       if (!url) continue;
@@ -851,6 +1092,10 @@ const schemas = {
     for (const field of INDICATOR_FIELDS) {
       if (body[field] === undefined) continue;
       payload[field] = body[field] === true || body[field] === "true";
+    }
+
+    if (body.isSuperimpose !== undefined) {
+      payload.isSuperimpose = body.isSuperimpose === true || body.isSuperimpose === "true";
     }
 
     if (body.audio !== undefined) {

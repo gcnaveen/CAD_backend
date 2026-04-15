@@ -11,6 +11,7 @@ const {
   deleteObject,
   keyFromFileUrl,
   assertUploadKey,
+  BUCKET,
 } = require("../utils/s3");
 const { BadRequestError, ForbiddenError } = require("../utils/errors");
 const { USER_ROLES } = require("../config/constants");
@@ -25,6 +26,23 @@ const logger = require("../utils/logger");
 
 const ALLOWED_ROLES = [USER_ROLES.SURVEYOR, USER_ROLES.CAD, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN];
 
+function wrapS3Error(err, context) {
+  const name = err?.name || "";
+  const msg = err?.message || String(err);
+  logger.error("S3 operation failed", err, { ...context, bucket: BUCKET });
+  if (
+    name === "AccessDenied" ||
+    /Access Denied|not authorized|AccessDenied/i.test(msg) ||
+    name === "InvalidAccessKeyId"
+  ) {
+    return new BadRequestError(
+      "S3 access denied. Redeploy so Lambda IAM and S3_BUCKET use the same bucket (see serverless custom.s3BucketName), and confirm the bucket exists in this AWS account/region.",
+      { code: "S3_ACCESS_DENIED" }
+    );
+  }
+  return new BadRequestError(`S3 error: ${msg}`, { code: "S3_ERROR" });
+}
+
 function assertAuthenticated(user) {
   if (!user) {
     throw new BadRequestError("Authentication required");
@@ -33,6 +51,13 @@ function assertAuthenticated(user) {
 
 function assertCanUpload(user) {
   assertAuthenticated(user);
+  if (!ALLOWED_ROLES.includes(user.role)) {
+    throw new ForbiddenError("You do not have permission to upload files");
+  }
+}
+
+function assertCanUploadIfAuthenticated(user) {
+  if (!user) return; 
   if (!ALLOWED_ROLES.includes(user.role)) {
     throw new ForbiddenError("You do not have permission to upload files");
   }
@@ -127,8 +152,9 @@ function validateAudioUpload(params) {
  * @param {Object} user - Authenticated user
  * @returns {Promise<{ uploadUrl: string, fileUrl: string, key: string }>}
  */
-async function getImageUploadUrl(params, user) {
-  assertCanUpload(user);
+async function getImageUploadUrl(params, user = null) {
+  // Public endpoint; if token is present, still validate role.
+  assertCanUploadIfAuthenticated(user);
 
   const entityId = (params.entityId || "misc").toString().trim() || "misc";
   const contentType = validateImageUpload(params);
@@ -139,14 +165,19 @@ async function getImageUploadUrl(params, user) {
     3600
   );
 
-  const uploadUrl = await getPresignedPutUrl(key, contentType, expiresIn);
+  let uploadUrl;
+  try {
+    uploadUrl = await getPresignedPutUrl(key, contentType, expiresIn);
+  } catch (err) {
+    throw wrapS3Error(err, { op: "getPresignedPutUrl", key, kind: "image" });
+  }
   const fileUrl = getPublicUrl(key);
 
   logger.info("Image upload URL issued", {
     key,
     entityId,
     contentType,
-    userId: user._id || user.id,
+    userId: user ? (user._id || user.id) : "anonymous",
   });
 
   return { uploadUrl, fileUrl, key };
@@ -159,8 +190,9 @@ async function getImageUploadUrl(params, user) {
  * @param {Object} user - Authenticated user
  * @returns {Promise<{ uploadUrl: string, fileUrl: string, key: string }>}
  */
-async function getAudioUploadUrl(params, user) {
-  assertCanUpload(user);
+async function getAudioUploadUrl(params, user = null) {
+  // Public endpoint; if token is present, still validate role.
+  assertCanUploadIfAuthenticated(user);
 
   const entityId = (params.entityId || "misc").toString().trim() || "misc";
   const contentType = validateAudioUpload(params);
@@ -171,14 +203,19 @@ async function getAudioUploadUrl(params, user) {
     3600
   );
 
-  const uploadUrl = await getPresignedPutUrl(key, contentType, expiresIn);
+  let uploadUrl;
+  try {
+    uploadUrl = await getPresignedPutUrl(key, contentType, expiresIn);
+  } catch (err) {
+    throw wrapS3Error(err, { op: "getPresignedPutUrl", key, kind: "audio" });
+  }
   const fileUrl = getPublicUrl(key);
 
   logger.info("Audio upload URL issued", {
     key,
     entityId,
     contentType,
-    userId: user._id || user.id,
+    userId: user ? (user._id || user.id) : "anonymous",
   });
 
   return { uploadUrl, fileUrl, key };
@@ -211,7 +248,11 @@ async function deleteUpload(params, user) {
   }
 
   assertUploadKey(key);
-  await deleteObject(key);
+  try {
+    await deleteObject(key);
+  } catch (err) {
+    throw wrapS3Error(err, { op: "deleteObject", key });
+  }
 
   logger.info("Upload deleted from S3", {
     key,

@@ -57,13 +57,18 @@ const SURVEY_FLAT_TYPE = Object.freeze({
 
 /** Surveyor sketch submission workflow status. */
 const SURVEY_SKETCH_STATUS = Object.freeze({
+  /** Awaiting PhonePe payment for new sketch submission (fee configured via env). */
+  PAYMENT_PENDING: "PAYMENT_PENDING",
   /** Surveyor raised the request; awaiting admin assignment to a CAD center. */
   PENDING: "PENDING",
   /** Admin has assigned this sketch to a CAD center. */
   ASSIGNED: "ASSIGNED",
   /** CAD has uploaded the finished sketch; surveyor can download from cadDeliverable on the upload. */
   CAD_DELIVERED: "CAD_DELIVERED",
-  UNDER_REVIEW: "UNDER_REVIEW",
+  /** Surveyor asked for changes/revision on delivered sketch. */
+  UNDER_REVISION: "UNDER_REVISION",
+  /** Backward-compat alias; use UNDER_REVISION in new code. */
+  UNDER_REVIEW: "UNDER_REVISION",
   APPROVED: "APPROVED",
   REJECTED: "REJECTED",
 });
@@ -76,6 +81,16 @@ const SURVEY_SKETCH_DOCUMENT_KEYS = Object.freeze([
   "rrPakkabook",
   "kharabu",
 ]);
+
+/** Alias keys accepted from clients for document uploads. */
+const SURVEY_SKETCH_DOCUMENT_KEY_ALIASES = Object.freeze({
+  rr_pakkabook: "rrPakkabook",
+  rrPakkaBook: "rrPakkabook",
+  rrpakkabook: "rrPakkabook",
+  kharabuttar: "kharabu",
+  karabu: "kharabu",
+  kharabuttar_doc: "kharabu",
+});
 
 /** Allowed MIME types / extensions for survey document uploads. */
 const SURVEY_SKETCH_ACCEPT_TYPES = Object.freeze([
@@ -134,6 +149,17 @@ const UPLOAD_AUDIO_MAX_BYTES = 25 * 1024 * 1024;
 /** Presigned URL expiry: 15 minutes. */
 const UPLOAD_PRESIGNED_EXPIRES_SECONDS = 900;
 
+/** CAD wallet ledger entry — payout for completed sketch work (admin marks PAID). */
+const CAD_WALLET_ENTRY_STATUS = Object.freeze({
+  PENDING: "PENDING",
+  PAID: "PAID",
+});
+
+const CAD_WALLET_ENTRY_KIND = Object.freeze({
+  INITIAL_DELIVERY: "INITIAL_DELIVERY",
+  REVISION_DELIVERY: "REVISION_DELIVERY",
+});
+
 module.exports = {
   USER_ROLES,
   USER_STATUS,
@@ -147,6 +173,7 @@ module.exports = {
   SURVEY_FLAT_TYPE,
   SURVEY_SKETCH_STATUS,
   SURVEY_SKETCH_DOCUMENT_KEYS,
+  SURVEY_SKETCH_DOCUMENT_KEY_ALIASES,
   SURVEY_SKETCH_ACCEPT_TYPES,
   SURVEY_SKETCH_ACCEPT_EXTENSIONS,
   UPLOAD_MEDIA_TYPE,
@@ -155,5 +182,7 @@ module.exports = {
   UPLOAD_IMAGE_MAX_BYTES,
   UPLOAD_AUDIO_MAX_BYTES,
   UPLOAD_PRESIGNED_EXPIRES_SECONDS,
+  CAD_WALLET_ENTRY_STATUS,
+  CAD_WALLET_ENTRY_KIND,
 };
 

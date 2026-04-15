@@ -739,7 +739,7 @@ paths:
       tags: [Authentication]
       summary: Update User (Patch)
       description: |
-        Partial update: name (firstName, lastName), status; for CAD cadCenter; for Surveyor district, taluka, category, surveyType.
+        Partial update: name (firstName, lastName), status; for CAD cadCenter and CAD profile sections (`personalDetails`, `kycDetails`, `bankDetails`, `upiDetails`, `professionalDetails`, `documents`, `profileCompleted`); for Surveyor district, taluka, category, surveyType.
         Super Admin can update any; Admin only CAD or Surveyor.
       operationId: updateUser
       security:
@@ -1527,6 +1527,59 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # -------- Payments (PhonePe) --------
+  /api/payments/phonepe/callback:
+    get:
+      tags: [Payments]
+      summary: PhonePe callback for survey sketch payments
+      description: |
+        Public redirect target after PhonePe checkout. No `Authorization` header.
+        `merchantOrderId` matches `meta.payment.merchantOrderId` from sketch upload or revision-request when payment is required.
+        Order id formats: `sketch_<uploadObjectId>` (initial submission), `rev_<uploadObjectId>_<revisionNumber>` (revision #2+ when `SKETCH_REVISION_FEE_PAISE` > 0).
+        On success or failure the API responds with **302** to `PHONEPE_SUCCESS_REDIRECT_URL` or `PHONEPE_FAILURE_REDIRECT_URL`.
+      operationId: phonePeSketchCallback
+      parameters:
+        - name: merchantOrderId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to configured frontend success or failure URL
+        "500":
+          description: Server error (callback still attempts redirect when possible)
+
+  /api/surveyor/sketch-pricing:
+    get:
+      tags: [Surveyor Sketch Uploads]
+      summary: Get resolved sketch upload and revision fees
+      description: |
+        Effective amounts for the UI before checkout — **same standard for every sketch**:
+        1. **Admin plan + discount** via `PATCH /api/admin/survey-sketch-pricing` (when plan fields are set),
+        2. else global **`SKETCH_UPLOAD_FEE_PAISE` / `SKETCH_REVISION_FEE_PAISE`** env on the server.
+        Surveyors cannot set a per-sketch price in the request body.
+      operationId: getSurveyorSketchPricing
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Pricing breakdown
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/SketchPricingResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   # -------- Surveyor Sketch Uploads --------
   /api/surveyor/sketch-uploads:
     post:
@@ -1536,6 +1589,7 @@ paths:
         Submit a survey sketch upload with survey info and document URLs.
         **Authorization:** Surveyor only (Bearer token required).
         **Flow:** Frontend uploads files (e.g., to S3/presigned URL), then POSTs this payload with document URLs.
+        **Payment:** If the resolved upload fee (see `GET /api/surveyor/sketch-pricing`) is **> 0** and PhonePe is configured, the upload is created with `status` **PAYMENT_PENDING** and the response includes `meta.payment.checkoutPageUrl`. After payment, PhonePe redirects to `GET /api/payments/phonepe/callback`. The amount is **standard for all uploads**: admin plan/discount from `PATCH /api/admin/survey-sketch-pricing` when set, else `SKETCH_UPLOAD_FEE_PAISE`. If the fee is 0, behavior is unchanged (`PENDING`, auto-assign and notifications immediately). On success, `data.sketchPayment.paidAmountPaise` stores the amount paid (paise).
         **Auto-generated:** `applicationId` is automatically generated in format `DISTRICT_CODE/TALUKA_CODE/YY/N` (e.g., `KA-BLR/BLR-N/26/1`).
         **Required fields:**
         - `surveyType`: `joint_flat` or `single_flat`
@@ -1585,7 +1639,7 @@ paths:
               others: "If joint flat, provide all survey no. details"
       responses:
         "201":
-          description: Survey sketch upload created
+          description: Survey sketch upload created (optional `meta.payment` when upload fee applies)
           content:
             application/json:
               schema:
@@ -1596,6 +1650,37 @@ paths:
                     example: true
                   data:
                     $ref: "#/components/schemas/SurveyorSketchUpload"
+                  meta:
+                    type: object
+                    nullable: true
+                    properties:
+                      payment:
+                        type: object
+                        properties:
+                          requiresPayment:
+                            type: boolean
+                          checkoutPageUrl:
+                            type: string
+                          redirectUrl:
+                            type: string
+                            description: Same as checkoutPageUrl (PhonePe redirect)
+                          merchantOrderId:
+                            type: string
+                          amountPaise:
+                            type: integer
+                          planAmountRupees:
+                            type: number
+                            nullable: true
+                            description: Admin list price snapshot when source is admin
+                          discountRupees:
+                            type: number
+                            nullable: true
+                          payableRupees:
+                            type: number
+                            description: Net rupees charged (plan − discount or equivalent)
+                          pricingSource:
+                            type: string
+                            enum: [admin, env, none]
               example:
                 success: true
                 data:
@@ -1682,7 +1767,7 @@ paths:
           description: Filter by survey sketch status
           schema:
             type: string
-            enum: [PENDING, ASSIGNED, UNDER_REVIEW, APPROVED, REJECTED]
+            enum: [PENDING, ASSIGNED, UNDER_REVISION, APPROVED, REJECTED]
         - name: cadCenterId
           in: query
           description: Filter by CAD center (only uploads assigned to this center)
@@ -1752,6 +1837,134 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /api/surveyor/sketch-uploads/{uploadId}/revision-request:
+    parameters:
+      - $ref: "#/components/parameters/UploadId"
+    post:
+      tags: [Surveyor Sketch Uploads]
+      summary: Request CAD revision
+      description: |
+        Surveyor requests a revision after CAD delivery by sending remarks and/or audio.
+        **First revision (revision #1) is free.** From **revision #2 onward**, if the resolved revision fee is **> 0** and PhonePe is configured, the API stores a pending revision and returns `meta.payment.checkoutPageUrl` (same flow as upload). The amount is **standard for all sketches**: admin revision plan/discount from `PATCH /api/admin/survey-sketch-pricing` when set, else `SKETCH_REVISION_FEE_PAISE`. If checkout was started but not finished, calling this endpoint again **refreshes** the checkout link (no 409). After successful payment, an entry is appended to `data.revisionFeePayments` with `paidAmountPaise`. Optional `retryPayment: true` is supported; remarks/audio still required unless only retrying.
+        This keeps existing CAD file and records a new revision request entry after payment when required.
+        The sketch status becomes `UNDER_REVISION` and backend auto-creates a new assignment for the same CAD user.
+        Admin can still reassign that new assignment to a different CAD user via `PATCH /api/admin/survey-sketch-assignments/{assignmentId}` with `assignedCadUserId`.
+      operationId: requestSketchRevision
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SketchRevisionRequest"
+      responses:
+        "200":
+          description: Revision request recorded (optional `meta.payment` for paid revision #2+)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/SurveyorSketchUpload" }
+                  meta:
+                    type: object
+                    nullable: true
+                    properties:
+                      payment:
+                        type: object
+                        properties:
+                          requiresPayment: { type: boolean }
+                          checkoutPageUrl: { type: string }
+                          redirectUrl: { type: string }
+                          merchantOrderId: { type: string }
+                          amountPaise: { type: integer }
+                          revisionNo: { type: integer }
+                          planAmountRupees: { type: number, nullable: true }
+                          discountRupees: { type: number, nullable: true }
+                          payableRupees: { type: number, nullable: true }
+                          pricingSource:
+                            type: string
+                            enum: [admin, env, none]
+                          message: { type: string, nullable: true }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/surveyor/orders:
+    get:
+      tags: [Surveyor Sketch Uploads]
+      summary: List Surveyor Orders with Status Tabs
+      description: |
+        Returns only the logged-in surveyor's orders with status bucket filter and tab counts.
+        Buckets:
+        - `all`
+        - `active` (PAYMENT_PENDING, PENDING, ASSIGNED, CAD_DELIVERED, UNDER_REVISION)
+        - `completed` (APPROVED)
+        - `cancelled` (REJECTED)
+      operationId: listSurveyorOrders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bucket
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [all, active, completed, cancelled]
+            default: all
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Surveyor orders list with counts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/SurveyorSketchUpload" }
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer, example: 1 }
+                      limit: { type: integer, example: 20 }
+                      total: { type: integer, example: 1 }
+                      bucket: { type: string, example: all }
+                      counts:
+                        type: object
+                        properties:
+                          all: { type: integer, example: 1 }
+                          active: { type: integer, example: 0 }
+                          completed: { type: integer, example: 0 }
+                          cancelled: { type: integer, example: 0 }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /api/surveyor/sketch-drafts:
     post:
@@ -1924,7 +2137,7 @@ paths:
     get:
       tags: [Admin - Assignments]
       summary: List Survey Sketch Status Options
-      description: Returns all survey sketch status values for dropdown (PENDING, ASSIGNED, UNDER_REVIEW, APPROVED, REJECTED). Admin/Super Admin only.
+      description: Returns all survey sketch status values for dropdown (PENDING, ASSIGNED, UNDER_REVISION, APPROVED, REJECTED). Admin/Super Admin only.
       operationId: getSurveySketchStatuses
       security:
         - bearerAuth: []
@@ -1940,7 +2153,7 @@ paths:
                   data:
                     type: array
                     items: { type: string }
-                    example: [PENDING, ASSIGNED, UNDER_REVIEW, APPROVED, REJECTED]
+                    example: [PENDING, ASSIGNED, UNDER_REVISION, APPROVED, REJECTED]
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -1951,7 +2164,7 @@ paths:
       tags: [Admin - Assignments]
       summary: Get Survey Sketch Assignment Flow Setting
       description: |
-        Get current assignment flow mode.
+        **Auto-assign only** (not pricing). Standard sketch fees are managed with `GET`/`PATCH /api/admin/survey-sketch-pricing`.
         - `autoAssignEnabled=false`: admin assigns manually.
         - `autoAssignEnabled=true`: new survey sketch uploads are auto-assigned to CAD centers.
       operationId: getSurveySketchAssignmentFlow
@@ -1975,9 +2188,8 @@ paths:
       tags: [Admin - Assignments]
       summary: Update Survey Sketch Assignment Flow Setting
       description: |
-        Toggle assignment flow.
-        - `false`: admin manual assignment.
-        - `true`: auto-assign on survey sketch creation.
+        Toggle auto-assign only. Body must include `autoAssignEnabled` (boolean).
+        For plan/discount amounts in rupees, use `PATCH /api/admin/survey-sketch-pricing`.
       operationId: updateSurveySketchAssignmentFlow
       security:
         - bearerAuth: []
@@ -2006,6 +2218,160 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/admin/survey-sketch-pricing:
+    get:
+      tags: [Admin - Assignments]
+      summary: Get standard sketch pricing (upload + paid revision)
+      description: |
+        **Separate from auto-assign** (`/api/admin/survey-sketch-assignment-flow`). Pricing is stored on its own document (`survey_sketch_standard_pricing`).
+        Returns stored plan/discount fields (rupees) and computed `pricing` (effective paise/rupees for upload and revision).
+        Same standard applies to every sketch. Falls back to env when admin plan fields are null.
+        If pricing was previously saved on the old assignment-flow document, the first read migrates it into this store.
+      operationId: getAdminSurveySketchPricing
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current pricing configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/AdminSurveySketchPricingSetting" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    patch:
+      tags: [Admin - Assignments]
+      summary: Update standard sketch pricing
+      description: |
+        Send **at least one** of the rupee fields. Plan and discount are in **rupees** (not paise). Payable = max(0, plan − discount).
+        Set a field to `null` to clear admin pricing for that side (server then uses `SKETCH_*_FEE_PAISE` env only).
+      operationId: updateAdminSurveySketchPricing
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminSurveySketchPricingUpdateRequest"
+            example:
+              sketchUploadPlanAmountRupees: 500
+              sketchUploadDiscountRupees: 50
+              sketchRevisionPlanAmountRupees: 200
+              sketchRevisionDiscountRupees: 0
+      responses:
+        "200":
+          description: Pricing updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/AdminSurveySketchPricingSetting" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/admin/cad-wallet-entries/{entryId}/mark-paid:
+    parameters:
+      - name: entryId
+        in: path
+        required: true
+        schema: { type: string }
+        description: CadWalletLedger entry ObjectId
+    post:
+      tags: [Admin - Assignments]
+      summary: Mark CAD wallet entry fully paid (shortcut)
+      description: |
+        Pays the **remaining** balance in one step (same as `record-payment` with `payFull: true`).
+        Idempotent if already fully paid. Admin/Super Admin only.
+      operationId: markCadWalletEntryPaid
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Updated ledger entry
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/CadWalletLedgerEntryAdmin" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/admin/cad-wallet-entries/{entryId}/record-payment:
+    parameters:
+      - name: entryId
+        in: path
+        required: true
+        schema: { type: string }
+        description: CadWalletLedger entry ObjectId
+    post:
+      tags: [Admin - Assignments]
+      summary: Record payout for CAD wallet entry (partial or full)
+      description: |
+        Apply one payment tranche toward the ledger row. CAD-facing history then shows **paidPercent** / **remaining** amounts.
+        - **`payFull: true`** — pay whatever balance remains (marks row PAID when done).
+        - **`amountPaise`** or **`amountRupees`** — pay up to that much, capped by remaining balance; row stays PENDING until fully covered.
+        Do not send `payFull` together with an amount. Idempotent when nothing left to pay.
+      operationId: recordCadWalletPayment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminCadWalletRecordPaymentRequest"
+            examples:
+              full:
+                summary: Complete remaining balance
+                value:
+                  payFull: true
+              partialPaise:
+                summary: Partial in paise
+                value:
+                  amountPaise: 5000
+              partialRupees:
+                summary: Partial in rupees
+                value:
+                  amountRupees: 250
+      responses:
+        "200":
+          description: Updated ledger entry (includes paidPercent for UI)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/CadWalletLedgerEntryAdmin" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # -------- Admin: Survey Sketch Assignments (assign survey sketch to CAD center) --------
   /api/admin/survey-sketch-assignments:
     post:
@@ -2014,7 +2380,9 @@ paths:
       description: |
         Assign a surveyor sketch upload. **Use `cadUserId` or `assignedCadUserId`** for the CAD **user** ObjectId (role CAD). That is not a CadCenter id.
         When a CAD user id is provided, `cadCenterId` is ignored. **Legacy:** `cadCenterId` only = a real CadCenter document id (pool); if you mistakenly send a user id there, the API may still resolve it as a CAD user when no center exists.
-        Admin/Super Admin only. One active assignment per survey sketch; returns 409 if already assigned.
+        Admin/Super Admin only. One **active** (non-cancelled) assignment per survey sketch; returns 409 if one already exists.
+        **Reassign after CAD rejects:** when the CAD user rejects, the assignment becomes `CANCELLED` and the sketch returns to `PENDING`. Call this endpoint again with the **same** `surveyorSketchUploadId` and the **new** `assignedCadUserId` (or `cadCenterId`) to create a fresh assignment.
+        **Reassign before CAD accepts:** while status is `ASSIGNED`, admins can PATCH the assignment with `assignedCadUserId` instead (SLA window restarts from `assignedAt`).
       operationId: createSurveySketchAssignment
       security:
         - bearerAuth: []
@@ -2076,7 +2444,10 @@ paths:
     patch:
       tags: [Admin - Assignments]
       summary: Update Assignment
-      description: Update status, dueDate, or notes. Admin/Super Admin only. (assignedToUserId commented out for now.)
+      description: |
+        Update status, `assignedCadUserId` (only while status is `ASSIGNED`, before CAD accepts), `dueDate`, or `notes`.
+        Setting status to `CANCELLED` sets the survey sketch back to `PENDING` so you can create a new assignment with POST.
+        Admin/Super Admin only.
       operationId: updateSurveySketchAssignment
       security:
         - bearerAuth: []
@@ -2186,6 +2557,121 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/cad/dashboard:
+    get:
+      tags: [CAD - Assignments]
+      summary: CAD dashboard (order counts)
+      description: Same response as `GET /api/cad/dashboard/stats`.
+      operationId: getCadDashboard
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dashboard counters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/CadDashboardStats" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/cad/dashboard/stats:
+    get:
+      tags: [CAD - Assignments]
+      summary: CAD dashboard assignment counts
+      description: |
+        Counts for the logged-in CAD user based on `SurveySketchAssignment`:
+        - **totalOrders** — assignments linked to you (`assignedTo`) or pool jobs you **rejected** (`rejectedByCad`).
+        - **acceptedOrders** — your assignments in IN_PROGRESS, ON_HOLD, or COMPLETED (past accept / active / done).
+        - **rejectedOrders** — you rejected (`rejectedByCad` + CANCELLED). Older rows before this field may not appear here.
+        - **inProgressOrders** — IN_PROGRESS or ON_HOLD.
+      operationId: getCadDashboardStats
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dashboard counters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/CadDashboardStats" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/cad/wallet:
+    get:
+      tags: [CAD - Assignments]
+      summary: CAD wallet summary (earnings)
+      description: |
+        Aggregates **CadWalletLedger** for this user. Amounts are in paise and rupees.
+        Ledger rows are created when a sketch **initial** or **revision** delivery completes, only if the matching env payout is &gt; 0:
+        `CAD_INITIAL_DELIVERY_PAYOUT_PAISE`, `CAD_REVISION_DELIVERY_PAYOUT_PAISE`.
+        **totalEarnings** / **totalEarningsPaise** — full credited amounts per row.
+        **receivedPayment** — cumulative amount admin has marked paid (including partial payments).
+        **pendingPayment** — remaining balance across all rows (`totalEarnings − receivedPayment`).
+      operationId: getCadWalletSummary
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Wallet totals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/CadWalletSummary" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/cad/wallet/transactions:
+    get:
+      tags: [CAD - Assignments]
+      summary: CAD wallet transaction history
+      description: |
+        Paginated ledger entries (newest first). Each row includes **paidPercent**, **remainingRupees**, and **balanceStatus**
+        (`PENDING` | `PARTIAL` | `PAID`) for payout progress bars.
+      operationId: listCadWalletTransactions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Ledger rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/CadWalletTransaction" }
+                  pagination: { type: object }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /api/cad/sketch-uploads/{uploadId}:
     parameters:
       - name: uploadId
@@ -2266,6 +2752,44 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/cad/assignments/{assignmentId}/reject:
+    parameters:
+      - name: assignmentId
+        in: path
+        required: true
+        schema: { type: string }
+        description: Survey sketch assignment ObjectId
+    post:
+      tags: [CAD - Assignments]
+      summary: Reject assignment (CAD)
+      description: |
+        CAD user rejects an assigned work.
+        - status → CANCELLED
+        - survey sketch status → PENDING (admin can reassign)
+        Eligible only when assignment status is ASSIGNED.
+        If the assignment is older than 2 hours, it may already be auto-expired and rejected by the system.
+      operationId: rejectAssignmentByCad
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Assignment updated (CANCELLED)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: "#/components/schemas/SurveySketchAssignment" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/cad/assignments/{assignmentId}/deliver:
     parameters:
       - name: assignmentId
@@ -2281,6 +2805,47 @@ paths:
         Sets `cadDeliverable` on the survey sketch upload, assignment status → COMPLETED, sketch status → CAD_DELIVERED.
         The surveyor can download using `cadDeliverable.url` from `GET /api/surveyor/sketch-uploads/{uploadId}`.
       operationId: deliverCadSketch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CadSketchDeliverableRequest"
+      responses:
+        "200":
+          description: Updated assignment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: "#/components/schemas/SurveySketchAssignment" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/cad/assignments/{assignmentId}/deliver-revision:
+    parameters:
+      - name: assignmentId
+        in: path
+        required: true
+        schema: { type: string }
+        description: Survey sketch assignment ObjectId (assigned CAD user only)
+    post:
+      tags: [CAD - Assignments]
+      summary: Submit revised sketch
+      description: |
+        CAD uploads revised sketch after a surveyor revision request.
+        Existing `cadDeliverable` is preserved in `cadDeliverableHistory`; latest revised file becomes `cadDeliverable`.
+      operationId: deliverCadSketchRevision
       security:
         - bearerAuth: []
       requestBody:
@@ -2446,12 +3011,11 @@ paths:
       summary: Get presigned URL for image/document upload
       description: |
         Returns a presigned PUT URL for uploading an image or PDF document to S3 (bucket caddrawing, folder: images).
-        **Flow:** Call this API → PUT the file to `uploadUrl` → use `fileUrl` in your payload (e.g. sketch, CAD drawing, PDF document).
-        **Auth:** Surveyor, CAD, Admin, Super Admin.
+        **Flow:** Call this API → PUT the file to `signedUploadUrl` (alias: `uploadUrl`) → use `publicFileUrl` (alias: `fileUrl`) in your payload (e.g. sketch, CAD drawing, PDF document).
+        **Auth:** Public (no token required).
         **Allowed types:** image/jpeg, image/jpg, image/png, image/gif, image/webp, application/pdf. Max 10 MB (enforced client-side or via fileSizeBytes).
       operationId: getImageUploadUrl
-      security:
-        - bearerAuth: []
+      security: []
       requestBody:
         required: true
         content:
@@ -2477,15 +3041,13 @@ paths:
                     type: object
                     properties:
                       message: { type: string }
+                      signedUploadUrl: { type: string, format: uri }
                       uploadUrl: { type: string, format: uri }
+                      publicFileUrl: { type: string, format: uri }
                       fileUrl: { type: string, format: uri }
                       key: { type: string }
         "400":
           $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
 
   /api/upload/audio:
     post:
@@ -2493,12 +3055,11 @@ paths:
       summary: Get presigned URL for audio upload
       description: |
         Returns a presigned PUT URL for uploading an audio file to S3 (bucket caddrawing).
-        **Flow:** Call this API → PUT the audio to `uploadUrl` → use `fileUrl` in your payload (e.g. remarks, voice notes).
-        **Auth:** Surveyor, CAD, Admin, Super Admin.
+        **Flow:** Call this API → PUT the audio to `signedUploadUrl` (alias: `uploadUrl`) → use `publicFileUrl` (alias: `fileUrl`) in your payload (e.g. remarks, voice notes).
+        **Auth:** Public (no token required).
         **Allowed types:** audio/mpeg, audio/mp3, audio/wav, audio/webm, audio/ogg, audio/m4a. Max 25 MB.
       operationId: getAudioUploadUrl
-      security:
-        - bearerAuth: []
+      security: []
       requestBody:
         required: true
         content:
@@ -2524,15 +3085,13 @@ paths:
                     type: object
                     properties:
                       message: { type: string }
+                      signedUploadUrl: { type: string, format: uri }
                       uploadUrl: { type: string, format: uri }
+                      publicFileUrl: { type: string, format: uri }
                       fileUrl: { type: string, format: uri }
                       key: { type: string }
         "400":
           $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
 
   /api/upload/delete:
     post:
@@ -2980,7 +3539,7 @@ components:
     UserPatchRequest:
       type: object
       minProperties: 1
-      description: At least one field required. CAD-only cadCenter; Surveyor-only district, taluka, category, surveyType.
+      description: At least one field required. CAD-only fields include cadCenter and cad profile sections; Surveyor-only fields are district, taluka, category, surveyType.
       properties:
         firstName:
           type: string
@@ -2992,6 +3551,45 @@ components:
         cadCenter:
           type: string
           description: ObjectId; for CAD users only
+        personalDetails:
+          type: object
+          properties:
+            firstName: { type: string }
+            lastName: { type: string }
+            phone: { type: string }
+            email: { type: string }
+            address: { type: string }
+            profilePhotoUrl: { type: string }
+        kycDetails:
+          type: object
+          properties:
+            aadhaarPhotoUrl: { type: string }
+        bankDetails:
+          type: object
+          properties:
+            accountNumber: { type: string }
+            accountHolderName: { type: string }
+            bankName: { type: string }
+            branchName: { type: string }
+            ifscCode: { type: string }
+        upiDetails:
+          type: object
+          properties:
+            upiId: { type: string }
+        professionalDetails:
+          type: object
+          properties:
+            skills:
+              type: array
+              items: { type: string }
+            experienceYears: { type: number, minimum: 0 }
+            resumeUrl: { type: string }
+        documents:
+          type: object
+          properties:
+            addressProofUrl: { type: string }
+        profileCompleted:
+          type: boolean
         district:
           type: string
           description: ObjectId; for Surveyor only
@@ -3349,6 +3947,147 @@ components:
           nullable: true
           description: Size in bytes
 
+    SketchPricingLine:
+      type: object
+      description: One side of resolved pricing (upload or revision).
+      properties:
+        feePaise:
+          type: integer
+          description: Amount charged in paise (PhonePe)
+          example: 45000
+        planAmountRupees:
+          type: number
+          nullable: true
+          description: Admin list price in rupees when source is admin
+        discountRupees:
+          type: number
+          nullable: true
+        payableRupees:
+          type: number
+          description: Net rupees equivalent of feePaise / display amount
+        source:
+          type: string
+          enum: [admin, env, none]
+          description: admin = flow plan set; env = Lambda env paise; none = free / no fee
+
+    SketchPricingResponse:
+      type: object
+      properties:
+        upload:
+          $ref: "#/components/schemas/SketchPricingLine"
+        revision:
+          $ref: "#/components/schemas/SketchPricingLine"
+
+    SketchRevisionRequest:
+      type: object
+      description: |
+        At least one of `remarks`, `audio`, or `retryPayment` (boolean).
+        Revision fee is **standard** (admin flow or env); not set per request.
+      properties:
+        remarks:
+          type: string
+          maxLength: 2000
+          nullable: true
+        audio:
+          type: object
+          nullable: true
+          properties:
+            url: { type: string, format: uri }
+            fileName: { type: string, nullable: true }
+            mimeType: { type: string, nullable: true }
+            size: { type: integer, nullable: true }
+        retryPayment:
+          type: boolean
+          description: Optional; when true, remarks/audio not required if resuming checkout (validator allows retry-only).
+
+    CadDashboardStats:
+      type: object
+      properties:
+        totalOrders: { type: integer, minimum: 0, example: 12 }
+        acceptedOrders: { type: integer, minimum: 0, example: 8 }
+        rejectedOrders: { type: integer, minimum: 0, example: 1 }
+        inProgressOrders: { type: integer, minimum: 0, example: 3 }
+
+    CadWalletSummary:
+      type: object
+      properties:
+        totalEarningsPaise: { type: integer, minimum: 0, description: Sum of ledger row totals }
+        pendingPaymentPaise: { type: integer, minimum: 0, description: Remaining to pay (supports partial payouts) }
+        receivedPaymentPaise: { type: integer, minimum: 0, description: Cumulative paid toward all rows }
+        totalEarningsRupees: { type: number }
+        pendingPaymentRupees: { type: number }
+        receivedPaymentRupees: { type: number }
+        totalEarnings: { type: number, description: Alias of totalEarningsRupees (₹) }
+        pendingPayment: { type: number, description: Alias of pendingPaymentRupees (₹) }
+        receivedPayment: { type: number, description: Alias of receivedPaymentRupees (₹) }
+
+    CadWalletPaymentLogItem:
+      type: object
+      properties:
+        amountPaise: { type: integer, minimum: 1 }
+        recordedAt: { type: string, format: date-time }
+        recordedBy: { type: string, nullable: true, description: Admin user ObjectId }
+
+    CadWalletTransaction:
+      type: object
+      properties:
+        _id: { type: string }
+        kind:
+          type: string
+          enum: [INITIAL_DELIVERY, REVISION_DELIVERY]
+        revisionNo: { type: integer, nullable: true }
+        amountPaise: { type: integer, minimum: 0 }
+        amountRupees: { type: number }
+        paidAmountPaise: { type: integer, minimum: 0, description: Cumulative paid toward this row }
+        paidAmountRupees: { type: number }
+        remainingPaise: { type: integer, minimum: 0 }
+        remainingRupees: { type: number }
+        paidPercent: { type: integer, minimum: 0, maximum: 100 }
+        balanceStatus:
+          type: string
+          enum: [PENDING, PARTIAL, PAID]
+        status:
+          type: string
+          enum: [PENDING, PAID]
+        paidAt: { type: string, format: date-time, nullable: true }
+        paymentLog:
+          type: array
+          items: { $ref: "#/components/schemas/CadWalletPaymentLogItem" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        assignment:
+          nullable: true
+          oneOf:
+            - type: string
+            - type: object
+              nullable: true
+        surveyorSketchUpload:
+          nullable: true
+          oneOf:
+            - type: string
+            - type: object
+              nullable: true
+
+    AdminCadWalletRecordPaymentRequest:
+      type: object
+      description: Exactly one of payFull or an amount field.
+      properties:
+        payFull: { type: boolean, description: Pay entire remaining balance }
+        amountPaise: { type: integer, minimum: 1, description: Tranche in paise (integer) }
+        amountRupees: { type: number, minimum: 0, description: Tranche in rupees (converted to paise) }
+
+    CadWalletLedgerEntryAdmin:
+      allOf:
+        - $ref: "#/components/schemas/CadWalletTransaction"
+        - type: object
+          properties:
+            cadUser:
+              nullable: true
+              oneOf:
+                - type: string
+                - type: object
+                  nullable: true
+
     SurveySketchAssignmentUpdateRequest:
       type: object
       minProperties: 1
@@ -3356,10 +4095,9 @@ components:
         status:
           type: string
           enum: [ASSIGNED, IN_PROGRESS, COMPLETED, ON_HOLD, CANCELLED]
-        # assignedToUserId – commented out for now; uncomment if required
-        # assignedToUserId:
-        #   type: string
-        #   nullable: true
+        assignedCadUserId:
+          type: string
+          description: Active CAD user ObjectId; only allowed while assignment status is ASSIGNED (pending acceptance). Resets assignedAt (2h accept window).
         dueDate:
           type: string
           format: date-time
@@ -3418,6 +4156,7 @@ components:
         updatedAt: { type: string, format: date-time }
     SurveySketchAssignmentFlowSetting:
       type: object
+      description: Auto-assign toggle only (not sketch fees).
       properties:
         key:
           type: string
@@ -3445,12 +4184,62 @@ components:
           type: boolean
           description: true = auto assign new submissions, false = manual admin assignment.
 
+    AdminSurveySketchPricingSetting:
+      type: object
+      properties:
+        sketchUploadPlanAmountRupees:
+          type: number
+          nullable: true
+          description: Admin list price (₹) for new sketch upload; null = use env only
+        sketchUploadDiscountRupees:
+          type: number
+          nullable: true
+        sketchRevisionPlanAmountRupees:
+          type: number
+          nullable: true
+          description: Admin list price (₹) for paid revision #2+
+        sketchRevisionDiscountRupees:
+          type: number
+          nullable: true
+        pricing:
+          $ref: "#/components/schemas/SketchPricingResponse"
+        updatedBy:
+          oneOf:
+            - type: string
+              nullable: true
+            - type: object
+              nullable: true
+        updatedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    AdminSurveySketchPricingUpdateRequest:
+      type: object
+      minProperties: 1
+      description: At least one property required.
+      properties:
+        sketchUploadPlanAmountRupees:
+          type: number
+          nullable: true
+          minimum: 0
+        sketchUploadDiscountRupees:
+          type: number
+          nullable: true
+          minimum: 0
+        sketchRevisionPlanAmountRupees:
+          type: number
+          nullable: true
+          minimum: 0
+        sketchRevisionDiscountRupees:
+          type: number
+          nullable: true
+          minimum: 0
+
     SurveyorSketchUploadCreateRequest:
       type: object
-      required: [surveyType, district, taluka, hobli, village, surveyNo, singleUpload]
+      required: [surveyType, district, taluka, hobli, village, surveyNo]
       description: |
-        singleUpload is required (URL string or object with url, fileName, mimeType, size).
-        Media document fields are optional: moolaTippani, hissaTippani, atlas, rrPakkabook, kharabu.
+        Provide **either** `singleUpload` **or** at least one document field (`moolaTippani`, `hissaTippani`, `atlas`, `rrPakkabook`, `kharabu`).
+        Media document fields are optional and support aliases (see descriptions/examples).
         Optional: audio (single audio file), other_documents (array of extra files, e.g. PDFs or images), others (text notes, max 2000 chars).
       properties:
         surveyType:
@@ -3479,6 +4268,11 @@ components:
           minLength: 1
           description: Survey number
           example: "123"
+        isSuperimpose:
+          type: boolean
+          description: |
+            Whether this sketch upload is part of a superimpose workflow (frontend flag). Optional.
+          example: false
         singleUpload:
           oneOf:
             - type: string
@@ -3490,7 +4284,7 @@ components:
                 fileName: { type: string }
                 mimeType: { type: string }
                 size: { type: integer, minimum: 0 }
-          description: Required single upload file (URL or document object)
+          description: Optional single upload file (URL or document object). Required only if no other document fields are provided.
         moolaTippani:
           oneOf:
             - type: string
@@ -3613,7 +4407,6 @@ components:
           type: boolean
           default: false
           description: "Indicates mulapatra is included. Sent by user when using singleUpload."
-
     SurveyDraftUpsertRequest:
       type: object
       description: Save or update survey draft (all fields optional).
@@ -3693,6 +4486,9 @@ components:
         is_akarabandu: { type: boolean }
         is_kharabuttar: { type: boolean }
         is_mulapatra: { type: boolean }
+        isSuperimpose:
+          type: boolean
+          description: Optional flag on draft to mirror isSuperimpose on final upload.
         audio:
           oneOf:
             - type: string
@@ -3938,6 +4734,10 @@ components:
           type: boolean
           default: false
           description: "Indicates mulapatra is included"
+        isSuperimpose:
+          type: boolean
+          default: false
+          description: "True when the surveyor indicated this upload is for a superimpose (overlay) workflow."
         cadDeliverable:
           type: object
           nullable: true
@@ -3948,10 +4748,101 @@ components:
             mimeType: { type: string, nullable: true }
             size: { type: integer, nullable: true }
             uploadedAt: { type: string, format: date-time, nullable: true }
+        cadDeliverableHistory:
+          type: array
+          description: All CAD submissions (original + revised versions). Latest file also appears in cadDeliverable.
+          items:
+            type: object
+            properties:
+              revisionNo: { type: integer, minimum: 0 }
+              isRevision: { type: boolean }
+              submittedBy: { type: string, nullable: true }
+              submittedAt: { type: string, format: date-time, nullable: true }
+              deliverable:
+                type: object
+                properties:
+                  url: { type: string, format: uri }
+                  fileName: { type: string, nullable: true }
+                  mimeType: { type: string, nullable: true }
+                  size: { type: integer, nullable: true }
+                  uploadedAt: { type: string, format: date-time, nullable: true }
+        revisionRequests:
+          type: array
+          description: Surveyor revision requests with remarks/audio and status.
+          items:
+            type: object
+            properties:
+              revisionNo: { type: integer, minimum: 1 }
+              remarks: { type: string, nullable: true }
+              audio:
+                type: object
+                nullable: true
+                properties:
+                  url: { type: string, format: uri }
+                  fileName: { type: string, nullable: true }
+                  mimeType: { type: string, nullable: true }
+                  size: { type: integer, nullable: true }
+                  uploadedAt: { type: string, format: date-time, nullable: true }
+              status:
+                type: string
+                enum: [REQUESTED, RESOLVED]
+              requestedBy: { type: string }
+              requestedAt: { type: string, format: date-time }
+              resolvedAt: { type: string, format: date-time, nullable: true }
+        sketchPayment:
+          type: object
+          nullable: true
+          description: PhonePe state for initial sketch submission when a fee applies
+          properties:
+            status:
+              type: string
+              enum: [NONE, PENDING, COMPLETED, FAILED]
+            merchantOrderId: { type: string, nullable: true }
+            amountPaise: { type: integer, nullable: true, description: Charged amount in paise (checkout) }
+            planAmountRupees: { type: number, nullable: true }
+            discountRupees: { type: number, nullable: true }
+            paidAmountPaise:
+              type: integer
+              nullable: true
+              description: Amount paid (paise) after successful callback; from PhonePe when available
+            paidAt: { type: string, format: date-time, nullable: true }
+            phonepeResponse:
+              type: object
+              nullable: true
+        pendingRevisionPayment:
+          type: object
+          nullable: true
+          description: Holds revision #2+ request until PhonePe completes
+          properties:
+            revisionNo: { type: integer }
+            remarks: { type: string, nullable: true }
+            audio:
+              type: object
+              nullable: true
+            status: { type: string, enum: [PENDING, COMPLETED, FAILED] }
+            merchantOrderId: { type: string, nullable: true }
+            amountPaise: { type: integer, nullable: true }
+            planAmountRupees: { type: number, nullable: true }
+            discountRupees: { type: number, nullable: true }
+            requestedAt: { type: string, format: date-time, nullable: true }
+        revisionFeePayments:
+          type: array
+          description: Audit trail of paid revision checkouts (#2+)
+          items:
+            type: object
+            properties:
+              revisionNo: { type: integer }
+              merchantOrderId: { type: string, nullable: true }
+              chargedAmountPaise: { type: integer, nullable: true }
+              paidAmountPaise: { type: integer, nullable: true }
+              planAmountRupees: { type: number, nullable: true }
+              discountRupees: { type: number, nullable: true }
+              paidAt: { type: string, format: date-time }
+              phonepeResponse: { type: object, nullable: true }
         status:
           type: string
-          description: PENDING → ASSIGNED → CAD_DELIVERED after CAD submits deliverable; etc.
-          enum: [PENDING, ASSIGNED, CAD_DELIVERED, UNDER_REVIEW, APPROVED, REJECTED]
+          description: PAYMENT_PENDING when awaiting PhonePe for new submission (fee > 0); then PENDING → ASSIGNED → CAD_DELIVERED after CAD submits deliverable; etc.
+          enum: [PAYMENT_PENDING, PENDING, ASSIGNED, CAD_DELIVERED, UNDER_REVISION, APPROVED, REJECTED]
           default: PENDING
         statusNote:
           type: string

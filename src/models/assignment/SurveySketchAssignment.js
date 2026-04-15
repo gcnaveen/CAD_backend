@@ -67,6 +67,13 @@ const SurveySketchAssignmentSchema = new mongoose.Schema(
       maxlength: 1000,
       default: null,
     },
+    /** Set when a CAD user rejects the assignment (including legacy pool); used for dashboard reject counts. */
+    rejectedByCad: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true,
+    },
   },
   { timestamps: true, strict: true }
 );

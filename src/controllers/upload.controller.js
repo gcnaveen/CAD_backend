@@ -13,8 +13,11 @@ const { ok } = require("../utils/response");
 async function getImageUploadUrl(params, currentUser) {
   const result = await uploadService.getImageUploadUrl(params, currentUser);
   return ok({
-    message: "Upload the image with PUT to uploadUrl, then use fileUrl in your payload.",
+    message:
+      "Upload with PUT to signedUploadUrl (or uploadUrl), then use publicFileUrl (or fileUrl) in your payload.",
+    signedUploadUrl: result.uploadUrl,
     uploadUrl: result.uploadUrl,
+    publicFileUrl: result.fileUrl,
     fileUrl: result.fileUrl,
     key: result.key,
   });
@@ -27,8 +30,11 @@ async function getImageUploadUrl(params, currentUser) {
 async function getAudioUploadUrl(params, currentUser) {
   const result = await uploadService.getAudioUploadUrl(params, currentUser);
   return ok({
-    message: "Upload the audio with PUT to uploadUrl, then use fileUrl in your payload.",
+    message:
+      "Upload with PUT to signedUploadUrl (or uploadUrl), then use publicFileUrl (or fileUrl) in your payload.",
+    signedUploadUrl: result.uploadUrl,
     uploadUrl: result.uploadUrl,
+    publicFileUrl: result.fileUrl,
     fileUrl: result.fileUrl,
     key: result.key,
   });

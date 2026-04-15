@@ -288,17 +288,51 @@ async function getByRole(actor, role, options = {}) {
 }
 
 /**
- * Patch user (name, status; for CAD: cadCenter; for Surveyor: profile fields).
+ * Patch user (name, status; for CAD: cadCenter + cadProfile sections; for Surveyor: profile fields).
  * Does not allow changing role, email, or phone.
  */
 async function patch(actor, userId, payload) {
-  const user = await User.findById(userId);
+  // auth.password is select:false; but User model validate() requires it for CAD/Admin.
+  // So we must explicitly select it for updates that call save().
+  const user = await User.findById(userId).select("+auth.password");
   if (!user || user.deletedAt) {
     throw new NotFoundError("User not found");
   }
-  assertCanManageUser(actor, user);
+  const isSelfUpdate = String(actor?._id) === String(user._id);
+  if (actor?.role === USER_ROLES.CAD) {
+    if (!isSelfUpdate) {
+      throw new ForbiddenError("CAD users can update only their own profile");
+    }
+  } else {
+    assertCanManageUser(actor, user);
+  }
 
-  const { firstName, lastName, status, cadCenter, district, taluka, category, surveyType } = payload;
+  const {
+    firstName,
+    lastName,
+    status,
+    cadCenter,
+    personalDetails,
+    kycDetails,
+    bankDetails,
+    upiDetails,
+    professionalDetails,
+    documents,
+    profileCompleted,
+    district,
+    taluka,
+    category,
+    surveyType,
+  } = payload;
+  const hasCadProfilePayload =
+    cadCenter !== undefined ||
+    personalDetails !== undefined ||
+    kycDetails !== undefined ||
+    bankDetails !== undefined ||
+    upiDetails !== undefined ||
+    professionalDetails !== undefined ||
+    documents !== undefined ||
+    profileCompleted !== undefined;
 
   if (firstName !== undefined) {
     user.name.first = String(firstName).trim() || user.name.first;
@@ -321,6 +355,51 @@ async function patch(actor, userId, payload) {
     }
     user.cadProfile = user.cadProfile || {};
     user.cadProfile.cadCenter = cadCenter;
+  }
+  if (user.role !== USER_ROLES.CAD && hasCadProfilePayload) {
+    throw new BadRequestError("CAD profile fields can be updated only for CAD users");
+  }
+
+  if (user.role === USER_ROLES.CAD) {
+    if (personalDetails !== undefined) {
+      user.personalDetails = {
+        ...(user.personalDetails || {}),
+        ...personalDetails,
+      };
+    }
+    if (kycDetails !== undefined) {
+      user.kycDetails = {
+        ...(user.kycDetails || {}),
+        ...kycDetails,
+      };
+    }
+    if (bankDetails !== undefined) {
+      user.bankDetails = {
+        ...(user.bankDetails || {}),
+        ...bankDetails,
+      };
+    }
+    if (upiDetails !== undefined) {
+      user.upiDetails = {
+        ...(user.upiDetails || {}),
+        ...upiDetails,
+      };
+    }
+    if (professionalDetails !== undefined) {
+      user.professionalDetails = {
+        ...(user.professionalDetails || {}),
+        ...professionalDetails,
+      };
+    }
+    if (documents !== undefined) {
+      user.documents = {
+        ...(user.documents || {}),
+        ...documents,
+      };
+    }
+    if (profileCompleted !== undefined) {
+      user.profileCompleted = profileCompleted;
+    }
   }
 
   if (user.role === USER_ROLES.SURVEYOR && (district !== undefined || taluka !== undefined || category !== undefined || surveyType !== undefined)) {

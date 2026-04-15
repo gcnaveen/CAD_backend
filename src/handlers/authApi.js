@@ -13,6 +13,9 @@ exports.handler = asyncHandler(async (event) => {
     `${(event.requestContext?.http?.method || "").toUpperCase()} ${event.rawPath || event.requestContext?.http?.path || ""}`.trim();
 
   switch (routeKey) {
+    case "GET /api/payments/phonepe/callback":
+      return authHandler.phonePeSketchCallback(event);
+
     case "POST /api/auth/superadmin/register":
       return authHandler.registerSuperAdmin(event);
 
@@ -57,12 +60,18 @@ exports.handler = asyncHandler(async (event) => {
     case "POST /api/users/{userId}/unblock":
       return authHandler.unblockUser(event);
 
+    case "GET /api/surveyor/sketch-pricing":
+      return authHandler.getSurveyorSketchPricing(event);
     case "POST /api/surveyor/sketch-uploads":
       return authHandler.createSurveyorSketchUpload(event);
     case "GET /api/surveyor/sketch-uploads":
       return authHandler.listSurveyorSketchUploads(event);
+    case "GET /api/surveyor/orders":
+      return authHandler.listSurveyorOrders(event);
     case "GET /api/surveyor/sketch-uploads/{uploadId}":
       return authHandler.getSurveyorSketchUpload(event);
+    case "POST /api/surveyor/sketch-uploads/{uploadId}/revision-request":
+      return authHandler.requestSketchRevision(event);
     case "POST /api/surveyor/sketch-drafts":
       return authHandler.createSurveyDraft(event);
     case "GET /api/surveyor/sketch-drafts":
@@ -87,16 +96,36 @@ exports.handler = asyncHandler(async (event) => {
 
     case "GET /api/cad/assignments":
       return authHandler.listCadAssignments(event);
+    case "GET /api/cad/dashboard":
+      return authHandler.getCadDashboard(event);
+    case "GET /api/cad/dashboard/stats":
+      return authHandler.getCadDashboardStats(event);
+    case "GET /api/cad/wallet":
+      return authHandler.getCadWalletSummary(event);
+    case "GET /api/cad/wallet/transactions":
+      return authHandler.listCadWalletTransactions(event);
     case "GET /api/cad/sketch-uploads/{uploadId}":
       return authHandler.getCadSketchUpload(event);
     case "POST /api/cad/assignments/{assignmentId}/accept":
       return authHandler.acceptAssignmentByCad(event);
+    case "POST /api/cad/assignments/{assignmentId}/reject":
+      return authHandler.rejectAssignmentByCad(event);
     case "POST /api/cad/assignments/{assignmentId}/deliver":
       return authHandler.deliverCadSketch(event);
+    case "POST /api/cad/assignments/{assignmentId}/deliver-revision":
+      return authHandler.deliverCadSketchRevision(event);
     case "GET /api/admin/survey-sketch-assignment-flow":
       return authHandler.getSurveySketchAssignmentFlow(event);
     case "PATCH /api/admin/survey-sketch-assignment-flow":
       return authHandler.updateSurveySketchAssignmentFlow(event);
+    case "GET /api/admin/survey-sketch-pricing":
+      return authHandler.getAdminSurveySketchPricing(event);
+    case "PATCH /api/admin/survey-sketch-pricing":
+      return authHandler.updateAdminSurveySketchPricing(event);
+    case "POST /api/admin/cad-wallet-entries/{entryId}/mark-paid":
+      return authHandler.markCadWalletEntryPaid(event);
+    case "POST /api/admin/cad-wallet-entries/{entryId}/record-payment":
+      return authHandler.recordCadWalletPayment(event);
     case "GET /api/notifications":
       return authHandler.listNotifications(event);
     case "GET /api/notifications/{notificationId}":

@@ -4,7 +4,9 @@ const userController = require("../controllers/user.controller");
 const surveyorSketchUploadController = require("../controllers/surveyorSketchUpload.controller");
 const surveyDraftController = require("../controllers/surveyDraft.controller");
 const surveySketchAssignmentController = require("../controllers/assignment/surveySketchAssignment.controller");
+const cadWalletController = require("../controllers/cad/cadWallet.controller");
 const surveySketchAssignmentFlowController = require("../controllers/config/surveySketchAssignmentFlow.controller");
+const sketchPricingAdminController = require("../controllers/config/sketchPricingAdmin.controller");
 const notificationController = require("../controllers/notification.controller");
 const cadInterestController = require("../controllers/cadInterest.controller");
 const { parsePagination } = require("../utils/pagination");
@@ -12,10 +14,11 @@ const authService = require("../services/auth.service");
 const { validate, schemas, validObjectId } = require("../middleware/validator");
 const { authorize } = require("../middleware/auth.middleware");
 const { USER_ROLES, SURVEY_SKETCH_STATUS } = require("../config/constants");
-const { ok } = require("../utils/response");
+const { ok, redirect } = require("../utils/response");
 const asyncHandler = require("../utils/asyncHandler");
 const logger = require("../utils/logger");
 const { BadRequestError } = require("../utils/errors");
+const sketchPaymentPricing = require("../services/sketchPaymentPricing.service");
 
 function getPathParams(event) {
   return event.pathParameters || {};
@@ -182,7 +185,7 @@ exports.getUsersByRole = asyncHandler(async (event) => {
 // -------- Patch User --------
 exports.updateUser = asyncHandler(async (event) => {
   await ensureDb();
-  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN, USER_ROLES.CAD)(event);
   const { userId } = getPathParams(event);
   if (!userId) throw new BadRequestError("userId is required");
   validObjectId(userId, "userId");
@@ -220,6 +223,24 @@ exports.unblockUser = asyncHandler(async (event) => {
   return await userController.unblockUser(user, userId);
 });
 
+// -------- PhonePe return (public; no auth) --------
+exports.phonePeSketchCallback = asyncHandler(async (event) => {
+  await ensureDb();
+  const phonePeSketchPaymentService = require("../services/phonePeSketchPayment.service");
+  const q = event.queryStringParameters || {};
+  const merchantOrderId = q.merchantOrderId || q.merchant_order_id;
+  const { redirectUrl } = await phonePeSketchPaymentService.handlePhonePeCallback(merchantOrderId);
+  return redirect(redirectUrl, 302);
+});
+
+// -------- Surveyor: resolved sketch / revision fees (plan + discount from admin flow, else env) --------
+exports.getSurveyorSketchPricing = asyncHandler(async (event) => {
+  await ensureDb();
+  await authorize(USER_ROLES.SURVEYOR)(event);
+  const pricing = await sketchPaymentPricing.getPublicPricingBreakdown();
+  return ok(pricing);
+});
+
 // -------- Surveyor Sketch Upload --------
 exports.createSurveyorSketchUpload = asyncHandler(async (event) => {
   await ensureDb();
@@ -237,6 +258,17 @@ exports.getSurveyorSketchUpload = asyncHandler(async (event) => {
   return await surveyorSketchUploadController.getUpload(user, uploadId);
 });
 
+// -------- Surveyor: Request CAD revision with remarks/audio --------
+exports.requestSketchRevision = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SURVEYOR)(event);
+  const { uploadId } = getPathParams(event);
+  if (!uploadId) throw new BadRequestError("uploadId is required");
+  validObjectId(uploadId, "uploadId");
+  const body = validate(schemas.sketchRevisionRequest)(event);
+  return await surveySketchAssignmentController.requestSketchRevision(uploadId, user, body);
+});
+
 exports.listSurveyorSketchUploads = asyncHandler(async (event) => {
   await ensureDb();
   const { user } = await authorize(USER_ROLES.SURVEYOR, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)(event);
@@ -249,6 +281,19 @@ exports.listSurveyorSketchUploads = asyncHandler(async (event) => {
     cadCenterId: q.cadCenterId,
   };
   return await surveyorSketchUploadController.listUploads(user, options);
+});
+
+// -------- Surveyor Orders (tabs: all, active, completed, cancelled) --------
+exports.listSurveyorOrders = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SURVEYOR)(event);
+  const q = event.queryStringParameters || {};
+  const options = {
+    page: q.page,
+    limit: q.limit,
+    bucket: q.bucket || q.statusBucket || q.filter || "all",
+  };
+  return await surveyorSketchUploadController.listSurveyorOrders(user, options);
 });
 
 // -------- Surveyor Sketch Draft --------
@@ -406,6 +451,16 @@ exports.acceptAssignmentByCad = asyncHandler(async (event) => {
   return await surveySketchAssignmentController.respondToAssignment(assignmentId, user, payload);
 });
 
+// -------- CAD: Reject assignment (ASSIGNED → CANCELLED) --------
+exports.rejectAssignmentByCad = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.CAD)(event);
+  const { assignmentId } = getPathParams(event);
+  if (!assignmentId) throw new BadRequestError("assignmentId is required");
+  validObjectId(assignmentId, "assignmentId");
+  return await surveySketchAssignmentController.respondToAssignment(assignmentId, user, { action: "reject" });
+});
+
 // -------- CAD: List my assignments (direct assignee or legacy center pool) --------
 exports.listCadAssignments = asyncHandler(async (event) => {
   await ensureDb();
@@ -413,6 +468,51 @@ exports.listCadAssignments = asyncHandler(async (event) => {
   const q = event.queryStringParameters || {};
   const options = { page: q.page, limit: q.limit, status: q.status };
   return await surveySketchAssignmentController.listForCadUser(user, options);
+});
+
+// -------- CAD: Dashboard assignment counts --------
+exports.getCadDashboardStats = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.CAD)(event);
+  return await surveySketchAssignmentController.getCadDashboardStats(user);
+});
+
+/** Same data as `GET /api/cad/dashboard/stats` (shorter path for dashboards). */
+exports.getCadDashboard = exports.getCadDashboardStats;
+
+// -------- CAD: Wallet summary & transaction history --------
+exports.getCadWalletSummary = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.CAD)(event);
+  return await cadWalletController.getWalletSummary(user);
+});
+
+exports.listCadWalletTransactions = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.CAD)(event);
+  const q = event.queryStringParameters || {};
+  return await cadWalletController.listWalletTransactions(user, q);
+});
+
+// -------- Admin: Mark CAD wallet ledger entry as paid --------
+exports.markCadWalletEntryPaid = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const { entryId } = getPathParams(event);
+  if (!entryId) throw new BadRequestError("entryId is required");
+  validObjectId(entryId, "entryId");
+  return await cadWalletController.markWalletEntryPaid(user, entryId);
+});
+
+/** Admin: record partial or full payout against a ledger row (shows paid % for CAD). */
+exports.recordCadWalletPayment = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const { entryId } = getPathParams(event);
+  if (!entryId) throw new BadRequestError("entryId is required");
+  validObjectId(entryId, "entryId");
+  const body = validate(schemas.adminCadWalletRecordPayment)(event);
+  return await cadWalletController.recordWalletPayment(user, entryId, body);
 });
 
 // -------- CAD: Get source sketch upload (inputs) for work --------
@@ -436,6 +536,17 @@ exports.deliverCadSketch = asyncHandler(async (event) => {
   return await surveySketchAssignmentController.deliverCadSketch(assignmentId, user, body);
 });
 
+// -------- CAD: Submit revised sketch (appends history; keeps previous versions) --------
+exports.deliverCadSketchRevision = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.CAD)(event);
+  const { assignmentId } = getPathParams(event);
+  if (!assignmentId) throw new BadRequestError("assignmentId is required");
+  validObjectId(assignmentId, "assignmentId");
+  const body = validate(schemas.cadSketchDeliverable)(event);
+  return await surveySketchAssignmentController.deliverCadSketchRevision(assignmentId, user, body);
+});
+
 // -------- Admin: Auto assignment flow toggle --------
 exports.getSurveySketchAssignmentFlow = asyncHandler(async (event) => {
   await ensureDb();
@@ -448,4 +559,18 @@ exports.updateSurveySketchAssignmentFlow = asyncHandler(async (event) => {
   const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
   const body = validate(schemas.surveySketchAssignmentFlowUpdate)(event);
   return await surveySketchAssignmentFlowController.updateFlowSettings(user, body);
+});
+
+// -------- Admin: Standard sketch pricing (upload + paid revision #2+) --------
+exports.getAdminSurveySketchPricing = asyncHandler(async (event) => {
+  await ensureDb();
+  await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  return await sketchPricingAdminController.getSketchPricing();
+});
+
+exports.updateAdminSurveySketchPricing = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const body = validate(schemas.adminSketchPricingUpdate)(event);
+  return await sketchPricingAdminController.updateSketchPricing(user, body);
 });

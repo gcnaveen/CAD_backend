@@ -8,7 +8,7 @@ const { ok, created } = require("../utils/response");
 
 async function createUpload(actor, payload) {
   const result = await surveyorSketchUploadService.create(actor, payload);
-  return created(result);
+  return created(result.data, result.meta);
 }
 
 async function getUpload(actor, uploadId) {
@@ -26,6 +26,14 @@ async function listUploads(actor, options) {
   return ok(result.data, result.meta);
 }
 
+async function listSurveyorOrders(actor, options) {
+  const result = await surveyorSketchUploadService.listOrdersForSurveyor(actor, options);
+  return ok(result.data, {
+    ...result.meta,
+    counts: result.counts,
+  });
+}
+
 async function listAllWithAssignment(options) {
   const result = await surveyorSketchUploadService.listAllWithAssignment(options);
   const { paginationMeta } = require("../../utils/pagination");
@@ -38,5 +46,6 @@ module.exports = {
   getUpload,
   getUploadForCad,
   listUploads,
+  listSurveyorOrders,
   listAllWithAssignment,
 };
