@@ -4,6 +4,7 @@
  */
 
 const Taluka = require("../../models/masters/Taluka");
+const { MASTER_STATUS } = require("../../config/constants");
 const districtService = require("./district.service");
 const { NotFoundError, ConflictError } = require("../../utils/errors");
 const mongoose = require("mongoose");
@@ -72,8 +73,10 @@ async function getByName(name, districtName) {
 }
 
 async function listByDistrict(districtId, filters = {}, pagination = null) {
-  const query = { districtId };
-  if (filters.status) query.status = filters.status;
+  const query = {
+    districtId,
+    status: filters.status || MASTER_STATUS.ACTIVE,
+  };
   const sort = { name: 1 };
   if (!pagination) {
     return Taluka.find(query).sort(sort).lean();
@@ -87,9 +90,10 @@ async function listByDistrict(districtId, filters = {}, pagination = null) {
 }
 
 async function list(filters = {}, pagination = null) {
-  const query = {};
+  const query = {
+    status: filters.status || MASTER_STATUS.ACTIVE,
+  };
   if (filters.districtId) query.districtId = filters.districtId;
-  if (filters.status) query.status = filters.status;
   const sort = { name: 1 };
   const baseQuery = () => Taluka.find(query).populate("districtId", "code name").sort(sort);
   if (!pagination) {

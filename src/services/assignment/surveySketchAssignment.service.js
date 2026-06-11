@@ -25,6 +25,7 @@ const {
 const sketchPaymentPricing = require("../sketchPaymentPricing.service");
 const phonePeSketchPayment = require("../phonePeSketchPayment.service");
 const cadWalletService = require("../cadWallet.service");
+const { normalizeStoredDocumentList } = require("../../utils/surveyDocuments");
 
 // CAD must accept within this window after assignment; otherwise it is auto-rejected.
 const AUTO_REJECT_AFTER_MS = 2 * 60 * 60 * 1000; // 2 hours
@@ -395,6 +396,69 @@ async function update(assignmentId, updates, actor) {
   return populated;
 }
 
+/**
+ * Admin pullback: move an active assignment from current CAD to another CAD user.
+ * Sets assignment back to ASSIGNED and restarts accept window from assignedAt.
+ */
+async function pullbackAndReassign(assignmentId, { assignedCadUserId, reason }, actor) {
+  const doc = await SurveySketchAssignment.findById(assignmentId);
+  if (!doc) {
+    throw new NotFoundError("Assignment not found", { code: "ASSIGNMENT_NOT_FOUND" });
+  }
+
+  if (!ACTIVE_ASSIGNMENT_STATUSES.includes(doc.status)) {
+    throw new BadRequestError(
+      "Pullback is allowed only for ASSIGNED, IN_PROGRESS, or ON_HOLD assignments",
+      { code: "INVALID_STATUS_FOR_PULLBACK", currentStatus: doc.status }
+    );
+  }
+
+  const nextCadUser = await User.findOne({
+    _id: assignedCadUserId,
+    role: USER_ROLES.CAD,
+    status: USER_STATUS.ACTIVE,
+    deletedAt: null,
+  }).lean();
+  if (!nextCadUser) {
+    throw new BadRequestError("assignedCadUserId must be an active CAD user", {
+      code: "INVALID_ASSIGNED_CAD_USER",
+    });
+  }
+
+  if (doc.assignedTo && String(doc.assignedTo) === String(nextCadUser._id)) {
+    throw new BadRequestError("Assignment is already assigned to this CAD user", {
+      code: "ALREADY_ASSIGNED_TO_SAME_CAD",
+    });
+  }
+
+  doc.assignedTo = nextCadUser._id;
+  doc.cadCenter = null;
+  doc.status = SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED;
+  doc.assignedAt = new Date();
+  doc.completedAt = null;
+  doc.rejectedByCad = null;
+  await doc.save();
+
+  const populated = await SurveySketchAssignment.findById(doc._id)
+    .populate("surveyorSketchUpload", "applicationId surveyNo status")
+    .populate("cadCenter", "name code")
+    .populate("assignedTo", "name auth")
+    .populate("assignedBy", "name")
+    .lean();
+
+  await notifyAssignmentEvent({
+    type: "SURVEY_SKETCH_ASSIGNED",
+    title: "Survey sketch pulled back and reassigned",
+    message: reason
+      ? `Admin pulled back and reassigned this assignment. Reason: ${String(reason).trim()}`
+      : "Admin pulled back and reassigned this assignment.",
+    assignmentDoc: populated || doc,
+    createdBy: actor?._id,
+  });
+
+  return populated;
+}
+
 const CAD_ASSIGNMENT_RESPONSE_ACTION = Object.freeze({ ACCEPT: "accept", REJECT: "reject" });
 
 /**
@@ -721,6 +785,22 @@ async function autoRejectExpiredAssignments({ now = new Date(), limit = 250 } = 
 /**
  * CAD uploads finished sketch URL (after presign PUT). Sets upload.cadDeliverable, assignment COMPLETED, sketch CAD_DELIVERED.
  */
+function buildCadDeliverableHistoryEntry({ revisionNo, isRevision, deliverables, submittedBy, submittedAt }) {
+  const files = normalizeStoredDocumentList(deliverables);
+  return {
+    revisionNo,
+    isRevision,
+    deliverables: files,
+    deliverable: files[0] || null,
+    submittedBy,
+    submittedAt,
+  };
+}
+
+function hasCadDeliverableFiles(value) {
+  return normalizeStoredDocumentList(value).length > 0;
+}
+
 async function deliverCadSketch(assignmentId, cadUser, fileMeta) {
   const doc = await SurveySketchAssignment.findById(assignmentId);
   if (!doc) {
@@ -742,13 +822,16 @@ async function deliverCadSketch(assignmentId, cadUser, fileMeta) {
   }
 
   const uploadId = doc.surveyorSketchUpload;
-  const cadDeliverable = {
-    url: String(fileMeta.url).trim(),
-    fileName: fileMeta.fileName != null ? String(fileMeta.fileName).trim() : null,
-    mimeType: fileMeta.mimeType != null ? String(fileMeta.mimeType).trim() : null,
-    size: fileMeta.size != null && fileMeta.size !== "" ? Number(fileMeta.size) : null,
-    uploadedAt: new Date(),
-  };
+  const cadDeliverables = normalizeStoredDocumentList(fileMeta.files).map((file) => ({
+    url: String(file.url).trim(),
+    fileName: file.fileName != null ? String(file.fileName).trim() : null,
+    mimeType: file.mimeType != null ? String(file.mimeType).trim() : null,
+    size: file.size != null && file.size !== "" ? Number(file.size) : null,
+    uploadedAt: file.uploadedAt || new Date(),
+  }));
+  if (!cadDeliverables.length) {
+    throw new BadRequestError("At least one deliverable file is required", { code: "CAD_DELIVERABLE_REQUIRED" });
+  }
 
   const uploadDoc = await SurveyorSketchUpload.findById(uploadId);
   if (!uploadDoc) {
@@ -758,24 +841,29 @@ async function deliverCadSketch(assignmentId, cadUser, fileMeta) {
     uploadDoc.cadDeliverableHistory = [];
   }
   // Preserve previously submitted CAD files; never drop older entries.
-  if (uploadDoc.cadDeliverable && uploadDoc.cadDeliverableHistory.length === 0) {
-    uploadDoc.cadDeliverableHistory.push({
-      revisionNo: 0,
-      isRevision: false,
-      deliverable: uploadDoc.cadDeliverable,
-      submittedBy: doc.assignedTo || cadUser._id,
-      submittedAt: uploadDoc.cadDeliverable.uploadedAt || new Date(),
-    });
+  if (hasCadDeliverableFiles(uploadDoc.cadDeliverable) && uploadDoc.cadDeliverableHistory.length === 0) {
+    const legacyFiles = normalizeStoredDocumentList(uploadDoc.cadDeliverable);
+    uploadDoc.cadDeliverableHistory.push(
+      buildCadDeliverableHistoryEntry({
+        revisionNo: 0,
+        isRevision: false,
+        deliverables: legacyFiles,
+        submittedBy: doc.assignedTo || cadUser._id,
+        submittedAt: legacyFiles[0]?.uploadedAt || new Date(),
+      })
+    );
   }
   const nextBaseSubmissionNo = uploadDoc.cadDeliverableHistory.filter((h) => !h?.isRevision).length;
-  uploadDoc.cadDeliverableHistory.push({
-    revisionNo: nextBaseSubmissionNo,
-    isRevision: false,
-    deliverable: cadDeliverable,
-    submittedBy: cadUser._id,
-    submittedAt: new Date(),
-  });
-  uploadDoc.cadDeliverable = cadDeliverable;
+  uploadDoc.cadDeliverableHistory.push(
+    buildCadDeliverableHistoryEntry({
+      revisionNo: nextBaseSubmissionNo,
+      isRevision: false,
+      deliverables: cadDeliverables,
+      submittedBy: cadUser._id,
+      submittedAt: new Date(),
+    })
+  );
+  uploadDoc.cadDeliverable = cadDeliverables;
   uploadDoc.status = SURVEY_SKETCH_STATUS.CAD_DELIVERED;
   await uploadDoc.save();
 
@@ -960,7 +1048,7 @@ async function requestSketchRevision(uploadId, surveyor, payload) {
       code: "NOT_YOUR_SKETCH",
     });
   }
-  if (!uploadDoc.cadDeliverable) {
+  if (!hasCadDeliverableFiles(uploadDoc.cadDeliverable)) {
     throw new BadRequestError("CAD has not delivered a sketch yet", {
       code: "NO_CAD_DELIVERABLE",
     });
@@ -1176,43 +1264,51 @@ async function deliverCadSketchRevision(assignmentId, cadUser, fileMeta) {
   if (!uploadDoc) {
     throw new NotFoundError("Survey sketch upload not found", { code: "SURVEY_SKETCH_NOT_FOUND" });
   }
-  if (!uploadDoc.cadDeliverable) {
+  if (!hasCadDeliverableFiles(uploadDoc.cadDeliverable)) {
     throw new BadRequestError(
       "Base CAD deliverable not found. Submit initial deliverable first.",
       { code: "BASE_CAD_DELIVERABLE_MISSING" }
     );
   }
 
-  const revisedDeliverable = {
-    url: String(fileMeta.url).trim(),
-    fileName: fileMeta.fileName != null ? String(fileMeta.fileName).trim() : null,
-    mimeType: fileMeta.mimeType != null ? String(fileMeta.mimeType).trim() : null,
-    size: fileMeta.size != null && fileMeta.size !== "" ? Number(fileMeta.size) : null,
-    uploadedAt: new Date(),
-  };
+  const revisedDeliverables = normalizeStoredDocumentList(fileMeta.files).map((file) => ({
+    url: String(file.url).trim(),
+    fileName: file.fileName != null ? String(file.fileName).trim() : null,
+    mimeType: file.mimeType != null ? String(file.mimeType).trim() : null,
+    size: file.size != null && file.size !== "" ? Number(file.size) : null,
+    uploadedAt: file.uploadedAt || new Date(),
+  }));
+  if (!revisedDeliverables.length) {
+    throw new BadRequestError("At least one deliverable file is required", { code: "CAD_DELIVERABLE_REQUIRED" });
+  }
 
   if (!Array.isArray(uploadDoc.cadDeliverableHistory)) {
     uploadDoc.cadDeliverableHistory = [];
   }
-  if (!uploadDoc.cadDeliverableHistory.length && uploadDoc.cadDeliverable) {
-    uploadDoc.cadDeliverableHistory.push({
-      revisionNo: 0,
-      isRevision: false,
-      deliverable: uploadDoc.cadDeliverable,
-      submittedBy: doc.assignedTo || null,
-      submittedAt: uploadDoc.cadDeliverable.uploadedAt || new Date(),
-    });
+  if (!uploadDoc.cadDeliverableHistory.length && hasCadDeliverableFiles(uploadDoc.cadDeliverable)) {
+    const legacyFiles = normalizeStoredDocumentList(uploadDoc.cadDeliverable);
+    uploadDoc.cadDeliverableHistory.push(
+      buildCadDeliverableHistoryEntry({
+        revisionNo: 0,
+        isRevision: false,
+        deliverables: legacyFiles,
+        submittedBy: doc.assignedTo || null,
+        submittedAt: legacyFiles[0]?.uploadedAt || new Date(),
+      })
+    );
   }
 
   const nextRevisionNo = uploadDoc.cadDeliverableHistory.filter((h) => h?.isRevision).length + 1;
-  uploadDoc.cadDeliverableHistory.push({
-    revisionNo: nextRevisionNo,
-    isRevision: true,
-    deliverable: revisedDeliverable,
-    submittedBy: cadUser._id,
-    submittedAt: new Date(),
-  });
-  uploadDoc.cadDeliverable = revisedDeliverable;
+  uploadDoc.cadDeliverableHistory.push(
+    buildCadDeliverableHistoryEntry({
+      revisionNo: nextRevisionNo,
+      isRevision: true,
+      deliverables: revisedDeliverables,
+      submittedBy: cadUser._id,
+      submittedAt: new Date(),
+    })
+  );
+  uploadDoc.cadDeliverable = revisedDeliverables;
   uploadDoc.status = SURVEY_SKETCH_STATUS.CAD_DELIVERED;
 
   if (Array.isArray(uploadDoc.revisionRequests)) {
@@ -1313,4 +1409,5 @@ module.exports = {
   autoAssignFromFlow,
   autoRejectExpiredAssignments,
   getCadDashboardStats,
+  pullbackAndReassign,
 };

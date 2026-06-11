@@ -11,9 +11,9 @@ custom:
     prod: production
   # Single resolved bucket name for both Lambda env and IAM (must match or presigned PUT → 403 loops).
   s3Bucket:
-    dev: caddrawing
-    prod: caddrawing
-  s3BucketFromStage: ${self:custom.s3Bucket.${self:provider.stage}, 'caddrawing'}
+    dev: ccaddrawing
+    prod: ccaddrawing
+  s3BucketFromStage: ${self:custom.s3Bucket.${self:provider.stage}, 'cad-backend-api-dev-deployments'}
   s3BucketName: ${env:S3_BUCKET, self:custom.s3BucketFromStage}
 
 provider:
@@ -154,10 +154,19 @@ functions:
           path: /api/surveyor/sketch-uploads/{uploadId}/revision-request
           method: post
       - httpApi:
+          path: /api/surveyor/assignments/{assignmentId}/feedback
+          method: post
+      - httpApi:
+          path: /api/surveyor/assignments/{assignmentId}/feedback
+          method: get
+      - httpApi:
           path: /api/surveyor/sketch-drafts
           method: post
       - httpApi:
           path: /api/surveyor/sketch-drafts
+          method: get
+      - httpApi:
+          path: /api/admin/survey-draft-reports
           method: get
       - httpApi:
           path: /api/surveyor/sketch-drafts/{draftId}
@@ -180,6 +189,9 @@ functions:
       - httpApi:
           path: /api/admin/survey-sketch-assignments/{assignmentId}
           method: patch
+      - httpApi:
+          path: /api/admin/survey-sketch-assignments/{assignmentId}/pullback-reassign
+          method: post
       - httpApi:
           path: /api/admin/cad-centers/{cadCenterId}/assignments
           method: get
@@ -230,6 +242,9 @@ functions:
           method: post
       - httpApi:
           path: /api/admin/cad-wallet-entries/{entryId}/record-payment
+          method: post
+      - httpApi:
+          path: /api/admin/cad-wallet/pay-user
           method: post
       - httpApi:
           path: /api/notifications

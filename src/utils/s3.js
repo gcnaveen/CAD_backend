@@ -15,7 +15,7 @@ const { S3Client, PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/cl
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { randomUUID } = require("crypto");
 
-const BUCKET = process.env.S3_BUCKET || "caddrawing";
+const BUCKET = process.env.S3_BUCKET || "cad-backend-api-dev-deployments";
 const REGION = process.env.AWS_REGION || process.env.REGION || "ap-south-1";
 
 const UPLOADS_PREFIX = "uploads";

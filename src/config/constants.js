@@ -138,6 +138,8 @@ const UPLOAD_AUDIO_MIME_TYPES = Object.freeze([
   "audio/ogg",
   "audio/m4a",
   "audio/x-m4a",
+  "audio/mp4",
+  "audio/x-wav",
 ]);
 
 /** Max file size in bytes: 10 MB for images. */
@@ -145,6 +147,12 @@ const UPLOAD_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 
 /** Max file size in bytes: 25 MB for audio. */
 const UPLOAD_AUDIO_MAX_BYTES = 25 * 1024 * 1024;
+
+/** Max files per multi-upload field on survey sketch / CAD deliverable payloads. */
+const SURVEY_SKETCH_MAX_UPLOAD_FILES = 20;
+
+/** Max files per batch presigned URL request. */
+const UPLOAD_BATCH_MAX_FILES = 20;
 
 /** Presigned URL expiry: 15 minutes. */
 const UPLOAD_PRESIGNED_EXPIRES_SECONDS = 900;
@@ -182,6 +190,8 @@ module.exports = {
   UPLOAD_IMAGE_MAX_BYTES,
   UPLOAD_AUDIO_MAX_BYTES,
   UPLOAD_PRESIGNED_EXPIRES_SECONDS,
+  SURVEY_SKETCH_MAX_UPLOAD_FILES,
+  UPLOAD_BATCH_MAX_FILES,
   CAD_WALLET_ENTRY_STATUS,
   CAD_WALLET_ENTRY_KIND,
 };

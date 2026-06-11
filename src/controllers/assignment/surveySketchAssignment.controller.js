@@ -55,6 +55,11 @@ async function updateAssignment(assignmentId, payload, actor) {
   return ok(data);
 }
 
+async function pullbackAndReassignAssignment(assignmentId, payload, actor) {
+  const data = await surveySketchAssignmentService.pullbackAndReassign(assignmentId, payload, actor);
+  return ok(data);
+}
+
 async function respondToAssignment(assignmentId, cadUser, payload) {
   const action = payload?.action || "accept";
   const data = await surveySketchAssignmentService.respondToAssignment(assignmentId, cadUser, action);
@@ -84,6 +89,7 @@ module.exports = {
   listForCadUser,
   listAll,
   updateAssignment,
+  pullbackAndReassignAssignment,
   respondToAssignment,
   deliverCadSketch,
   requestSketchRevision,

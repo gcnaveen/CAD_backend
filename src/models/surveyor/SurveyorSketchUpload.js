@@ -11,6 +11,7 @@ const {
   SURVEY_SKETCH_DOCUMENT_KEYS,
 } = require("../../config/constants");
 const { pickSurveyDocumentRaw } = require("../../utils/surveyDocumentKeys");
+const { normalizeStoredDocumentList, normalizeDocumentsField } = require("../../utils/surveyDocuments");
 
 // -------- Document reference (one per survey record type) --------
 const SurveyDocumentSchema = new mongoose.Schema(
@@ -33,7 +34,9 @@ const CadDeliverableVersionSchema = new mongoose.Schema(
   {
     revisionNo: { type: Number, required: true, min: 0 },
     isRevision: { type: Boolean, default: false },
-    deliverable: { type: SurveyDocumentSchema, required: true },
+    /** @deprecated use deliverables — kept for legacy reads */
+    deliverable: { type: SurveyDocumentSchema, default: null },
+    deliverables: { type: [SurveyDocumentSchema], default: () => [] },
     submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     submittedAt: { type: Date, default: () => new Date() },
   },
@@ -116,17 +119,17 @@ const SurveyorSketchUploadSchema = new mongoose.Schema(
     },
 
     // -------- Documents (from UploadSurvey form) --------
-    /** One entry per key: moolaTippani, hissaTippani, atlas, rrPakkabook, kharabu. */
+    /** One entry per key: moolaTippani, hissaTippani, atlas, rrPakkabook, kharabu (each key holds 0..n files). */
     documents: {
       type: Map,
-      of: SurveyDocumentSchema,
+      of: [SurveyDocumentSchema],
       default: () => new Map(),
     },
 
-    /** Required single upload file for this request (URL/object metadata). */
+    /** Combined upload bundle (one or more files). */
     singleUpload: {
-      type: SurveyDocumentSchema,
-      // required: true,
+      type: [SurveyDocumentSchema],
+      default: () => [],
     },
 
     // -------- Document indicator booleans --------
@@ -143,10 +146,10 @@ const SurveyorSketchUploadSchema = new mongoose.Schema(
     /** Whether this sketch involves superimpose workflow (frontend flag). */
     isSuperimpose: { type: Boolean, default: false },
 
-    /** Optional audio file (e.g. audio remarks, voice notes). Single file: url, fileName?, mimeType?, size?, uploadedAt?. */
+    /** Optional audio files (e.g. audio remarks, voice notes). */
     audio: {
-      type: SurveyDocumentSchema,
-      default: null,
+      type: [SurveyDocumentSchema],
+      default: () => [],
     },
 
     /** Optional extra documents (e.g. additional PDFs, images). Each item: url, fileName?, mimeType?, size?, uploadedAt?. */
@@ -155,10 +158,10 @@ const SurveyorSketchUploadSchema = new mongoose.Schema(
       default: () => [],
     },
 
-    /** CAD output (finished sketch) after assignment completion; surveyor downloads via url (same shape as singleUpload). */
+    /** CAD output files after assignment completion (latest submission). */
     cadDeliverable: {
-      type: SurveyDocumentSchema,
-      default: null,
+      type: [SurveyDocumentSchema],
+      default: () => [],
     },
     /** History of all CAD deliverables including first submit and revisions. */
     cadDeliverableHistory: {
@@ -356,24 +359,47 @@ SurveyorSketchUploadSchema.pre("save", async function (next) {
 // -------- Helpers --------
 /** Normalize documents from flat object to Map for storage. */
 function documentsFromPayload(payload) {
+  const { parseSurveyDocumentList } = require("../../utils/surveyDocuments");
   const map = new Map();
   for (const key of SURVEY_SKETCH_DOCUMENT_KEYS) {
     const raw = pickSurveyDocumentRaw(payload, key);
     if (!raw) continue;
-    const entry =
-      typeof raw === "string"
-        ? { url: raw.trim(), fileName: null, mimeType: null, size: null }
-        : {
-            url: (raw.url || raw.path || "").toString().trim(),
-            fileName: raw.fileName != null ? String(raw.fileName).trim() : null,
-            mimeType: raw.mimeType != null ? String(raw.mimeType).trim() : null,
-            size: raw.size != null ? Number(raw.size) : null,
-            uploadedAt: raw.uploadedAt ? new Date(raw.uploadedAt) : new Date(),
-          };
-    if (entry.url) map.set(key, entry);
+    const entries = parseSurveyDocumentList(raw, { fieldName: key });
+    if (entries.length) map.set(key, entries);
   }
   return map;
 }
+
+function normalizeSketchUploadDoc(doc, { forSerialization = false } = {}) {
+  if (!doc || typeof doc !== "object") return doc;
+  doc.singleUpload = normalizeStoredDocumentList(doc.singleUpload);
+  doc.audio = normalizeStoredDocumentList(doc.audio);
+  doc.cadDeliverable = normalizeStoredDocumentList(doc.cadDeliverable);
+  doc.documents = normalizeDocumentsField(doc.documents, { asPlainObject: forSerialization });
+  if (Array.isArray(doc.cadDeliverableHistory)) {
+    doc.cadDeliverableHistory = doc.cadDeliverableHistory.map((row) => {
+      const deliverables = normalizeStoredDocumentList(row?.deliverables?.length ? row.deliverables : row?.deliverable);
+      return { ...row, deliverables, deliverable: deliverables[0] || row?.deliverable || null };
+    });
+  }
+  return doc;
+}
+
+SurveyorSketchUploadSchema.post("init", function normalizeLegacyUploadFields() {
+  normalizeSketchUploadDoc(this, { forSerialization: false });
+});
+
+SurveyorSketchUploadSchema.set("toJSON", {
+  transform(_doc, ret) {
+    return normalizeSketchUploadDoc(ret, { forSerialization: true });
+  },
+});
+
+SurveyorSketchUploadSchema.set("toObject", {
+  transform(_doc, ret) {
+    return normalizeSketchUploadDoc(ret, { forSerialization: true });
+  },
+});
 
 module.exports =
   mongoose.models.SurveyorSketchUpload ||

@@ -191,8 +191,7 @@ async function create(surveyor, payload) {
       hobli: payload.hobli,
       village: payload.village,
       surveyNo: payload.surveyNo,
-      documents: new Map(Object.entries(payload.documents || {})),
-      singleUpload: payload.singleUpload,
+      documents: require("../utils/surveyDocuments").documentsMapFromObject(payload.documents),
       is_originaltippani: payload.is_originaltippani || false,
       is_hissatippani: payload.is_hissatippani || false,
       is_atlas: payload.is_atlas || false,
@@ -200,8 +199,9 @@ async function create(surveyor, payload) {
       is_akarabandu: payload.is_akarabandu || false,
       is_kharabuttar: payload.is_kharabuttar || false,
       is_mulapatra: payload.is_mulapatra || false,
-      audio: payload.audio || null,
+      audio: Array.isArray(payload.audio) ? payload.audio : [],
       other_documents: Array.isArray(payload.other_documents) ? payload.other_documents : [],
+      singleUpload: Array.isArray(payload.singleUpload) ? payload.singleUpload : payload.singleUpload ? [payload.singleUpload] : [],
       others: payload.others ?? null,
     });
 

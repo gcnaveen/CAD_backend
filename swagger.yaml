@@ -48,7 +48,7 @@ tags:
   - name: Notifications
     description: Role-based notification feed for assignment and sketch lifecycle updates
   - name: Upload
-    description: S3 presigned URLs for images and audio (bucket caddrawing)
+    description: S3 presigned URLs for images and audio (dev bucket cad-backend-api-dev-deployments)
   - name: Health
     description: Health and readiness
 
@@ -1595,9 +1595,9 @@ paths:
         - `surveyType`: `joint_flat` or `single_flat`
         - `district`, `taluka`, `hobli`, `village`: ObjectIds from masters
         - `surveyNo`: Survey number string
-        - `singleUpload`: single upload file (URL string or object with `url`, `fileName`, `mimeType`, `size`)
-        **Optional:** media document fields (`moolaTippani`, `hissaTippani`, `atlas`, `rrPakkabook`, `kharabu`), checklist flags (`is_originaltippani`, `is_hissatippani`, `is_atlas`, `is_rrpakkabook`, `is_akarabandu`, `is_kharabuttar`, `is_mulapatra`), `audio` (single audio file), `other_documents` (array of extra files), `others` (text notes, max 2000 chars).
-        **Checklist behavior:** If `singleUpload` is used, send the `is_*` flags as `true/false` based on what is present in the single document. If separate files are uploaded for known keys, corresponding `is_*` flags are auto-set to `true` by backend.
+        - `singleUpload`: one or more upload files (URL string, document object, or array of either; max 20 per field)
+        **Optional:** media document fields (`moolaTippani`, `hissaTippani`, `atlas`, `rrPakkabook`, `kharabu` — each accepts one or more files), checklist flags (`is_originaltippani`, `is_hissatippani`, `is_atlas`, `is_rrpakkabook`, `is_akarabandu`, `is_kharabuttar`, `is_mulapatra`), `audio` (one or more audio files), `other_documents` (array of extra files), `others` (text notes, max 2000 chars).
+        **Checklist behavior:** If `singleUpload` is used, send the `is_*` flags as `true/false` based on what is included in the bundle. If separate files are uploaded for known keys, corresponding `is_*` flags are auto-set to `true` by backend.
       operationId: createSurveyorSketchUpload
       security:
         - bearerAuth: []
@@ -1614,7 +1614,11 @@ paths:
               hobli: "507f1f77bcf86cd799439014"
               village: "507f1f77bcf86cd799439015"
               surveyNo: "123"
-              singleUpload: "https://storage.example.com/documents/single-upload.pdf"
+              singleUpload:
+                - url: "https://storage.example.com/documents/single-upload-1.pdf"
+                  fileName: "bundle-1.pdf"
+                - url: "https://storage.example.com/documents/single-upload-2.pdf"
+                  fileName: "bundle-2.pdf"
               is_originaltippani: true
               is_hissatippani: true
               is_atlas: true
@@ -1694,26 +1698,30 @@ paths:
                   village: { _id: "507f1f77bcf86cd799439015", code: "V001", name: "Village 1" }
                   surveyNo: "123"
                   singleUpload:
-                    url: "https://storage.example.com/documents/single-upload.pdf"
-                    fileName: null
-                    mimeType: null
-                    size: null
+                    - url: "https://storage.example.com/documents/single-upload-1.pdf"
+                      fileName: "bundle-1.pdf"
+                      mimeType: "application/pdf"
+                      size: null
+                    - url: "https://storage.example.com/documents/single-upload-2.pdf"
+                      fileName: "bundle-2.pdf"
+                      mimeType: "application/pdf"
+                      size: null
                   documents:
                     moolaTippani:
-                      url: "https://storage.example.com/documents/moola.pdf"
-                      fileName: null
-                      mimeType: null
-                      size: null
+                      - url: "https://storage.example.com/documents/moola.pdf"
+                        fileName: null
+                        mimeType: null
+                        size: null
                     hissaTippani:
-                      url: "https://storage.example.com/documents/hissa.pdf"
-                      fileName: "hissa_tippani.pdf"
-                      mimeType: "application/pdf"
-                      size: 245678
+                      - url: "https://storage.example.com/documents/hissa.pdf"
+                        fileName: "hissa_tippani.pdf"
+                        mimeType: "application/pdf"
+                        size: 245678
                   audio:
-                    url: "https://storage.example.com/audio/remarks.mp3"
-                    fileName: "remarks.mp3"
-                    mimeType: "audio/mpeg"
-                    size: 128000
+                    - url: "https://storage.example.com/audio/remarks.mp3"
+                      fileName: "remarks.mp3"
+                      mimeType: "audio/mpeg"
+                      size: 128000
                   other_documents:
                     - url: "https://storage.example.com/documents/extra.pdf"
                       fileName: null
@@ -2047,6 +2055,81 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/surveyor/assignments/{assignmentId}/feedback:
+    parameters:
+      - name: assignmentId
+        in: path
+        required: true
+        schema: { type: string }
+        description: SurveySketchAssignment ObjectId
+    post:
+      tags: [Surveyor Sketch Uploads]
+      summary: Submit feedback for CAD user
+      description: |
+        Surveyor submits feedback against an assignment's CAD user.
+        Fields supported: `rating` (1-5), optional `remarks`, optional `audio`.
+        If feedback already exists for the same assignment by the same surveyor, this API updates it.
+      operationId: createCadUserFeedback
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CadUserFeedbackCreateRequest"
+            example:
+              rating: 4.5
+              remarks: "Good quality and quick turnaround"
+              audio:
+                url: "https://example.com/feedback-audio.mp3"
+                fileName: "feedback.mp3"
+                mimeType: "audio/mpeg"
+                size: 12345
+      responses:
+        "200":
+          description: Feedback saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/CadUserFeedback" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    get:
+      tags: [Surveyor Sketch Uploads]
+      summary: Get feedback for CAD user by assignment
+      description: |
+        Returns feedback already submitted for this assignment.
+        Allowed roles: Surveyor owner, assigned CAD user, Admin, Super Admin.
+      operationId: getCadUserFeedback
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Feedback details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/CadUserFeedback" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/surveyor/sketch-drafts/{draftId}:
     parameters:
       - name: draftId
@@ -2131,6 +2214,50 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /api/admin/survey-draft-reports:
+    get:
+      tags: [Admin - Assignments]
+      summary: List all survey draft reports
+      description: |
+        Admin/Super Admin endpoint to list all survey sketch drafts.
+        Supports pagination and optional filter by `surveyorId`.
+      operationId: listAdminSurveyDraftReports
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: surveyorId
+          in: query
+          schema: { type: string }
+          description: Optional filter by surveyor user id
+      responses:
+        "200":
+          description: Draft report list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/SurveyDraft" }
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer, example: 1 }
+                      limit: { type: integer, example: 20 }
+                      total: { type: integer, example: 10 }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   # -------- Admin: Survey Sketch Status options (for dropdown) --------
   /api/admin/survey-sketch-statuses:
@@ -2372,6 +2499,51 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/admin/cad-wallet/pay-user:
+    post:
+      tags: [Admin - Assignments]
+      summary: Pay CAD user by amount
+      description: |
+        Admin/Super Admin provides a CAD user and amount.
+        The amount is auto-applied to that CAD user's **oldest pending** wallet entries first.
+        CAD wallet summary immediately reflects this as received payment.
+      operationId: recordCadWalletPaymentForUser
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminCadWalletPayCadUserRequest"
+            examples:
+              paise:
+                value:
+                  cadUserId: "507f1f77bcf86cd799439011"
+                  amountPaise: 15000
+              rupees:
+                value:
+                  cadUserId: "507f1f77bcf86cd799439011"
+                  amountRupees: 150
+      responses:
+        "200":
+          description: Amount applied to user's pending entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/AdminCadWalletPayCadUserResponse" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # -------- Admin: Survey Sketch Assignments (assign survey sketch to CAD center) --------
   /api/admin/survey-sketch-assignments:
     post:
@@ -2512,6 +2684,52 @@ paths:
                   success: { type: boolean }
                   data: { type: array, items: { $ref: "#/components/schemas/SurveySketchAssignment" } }
                   pagination: { type: object }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/admin/survey-sketch-assignments/{assignmentId}/pullback-reassign:
+    parameters:
+      - name: assignmentId
+        in: path
+        required: true
+        schema: { type: string }
+        description: Assignment ObjectId
+    post:
+      tags: [Admin - Assignments]
+      summary: Pull back assignment and reassign to another CAD user
+      description: |
+        Admin/Super Admin only.
+        Pull back an active assignment from current CAD and assign it to another CAD user.
+        Allowed current statuses: `ASSIGNED`, `IN_PROGRESS`, `ON_HOLD`.
+        After this call, assignment status becomes `ASSIGNED` and `assignedAt` is reset.
+      operationId: pullbackAndReassignSurveySketchAssignment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminAssignmentPullbackReassignRequest"
+            example:
+              assignedCadUserId: "507f1f77bcf86cd799439099"
+              reason: "Reassigning due to workload"
+      responses:
+        "200":
+          description: Assignment pulled back and reassigned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/SurveySketchAssignment" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -2801,9 +3019,9 @@ paths:
       tags: [CAD - Assignments]
       summary: Submit finished sketch (CAD deliverable)
       description: |
-        After uploading the file via presigned PUT (`/api/upload/image`), POST the resulting URL here.
-        Sets `cadDeliverable` on the survey sketch upload, assignment status → COMPLETED, sketch status → CAD_DELIVERED.
-        The surveyor can download using `cadDeliverable.url` from `GET /api/surveyor/sketch-uploads/{uploadId}`.
+        After uploading file(s) via presigned PUT (`/api/upload/image`), POST the resulting URL(s) here.
+        Send **`files`** (array, recommended) or legacy single **`url`** object. Sets `cadDeliverable` (array) on the survey sketch upload, assignment status → COMPLETED, sketch status → CAD_DELIVERED.
+        The surveyor can download from `cadDeliverable[]` on `GET /api/surveyor/sketch-uploads/{uploadId}`.
       operationId: deliverCadSketch
       security:
         - bearerAuth: []
@@ -2844,7 +3062,7 @@ paths:
       summary: Submit revised sketch
       description: |
         CAD uploads revised sketch after a surveyor revision request.
-        Existing `cadDeliverable` is preserved in `cadDeliverableHistory`; latest revised file becomes `cadDeliverable`.
+        Send **`files`** (array) or legacy single **`url`**. Existing submissions are preserved in `cadDeliverableHistory`; latest revised files become `cadDeliverable`.
       operationId: deliverCadSketchRevision
       security:
         - bearerAuth: []
@@ -3010,8 +3228,9 @@ paths:
       tags: [Upload]
       summary: Get presigned URL for image/document upload
       description: |
-        Returns a presigned PUT URL for uploading an image or PDF document to S3 (bucket caddrawing, folder: images).
-        **Flow:** Call this API → PUT the file to `signedUploadUrl` (alias: `uploadUrl`) → use `publicFileUrl` (alias: `fileUrl`) in your payload (e.g. sketch, CAD drawing, PDF document).
+        Returns presigned PUT URL(s) for uploading image(s) or PDF document(s) to S3 (bucket caddrawing, folder: images).
+        **Single file:** send `fileName` + `contentType`. **Batch:** send `files` array (max 20) with one entry per file.
+        **Flow:** Call this API → PUT each file to its `signedUploadUrl` (alias: `uploadUrl`) → use each `publicFileUrl` (alias: `fileUrl`) in your payload.
         **Auth:** Public (no token required).
         **Allowed types:** image/jpeg, image/jpg, image/png, image/gif, image/webp, application/pdf. Max 10 MB (enforced client-side or via fileSizeBytes).
       operationId: getImageUploadUrl
@@ -3046,6 +3265,11 @@ paths:
                       publicFileUrl: { type: string, format: uri }
                       fileUrl: { type: string, format: uri }
                       key: { type: string }
+                      files:
+                        type: array
+                        description: Present when request body used `files` batch (one presigned URL per item)
+                        items:
+                          $ref: "#/components/schemas/UploadPresignedUrlResult"
         "400":
           $ref: "#/components/responses/BadRequest"
 
@@ -3054,8 +3278,9 @@ paths:
       tags: [Upload]
       summary: Get presigned URL for audio upload
       description: |
-        Returns a presigned PUT URL for uploading an audio file to S3 (bucket caddrawing).
-        **Flow:** Call this API → PUT the audio to `signedUploadUrl` (alias: `uploadUrl`) → use `publicFileUrl` (alias: `fileUrl`) in your payload (e.g. remarks, voice notes).
+        Returns presigned PUT URL(s) for uploading audio file(s) to S3 (bucket caddrawing).
+        **Single file:** send `fileName` + `contentType`. **Batch:** send `files` array (max 20).
+        **Flow:** Call this API → PUT each audio to its `signedUploadUrl` → use each `publicFileUrl` in your payload.
         **Auth:** Public (no token required).
         **Allowed types:** audio/mpeg, audio/mp3, audio/wav, audio/webm, audio/ogg, audio/m4a. Max 25 MB.
       operationId: getAudioUploadUrl
@@ -3090,6 +3315,11 @@ paths:
                       publicFileUrl: { type: string, format: uri }
                       fileUrl: { type: string, format: uri }
                       key: { type: string }
+                      files:
+                        type: array
+                        description: Present when request body used `files` batch (one presigned URL per item)
+                        items:
+                          $ref: "#/components/schemas/UploadPresignedUrlResult"
         "400":
           $ref: "#/components/responses/BadRequest"
 
@@ -3927,15 +4157,61 @@ components:
           type: string
           maxLength: 1000
           nullable: true
-    CadSketchDeliverableRequest:
+    SurveyDocumentObject:
       type: object
-      required: [url]
-      description: Metadata for the finished file after S3 presigned upload
+      description: Uploaded file metadata (from presigned PUT flow)
       properties:
         url:
           type: string
           format: uri
-          description: File URL or S3 key as returned from upload API
+          description: File URL as returned from upload API
+        fileName:
+          type: string
+          nullable: true
+        mimeType:
+          type: string
+          nullable: true
+        size:
+          type: integer
+          nullable: true
+          description: Size in bytes
+        uploadedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    SurveyDocumentRef:
+      oneOf:
+        - type: string
+          format: uri
+          description: File URL
+        - $ref: "#/components/schemas/SurveyDocumentObject"
+
+    SurveyDocumentList:
+      oneOf:
+        - $ref: "#/components/schemas/SurveyDocumentRef"
+        - type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/SurveyDocumentRef"
+      description: One file or up to 20 files (URL string or metadata object each)
+
+    CadSketchDeliverableRequest:
+      type: object
+      description: |
+        CAD finished sketch file(s) after S3 presigned upload.
+        Prefer **`files`** (array, max 20). Legacy single-file body with **`url`** (+ optional metadata) is still accepted.
+      properties:
+        files:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/SurveyDocumentObject"
+          description: One or more deliverable files (recommended)
+        url:
+          type: string
+          format: uri
+          description: Legacy single-file URL (use `files` for multiple)
         fileName:
           type: string
           nullable: true
@@ -4076,6 +4352,30 @@ components:
         amountPaise: { type: integer, minimum: 1, description: Tranche in paise (integer) }
         amountRupees: { type: number, minimum: 0, description: Tranche in rupees (converted to paise) }
 
+    AdminCadWalletPayCadUserRequest:
+      type: object
+      required: [cadUserId]
+      properties:
+        cadUserId: { type: string }
+        amountPaise: { type: integer, minimum: 1, description: Amount to pay in paise }
+        amountRupees: { type: number, minimum: 0, description: Amount to pay in rupees }
+
+    AdminCadWalletPayCadUserResponse:
+      type: object
+      properties:
+        cadUserId: { type: string }
+        requestedAmountPaise: { type: integer }
+        requestedAmountRupees: { type: number }
+        appliedAmountPaise: { type: integer }
+        appliedAmountRupees: { type: number }
+        unappliedAmountPaise: { type: integer }
+        unappliedAmountRupees: { type: number }
+        touchedEntryIds:
+          type: array
+          items: { type: string }
+        summary:
+          $ref: "#/components/schemas/CadWalletSummary"
+
     CadWalletLedgerEntryAdmin:
       allOf:
         - $ref: "#/components/schemas/CadWalletTransaction"
@@ -4087,6 +4387,18 @@ components:
                 - type: string
                 - type: object
                   nullable: true
+
+    AdminAssignmentPullbackReassignRequest:
+      type: object
+      required: [assignedCadUserId]
+      properties:
+        assignedCadUserId:
+          type: string
+          description: Active CAD user ObjectId to receive the reassigned work
+        reason:
+          type: string
+          nullable: true
+          maxLength: 1000
 
     SurveySketchAssignmentUpdateRequest:
       type: object
@@ -4238,9 +4550,9 @@ components:
       type: object
       required: [surveyType, district, taluka, hobli, village, surveyNo]
       description: |
-        Provide **either** `singleUpload` **or** at least one document field (`moolaTippani`, `hissaTippani`, `atlas`, `rrPakkabook`, `kharabu`).
+        Provide **either** `singleUpload` (one or more files) **or** at least one document field (`moolaTippani`, `hissaTippani`, `atlas`, `rrPakkabook`, `kharabu` — each accepts one or more files).
         Media document fields are optional and support aliases (see descriptions/examples).
-        Optional: audio (single audio file), other_documents (array of extra files, e.g. PDFs or images), others (text notes, max 2000 chars).
+        Optional: audio (one or more files), other_documents (array of extra files), others (text notes, max 2000 chars). Max **20 files** per multi-upload field.
       properties:
         surveyType:
           type: string
@@ -4274,90 +4586,29 @@ components:
             Whether this sketch upload is part of a superimpose workflow (frontend flag). Optional.
           example: false
         singleUpload:
-          oneOf:
-            - type: string
-              format: uri
-              description: Document URL
-            - type: object
-              properties:
-                url: { type: string, format: uri }
-                fileName: { type: string }
-                mimeType: { type: string }
-                size: { type: integer, minimum: 0 }
-          description: Optional single upload file (URL or document object). Required only if no other document fields are provided.
+          $ref: "#/components/schemas/SurveyDocumentList"
+          description: Combined upload bundle (one or more files). Required only if no other document fields are provided.
+        files:
+          $ref: "#/components/schemas/SurveyDocumentList"
+          description: Alias of `singleUpload` (frontend may send either field name)
         moolaTippani:
-          oneOf:
-            - type: string
-              format: uri
-              description: Document URL
-            - type: object
-              properties:
-                url: { type: string, format: uri }
-                fileName: { type: string }
-                mimeType: { type: string }
-                size: { type: integer, minimum: 0 }
-          description: Moola Tippani document (optional)
+          $ref: "#/components/schemas/SurveyDocumentList"
+          description: Moola Tippani document(s) (optional)
         hissaTippani:
-          oneOf:
-            - type: string
-              format: uri
-              description: Document URL
-            - type: object
-              properties:
-                url: { type: string, format: uri }
-                fileName: { type: string }
-                mimeType: { type: string }
-                size: { type: integer, minimum: 0 }
-          description: Hissa Tippani document (optional)
+          $ref: "#/components/schemas/SurveyDocumentList"
+          description: Hissa Tippani document(s) (optional)
         atlas:
-          oneOf:
-            - type: string
-              format: uri
-              description: Document URL
-            - type: object
-              properties:
-                url: { type: string, format: uri }
-                fileName: { type: string }
-                mimeType: { type: string }
-                size: { type: integer, minimum: 0 }
-          description: Atlas document (optional)
+          $ref: "#/components/schemas/SurveyDocumentList"
+          description: Atlas document(s) (optional)
         rrPakkabook:
-          oneOf:
-            - type: string
-              format: uri
-              description: Document URL
-            - type: object
-              properties:
-                url: { type: string, format: uri }
-                fileName: { type: string }
-                mimeType: { type: string }
-                size: { type: integer, minimum: 0 }
-          description: RR Pakkabook document (optional)
+          $ref: "#/components/schemas/SurveyDocumentList"
+          description: RR Pakkabook document(s) (optional)
         kharabu:
-          oneOf:
-            - type: string
-              format: uri
-              description: Document URL
-            - type: object
-              properties:
-                url: { type: string, format: uri }
-                fileName: { type: string }
-                mimeType: { type: string }
-                size: { type: integer, minimum: 0 }
-          description: Kharabu document (optional)
+          $ref: "#/components/schemas/SurveyDocumentList"
+          description: Kharabu document(s) (optional)
         audio:
-          oneOf:
-            - type: string
-              format: uri
-              description: Audio file URL (e.g. audio remarks, voice notes)
-            - type: object
-              properties:
-                url: { type: string, format: uri }
-                fileName: { type: string }
-                mimeType: { type: string, description: "e.g. audio/mpeg, audio/wav" }
-                size: { type: integer, minimum: 0 }
-                uploadedAt: { type: string, format: date-time }
-          description: Optional audio file (single file). Can be a URL string or object with url, fileName, mimeType, size, uploadedAt.
+          $ref: "#/components/schemas/SurveyDocumentList"
+          description: Optional audio file(s) (URL string, object, or array)
         other_documents:
           type: array
           maxItems: 20
@@ -4420,65 +4671,30 @@ components:
         village: { type: string }
         surveyNo: { type: string }
         singleUpload:
-          oneOf:
-            - type: string
-              format: uri
-            - type: object
-              properties:
-                url: { type: string, format: uri }
-                fileName: { type: string }
-                mimeType: { type: string }
-                size: { type: integer, minimum: 0 }
+          $ref: "#/components/schemas/SurveyDocumentList"
+        files:
+          $ref: "#/components/schemas/SurveyDocumentList"
+          description: Alias of `singleUpload`
         moolaTippani:
-          oneOf:
-            - type: string
-              format: uri
-            - type: object
-              properties:
-                url: { type: string, format: uri }
-                fileName: { type: string }
-                mimeType: { type: string }
-                size: { type: integer, minimum: 0 }
+          $ref: "#/components/schemas/SurveyDocumentList"
         hissaTippani:
-          oneOf:
-            - type: string
-              format: uri
-            - type: object
-              properties:
-                url: { type: string, format: uri }
-                fileName: { type: string }
-                mimeType: { type: string }
-                size: { type: integer, minimum: 0 }
+          $ref: "#/components/schemas/SurveyDocumentList"
         atlas:
-          oneOf:
-            - type: string
-              format: uri
-            - type: object
-              properties:
-                url: { type: string, format: uri }
-                fileName: { type: string }
-                mimeType: { type: string }
-                size: { type: integer, minimum: 0 }
+          $ref: "#/components/schemas/SurveyDocumentList"
         rrPakkabook:
-          oneOf:
-            - type: string
-              format: uri
-            - type: object
-              properties:
-                url: { type: string, format: uri }
-                fileName: { type: string }
-                mimeType: { type: string }
-                size: { type: integer, minimum: 0 }
+          $ref: "#/components/schemas/SurveyDocumentList"
         kharabu:
-          oneOf:
-            - type: string
-              format: uri
-            - type: object
-              properties:
-                url: { type: string, format: uri }
-                fileName: { type: string }
-                mimeType: { type: string }
-                size: { type: integer, minimum: 0 }
+          $ref: "#/components/schemas/SurveyDocumentList"
+        audio:
+          $ref: "#/components/schemas/SurveyDocumentList"
+        other_documents:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/SurveyDocumentRef"
+        others:
+          type: string
+          maxLength: 2000
         is_originaltippani: { type: boolean }
         is_hissatippani: { type: boolean }
         is_atlas: { type: boolean }
@@ -4489,48 +4705,54 @@ components:
         isSuperimpose:
           type: boolean
           description: Optional flag on draft to mirror isSuperimpose on final upload.
-        audio:
-          oneOf:
-            - type: string
-              format: uri
-            - type: object
-              properties:
-                url: { type: string, format: uri }
-                fileName: { type: string }
-                mimeType: { type: string }
-                size: { type: integer, minimum: 0 }
-                uploadedAt: { type: string, format: date-time }
-        other_documents:
-          type: array
-          maxItems: 20
-          items:
-            oneOf:
-              - type: string
-                format: uri
-              - type: object
-                properties:
-                  url: { type: string, format: uri }
-                  fileName: { type: string }
-                  mimeType: { type: string }
-                  size: { type: integer, minimum: 0 }
-                  uploadedAt: { type: string, format: date-time }
-        others:
-          type: string
-          maxLength: 2000
 
-    UploadImageRequest:
+    UploadBatchFileItem:
       type: object
-      required: [fileName, contentType]
-      description: Request body for image/document upload presigned URL (images and PDFs)
+      required: [fileName]
       properties:
         fileName:
           type: string
           description: Original filename (used in S3 key)
+        contentType:
+          type: string
+          description: MIME type (inferred from extension when omitted)
+        fileSizeBytes:
+          type: integer
+          minimum: 0
+
+    UploadPresignedUrlResult:
+      type: object
+      properties:
+        signedUploadUrl: { type: string, format: uri }
+        uploadUrl: { type: string, format: uri }
+        publicFileUrl: { type: string, format: uri }
+        fileUrl: { type: string, format: uri }
+        key: { type: string }
+        contentType: { type: string }
+        uploadHeaders:
+          type: object
+          additionalProperties: { type: string }
+        bucket: { type: string }
+
+    UploadImageRequest:
+      type: object
+      description: |
+        Single file: provide `fileName` (+ optional `contentType`). Batch: provide `files` array (max 20) and omit top-level `fileName`.
+      properties:
+        fileName:
+          type: string
+          description: Original filename for single-file mode
           example: "sketch.png"
         contentType:
           type: string
           enum: [image/jpeg, image/jpg, image/png, image/gif, image/webp, application/pdf]
-          description: MIME type of the image or PDF document
+          description: MIME type for single-file mode
+        files:
+          type: array
+          maxItems: 20
+          description: Batch mode — one presigned URL per item
+          items:
+            $ref: "#/components/schemas/UploadBatchFileItem"
         entityId:
           type: string
           description: Optional grouping ID (e.g. drawingRequestId, surveyorSketchId)
@@ -4538,7 +4760,7 @@ components:
           type: integer
           minimum: 0
           maximum: 10485760
-          description: File size in bytes (max 10 MB); validated server-side if provided
+          description: File size in bytes (max 10 MB); single-file mode only
         expiresIn:
           type: integer
           minimum: 60
@@ -4547,17 +4769,23 @@ components:
 
     UploadAudioRequest:
       type: object
-      required: [fileName, contentType]
-      description: Request body for audio upload presigned URL
+      description: |
+        Single file: provide `fileName` (+ optional `contentType`). Batch: provide `files` array (max 20).
       properties:
         fileName:
           type: string
-          description: Original filename
+          description: Original filename for single-file mode
           example: "remark.mp3"
         contentType:
           type: string
           enum: [audio/mpeg, audio/mp3, audio/wav, audio/webm, audio/ogg, audio/m4a, audio/x-m4a]
-          description: MIME type of the audio
+          description: MIME type for single-file mode
+        files:
+          type: array
+          maxItems: 20
+          description: Batch mode — one presigned URL per item
+          items:
+            $ref: "#/components/schemas/UploadBatchFileItem"
         entityId:
           type: string
           description: Optional grouping ID
@@ -4565,7 +4793,7 @@ components:
           type: integer
           minimum: 0
           maximum: 26214400
-          description: File size in bytes (max 25 MB)
+          description: File size in bytes (max 25 MB); single-file mode only
         expiresIn:
           type: integer
           minimum: 60
@@ -4652,44 +4880,21 @@ components:
           type: string
         documents:
           type: object
-          description: Map of document keys to document objects
+          description: Map of document keys to file arrays (each key holds 0..n files)
           additionalProperties:
-            type: object
-            properties:
-              url:
-                type: string
-                format: uri
-              fileName:
-                type: string
-                nullable: true
-              mimeType:
-                type: string
-                nullable: true
-              size:
-                type: integer
-                nullable: true
-              uploadedAt:
-                type: string
-                format: date-time
+            type: array
+            items:
+              $ref: "#/components/schemas/SurveyDocumentObject"
         singleUpload:
-          type: object
-          description: Required single upload file
-          properties:
-            url: { type: string, format: uri }
-            fileName: { type: string, nullable: true }
-            mimeType: { type: string, nullable: true }
-            size: { type: integer, nullable: true }
-            uploadedAt: { type: string, format: date-time, nullable: true }
+          type: array
+          description: Combined upload bundle (one or more files)
+          items:
+            $ref: "#/components/schemas/SurveyDocumentObject"
         audio:
-          type: object
-          nullable: true
-          description: Optional audio file (single file)
-          properties:
-            url: { type: string, format: uri }
-            fileName: { type: string, nullable: true }
-            mimeType: { type: string, nullable: true }
-            size: { type: integer, nullable: true }
-            uploadedAt: { type: string, format: date-time, nullable: true }
+          type: array
+          description: Optional audio file(s)
+          items:
+            $ref: "#/components/schemas/SurveyDocumentObject"
         other_documents:
           type: array
           description: Optional extra documents (additional PDFs, images, etc.)
@@ -4739,18 +4944,13 @@ components:
           default: false
           description: "True when the surveyor indicated this upload is for a superimpose (overlay) workflow."
         cadDeliverable:
-          type: object
-          nullable: true
-          description: CAD output after deliver endpoint; surveyor uses url to download
-          properties:
-            url: { type: string, format: uri }
-            fileName: { type: string, nullable: true }
-            mimeType: { type: string, nullable: true }
-            size: { type: integer, nullable: true }
-            uploadedAt: { type: string, format: date-time, nullable: true }
+          type: array
+          description: Latest CAD output file(s) after deliver endpoint
+          items:
+            $ref: "#/components/schemas/SurveyDocumentObject"
         cadDeliverableHistory:
           type: array
-          description: All CAD submissions (original + revised versions). Latest file also appears in cadDeliverable.
+          description: All CAD submissions (original + revised versions). Latest files also appear in cadDeliverable.
           items:
             type: object
             properties:
@@ -4758,14 +4958,15 @@ components:
               isRevision: { type: boolean }
               submittedBy: { type: string, nullable: true }
               submittedAt: { type: string, format: date-time, nullable: true }
+              deliverables:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SurveyDocumentObject"
               deliverable:
-                type: object
-                properties:
-                  url: { type: string, format: uri }
-                  fileName: { type: string, nullable: true }
-                  mimeType: { type: string, nullable: true }
-                  size: { type: integer, nullable: true }
-                  uploadedAt: { type: string, format: date-time, nullable: true }
+                allOf:
+                  - $ref: "#/components/schemas/SurveyDocumentObject"
+                nullable: true
+                description: Legacy first file (same as deliverables[0])
         revisionRequests:
           type: array
           description: Surveyor revision requests with remarks/audio and status.
@@ -4888,22 +5089,13 @@ components:
         documents:
           type: object
           additionalProperties:
-            type: object
-            properties:
-              url: { type: string, format: uri }
-              fileName: { type: string, nullable: true }
-              mimeType: { type: string, nullable: true }
-              size: { type: integer, nullable: true }
-              uploadedAt: { type: string, format: date-time, nullable: true }
+            type: array
+            items:
+              $ref: "#/components/schemas/SurveyDocumentObject"
         singleUpload:
-          type: object
-          nullable: true
-          properties:
-            url: { type: string, format: uri }
-            fileName: { type: string, nullable: true }
-            mimeType: { type: string, nullable: true }
-            size: { type: integer, nullable: true }
-            uploadedAt: { type: string, format: date-time, nullable: true }
+          type: array
+          items:
+            $ref: "#/components/schemas/SurveyDocumentObject"
         is_originaltippani: { type: boolean }
         is_hissatippani: { type: boolean }
         is_atlas: { type: boolean }
@@ -4912,14 +5104,9 @@ components:
         is_kharabuttar: { type: boolean }
         is_mulapatra: { type: boolean }
         audio:
-          type: object
-          nullable: true
-          properties:
-            url: { type: string, format: uri }
-            fileName: { type: string, nullable: true }
-            mimeType: { type: string, nullable: true }
-            size: { type: integer, nullable: true }
-            uploadedAt: { type: string, format: date-time, nullable: true }
+          type: array
+          items:
+            $ref: "#/components/schemas/SurveyDocumentObject"
         other_documents:
           type: array
           items:
@@ -4931,6 +5118,60 @@ components:
               size: { type: integer, nullable: true }
               uploadedAt: { type: string, format: date-time, nullable: true }
         others: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CadUserFeedbackCreateRequest:
+      type: object
+      required: [rating]
+      properties:
+        rating:
+          type: number
+          minimum: 1
+          maximum: 5
+        remarks:
+          type: string
+          nullable: true
+          maxLength: 2000
+        audio:
+          type: object
+          nullable: true
+          properties:
+            url: { type: string, format: uri }
+            fileName: { type: string, nullable: true }
+            mimeType: { type: string, nullable: true }
+            size: { type: integer, nullable: true }
+
+    CadUserFeedback:
+      type: object
+      properties:
+        _id: { type: string }
+        assignment:
+          oneOf:
+            - type: string
+            - type: object
+              nullable: true
+        surveyor:
+          oneOf:
+            - type: string
+            - type: object
+              nullable: true
+        cadUser:
+          oneOf:
+            - type: string
+            - type: object
+              nullable: true
+        rating: { type: number, minimum: 1, maximum: 5 }
+        remarks: { type: string, nullable: true }
+        audio:
+          type: object
+          nullable: true
+          properties:
+            url: { type: string, format: uri }
+            fileName: { type: string, nullable: true }
+            mimeType: { type: string, nullable: true }
+            size: { type: integer, nullable: true }
+            uploadedAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
 

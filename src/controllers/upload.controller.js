@@ -10,7 +10,33 @@ const { ok } = require("../utils/response");
  * Get presigned URL for image upload.
  * Client: PUT file to uploadUrl, then use fileUrl in API payloads.
  */
+function mapUploadResult(result) {
+  return {
+    signedUploadUrl: result.uploadUrl,
+    uploadUrl: result.uploadUrl,
+    publicFileUrl: result.fileUrl,
+    fileUrl: result.fileUrl,
+    key: result.key,
+    contentType: result.contentType,
+    uploadHeaders: result.uploadHeaders,
+    bucket: result.bucket,
+    uploadInstructions:
+      "PUT raw file bytes to signedUploadUrl. Send exactly uploadHeaders (especially Content-Type). Do not add Authorization or extra x-amz-* headers.",
+  };
+}
+
 async function getImageUploadUrl(params, currentUser) {
+  if (Array.isArray(params.files) && params.files.length > 0) {
+    const result = await uploadService.getImageUploadUrls(params, currentUser);
+    return ok({
+      message:
+        "Upload each file with PUT to its signedUploadUrl, then use each publicFileUrl in your payload.",
+      files: result.files.map(mapUploadResult),
+      entityId: result.entityId,
+      bucket: result.bucket,
+    });
+  }
+
   const result = await uploadService.getImageUploadUrl(params, currentUser);
   return ok({
     message:
@@ -20,6 +46,11 @@ async function getImageUploadUrl(params, currentUser) {
     publicFileUrl: result.fileUrl,
     fileUrl: result.fileUrl,
     key: result.key,
+    contentType: result.contentType,
+    uploadHeaders: result.uploadHeaders,
+    bucket: result.bucket,
+    uploadInstructions:
+      "PUT raw file bytes to signedUploadUrl. Send exactly uploadHeaders (especially Content-Type). Do not add Authorization or extra x-amz-* headers.",
   });
 }
 
@@ -28,6 +59,17 @@ async function getImageUploadUrl(params, currentUser) {
  * Client: PUT file to uploadUrl, then use fileUrl in API payloads.
  */
 async function getAudioUploadUrl(params, currentUser) {
+  if (Array.isArray(params.files) && params.files.length > 0) {
+    const result = await uploadService.getAudioUploadUrls(params, currentUser);
+    return ok({
+      message:
+        "Upload each file with PUT to its signedUploadUrl, then use each publicFileUrl in your payload.",
+      files: result.files.map(mapUploadResult),
+      entityId: result.entityId,
+      bucket: result.bucket,
+    });
+  }
+
   const result = await uploadService.getAudioUploadUrl(params, currentUser);
   return ok({
     message:
@@ -37,6 +79,11 @@ async function getAudioUploadUrl(params, currentUser) {
     publicFileUrl: result.fileUrl,
     fileUrl: result.fileUrl,
     key: result.key,
+    contentType: result.contentType,
+    uploadHeaders: result.uploadHeaders,
+    bucket: result.bucket,
+    uploadInstructions:
+      "PUT raw file bytes to signedUploadUrl. Send exactly uploadHeaders (especially Content-Type). Do not add Authorization or extra x-amz-* headers.",
   });
 }
 

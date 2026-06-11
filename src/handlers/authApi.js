@@ -72,10 +72,16 @@ exports.handler = asyncHandler(async (event) => {
       return authHandler.getSurveyorSketchUpload(event);
     case "POST /api/surveyor/sketch-uploads/{uploadId}/revision-request":
       return authHandler.requestSketchRevision(event);
+    case "POST /api/surveyor/assignments/{assignmentId}/feedback":
+      return authHandler.createCadUserFeedback(event);
+    case "GET /api/surveyor/assignments/{assignmentId}/feedback":
+      return authHandler.getCadUserFeedback(event);
     case "POST /api/surveyor/sketch-drafts":
       return authHandler.createSurveyDraft(event);
     case "GET /api/surveyor/sketch-drafts":
       return authHandler.listSurveyDrafts(event);
+    case "GET /api/admin/survey-draft-reports":
+      return authHandler.listAdminSurveyDraftReports(event);
     case "GET /api/surveyor/sketch-drafts/{draftId}":
       return authHandler.getSurveyDraft(event);
     case "PATCH /api/surveyor/sketch-drafts/{draftId}":
@@ -91,6 +97,8 @@ exports.handler = asyncHandler(async (event) => {
       return authHandler.getSurveySketchAssignment(event);
     case "PATCH /api/admin/survey-sketch-assignments/{assignmentId}":
       return authHandler.updateSurveySketchAssignment(event);
+    case "POST /api/admin/survey-sketch-assignments/{assignmentId}/pullback-reassign":
+      return authHandler.pullbackAndReassignSurveySketchAssignment(event);
     case "GET /api/admin/cad-centers/{cadCenterId}/assignments":
       return authHandler.listAssignmentsByCadCenter(event);
 
@@ -126,6 +134,8 @@ exports.handler = asyncHandler(async (event) => {
       return authHandler.markCadWalletEntryPaid(event);
     case "POST /api/admin/cad-wallet-entries/{entryId}/record-payment":
       return authHandler.recordCadWalletPayment(event);
+    case "POST /api/admin/cad-wallet/pay-user":
+      return authHandler.recordCadWalletPaymentForUser(event);
     case "GET /api/notifications":
       return authHandler.listNotifications(event);
     case "GET /api/notifications/{notificationId}":

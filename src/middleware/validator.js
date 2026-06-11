@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const { BadRequestError } = require("../utils/errors");
 const { pickSurveyDocumentRaw } = require("../utils/surveyDocumentKeys");
+const { parseSurveyDocumentList } = require("../utils/surveyDocuments");
 
 const STATUS_ENUM = ["ACTIVE", "INACTIVE"];
 
@@ -631,19 +632,23 @@ const schemas = {
     };
   },
 
-  /** CAD: finished sketch file metadata (URL from presigned PUT). */
+  /** CAD: finished sketch file metadata (URL from presigned PUT). Single file or files[]. */
   cadSketchDeliverable(body) {
-    requireFields(body, ["url"]);
-    const url = String(body.url ?? "").trim();
-    if (!url) {
-      throw new BadRequestError("url is required", { errors: [{ field: "url", message: "Required" }] });
+    const { SURVEY_SKETCH_MAX_UPLOAD_FILES } = require("../config/constants");
+    if (body.files !== undefined) {
+      const files = parseSurveyDocumentList(body.files, {
+        maxItems: SURVEY_SKETCH_MAX_UPLOAD_FILES,
+        fieldName: "files",
+        required: true,
+      });
+      return { files };
     }
-    return {
-      url,
-      fileName: body.fileName != null ? String(body.fileName).trim() : undefined,
-      mimeType: body.mimeType != null ? String(body.mimeType).trim() : undefined,
-      size: body.size !== undefined && body.size !== null ? body.size : undefined,
-    };
+    const files = parseSurveyDocumentList(body, {
+      maxItems: 1,
+      fieldName: "url",
+      required: true,
+    });
+    return { files };
   },
 
   /** Surveyor: request sketch revision with optional remarks/audio. */
@@ -680,6 +685,40 @@ const schemas = {
       throw new BadRequestError("At least one of remarks or audio is required");
     }
     return payload;
+  },
+
+  surveyorCadFeedbackCreate(body) {
+    requireFields(body, ["rating"]);
+    const rating = Number(body.rating);
+    if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+      throw new BadRequestError("rating must be between 1 and 5", {
+        errors: [{ field: "rating", message: "Invalid value" }],
+      });
+    }
+    const out = {
+      rating: Math.round(rating * 10) / 10,
+      remarks: body.remarks != null ? String(body.remarks).trim().slice(0, 2000) || null : null,
+    };
+    if (body.audio !== undefined && body.audio !== null) {
+      if (typeof body.audio !== "object") {
+        throw new BadRequestError("audio must be an object", {
+          errors: [{ field: "audio", message: "Invalid value" }],
+        });
+      }
+      const url = String(body.audio.url ?? "").trim();
+      if (!url) {
+        throw new BadRequestError("audio.url is required when audio is provided", {
+          errors: [{ field: "audio.url", message: "Required" }],
+        });
+      }
+      out.audio = {
+        url,
+        fileName: body.audio.fileName != null ? String(body.audio.fileName).trim() : undefined,
+        mimeType: body.audio.mimeType != null ? String(body.audio.mimeType).trim() : undefined,
+        size: body.audio.size !== undefined && body.audio.size !== null ? body.audio.size : undefined,
+      };
+    }
+    return out;
   },
 
   /** CAD: respond to assignment – body optional; action "accept" | "reject", default "accept". */
@@ -726,6 +765,13 @@ const schemas = {
     return updates;
   },
 
+  adminAssignmentPullbackReassign(body) {
+    requireFields(body, ["assignedCadUserId"]);
+    const assignedCadUserId = validObjectId(String(body.assignedCadUserId).trim(), "assignedCadUserId");
+    const reason = body.reason != null ? String(body.reason).trim().slice(0, 1000) : null;
+    return { assignedCadUserId, reason };
+  },
+
   /**
    * Admin CAD wallet: either payFull (settle remaining balance) or a single tranche in paise or rupees.
    * Do not send payFull together with amountPaise / amountRupees.
@@ -769,6 +815,40 @@ const schemas = {
       });
     }
     return payFull ? { payFull: true } : { payFull: false, amountPaise };
+  },
+
+  adminCadWalletPayCadUser(body) {
+    requireFields(body, ["cadUserId"]);
+    const cadUserId = validObjectId(String(body.cadUserId).trim(), "cadUserId");
+    let amountPaise;
+    if (body.amountPaise !== undefined && body.amountPaise !== null && body.amountPaise !== "") {
+      const n = typeof body.amountPaise === "number" ? body.amountPaise : parseInt(String(body.amountPaise), 10);
+      if (!Number.isFinite(n) || n <= 0) {
+        throw new BadRequestError("amountPaise must be a positive integer", {
+          errors: [{ field: "amountPaise", message: "Invalid value" }],
+        });
+      }
+      amountPaise = n;
+    }
+    if (body.amountRupees !== undefined && body.amountRupees !== null && body.amountRupees !== "") {
+      if (amountPaise !== undefined) {
+        throw new BadRequestError("Send only one of amountPaise or amountRupees", {
+          errors: [{ field: "body", message: "Conflicting amount fields" }],
+        });
+      }
+      amountPaise = parseRupeesToPaise(body.amountRupees, "amountRupees");
+      if (amountPaise <= 0) {
+        throw new BadRequestError("amountRupees must be greater than zero", {
+          errors: [{ field: "amountRupees", message: "Invalid value" }],
+        });
+      }
+    }
+    if (amountPaise === undefined) {
+      throw new BadRequestError("Provide amountPaise or amountRupees", {
+        errors: [{ field: "body", message: "Missing amount" }],
+      });
+    }
+    return { cadUserId, amountPaise };
   },
 
   surveySketchAssignmentFlowUpdate(body) {
@@ -825,11 +905,11 @@ const schemas = {
   /**
    * Create surveyor sketch upload (survey info + document URLs).
    * Required: surveyType, district, taluka, hobli, village, surveyNo.
-   * At least one upload field is required: singleUpload OR known doc keys.
+   * At least one upload field is required: singleUpload (one or more files) OR known doc keys.
    * Optional: draftId (to cleanup submitted draft), others (string, max 2000).
    */
   surveyorSketchUploadCreate(body) {
-    const { SURVEY_SKETCH_DOCUMENT_KEYS } = require("../config/constants");
+    const { SURVEY_SKETCH_DOCUMENT_KEYS, SURVEY_SKETCH_MAX_UPLOAD_FILES } = require("../config/constants");
     requireFields(body, ["surveyType", "district", "taluka", "hobli", "village", "surveyNo"]);
 
     const surveyType = String(body.surveyType).toLowerCase().trim();
@@ -855,44 +935,30 @@ const schemas = {
     for (const key of SURVEY_SKETCH_DOCUMENT_KEYS) {
       const raw = pickSurveyDocumentRaw(body, key);
       if (raw == null || raw === "") continue;
-      const url = typeof raw === "string" ? raw.trim() : (raw.url || raw.path || "").toString().trim();
-      if (!url) continue;
-      documents[key] =
-        typeof raw === "string"
-          ? { url }
-          : {
-              url,
-              fileName: raw.fileName != null ? String(raw.fileName).trim() : null,
-              mimeType: raw.mimeType != null ? String(raw.mimeType).trim() : null,
-              size: raw.size != null ? Number(raw.size) : null,
-              uploadedAt: raw.uploadedAt ? new Date(raw.uploadedAt) : new Date(),
-            };
+      const entries = parseSurveyDocumentList(raw, {
+        maxItems: SURVEY_SKETCH_MAX_UPLOAD_FILES,
+        fieldName: key,
+      });
+      if (entries.length) documents[key] = entries;
     }
-    const singleUploadRaw = body.singleUpload;
-    const singleUploadUrl =
-      typeof singleUploadRaw === "string"
-        ? singleUploadRaw.trim()
-        : (singleUploadRaw?.url || singleUploadRaw?.path || "").toString().trim();
-    const singleUpload = !singleUploadUrl
-      ? null
-      : typeof singleUploadRaw === "string"
-        ? { url: singleUploadUrl }
-        : {
-            url: singleUploadUrl,
-            fileName: singleUploadRaw.fileName != null ? String(singleUploadRaw.fileName).trim() : null,
-            mimeType: singleUploadRaw.mimeType != null ? String(singleUploadRaw.mimeType).trim() : null,
-            size: singleUploadRaw.size != null ? Number(singleUploadRaw.size) : null,
-            uploadedAt: singleUploadRaw.uploadedAt ? new Date(singleUploadRaw.uploadedAt) : new Date(),
-          };
+    const uploadFilesRaw =
+      body.singleUpload !== undefined && body.singleUpload !== null && body.singleUpload !== ""
+        ? body.singleUpload
+        : body.files;
+    const singleUpload = parseSurveyDocumentList(uploadFilesRaw, {
+      maxItems: SURVEY_SKETCH_MAX_UPLOAD_FILES,
+      fieldName: body.singleUpload !== undefined ? "singleUpload" : "files",
+    });
 
-    if (!singleUpload && Object.keys(documents).length === 0) {
+    const hasTypedDocuments = Object.values(documents).some((entries) => entries.length > 0);
+    if (!singleUpload.length && !hasTypedDocuments) {
       throw new BadRequestError(
-        "Provide at least one upload: singleUpload or one of moolaTippani/hissaTippani/atlas/rrPakkabook/kharabu",
+        "Provide at least one upload: singleUpload, files, or one of moolaTippani/hissaTippani/atlas/rrPakkabook/kharabu",
         {
           errors: [
             {
               field: "singleUpload",
-              message: "Either singleUpload or any known document key is required",
+              message: "Either singleUpload, files, or any known document key is required",
             },
           ],
         }
@@ -909,50 +975,15 @@ const schemas = {
       }
     }
 
-    // Optional audio: single file (string URL or object with url, fileName?, mimeType?, size?, uploadedAt?)
-    let audio = null;
-    if (body.audio != null && body.audio !== "") {
-      const raw = body.audio;
-      const url = typeof raw === "string" ? raw.trim() : (raw?.url || raw?.path || "").toString().trim();
-      if (url) {
-        audio =
-          typeof raw === "string"
-            ? { url }
-            : {
-                url,
-                fileName: raw.fileName != null ? String(raw.fileName).trim() : null,
-                mimeType: raw.mimeType != null ? String(raw.mimeType).trim() : null,
-                size: raw.size != null ? Number(raw.size) : null,
-                uploadedAt: raw.uploadedAt ? new Date(raw.uploadedAt) : new Date(),
-              };
-      }
-    }
+    const audio = parseSurveyDocumentList(body.audio, {
+      maxItems: SURVEY_SKETCH_MAX_UPLOAD_FILES,
+      fieldName: "audio",
+    });
 
-    // Optional other_documents: array of { url, fileName?, mimeType?, size?, uploadedAt? } (extra files, not audio)
-    let other_documents = [];
-    if (Array.isArray(body.other_documents) && body.other_documents.length > 0) {
-      const maxOtherDocs = 20;
-      if (body.other_documents.length > maxOtherDocs) {
-        throw new BadRequestError(`other_documents must have at most ${maxOtherDocs} items`, {
-          errors: [{ field: "other_documents", message: `Max ${maxOtherDocs} items` }],
-        });
-      }
-      for (const raw of body.other_documents) {
-        const url = typeof raw === "string" ? raw.trim() : (raw?.url || raw?.path || "").toString().trim();
-        if (!url) continue;
-        other_documents.push(
-          typeof raw === "string"
-            ? { url }
-            : {
-                url,
-                fileName: raw.fileName != null ? String(raw.fileName).trim() : null,
-                mimeType: raw.mimeType != null ? String(raw.mimeType).trim() : null,
-                size: raw.size != null ? Number(raw.size) : null,
-                uploadedAt: raw.uploadedAt ? new Date(raw.uploadedAt) : new Date(),
-              }
-        );
-      }
-    }
+    const other_documents = parseSurveyDocumentList(body.other_documents, {
+      maxItems: SURVEY_SKETCH_MAX_UPLOAD_FILES,
+      fieldName: "other_documents",
+    });
 
     // Document indicator booleans.
     // Map from document key → boolean field name for auto-derivation.
@@ -983,9 +1014,9 @@ const schemas = {
     const isSuperimpose =
       body.isSuperimpose === true || body.isSuperimpose === "true" ? true : undefined;
 
-    // Auto-set to true when the corresponding separate file was uploaded
+    // Auto-set to true when the corresponding separate file(s) were uploaded
     for (const [docKey, flagName] of Object.entries(DOC_KEY_TO_FLAG)) {
-      if (documents[docKey]) {
+      if (Array.isArray(documents[docKey]) && documents[docKey].length > 0) {
         indicators[flagName] = true;
       }
     }
@@ -999,10 +1030,10 @@ const schemas = {
       surveyNo,
       draftId: body.draftId != null && body.draftId !== "" ? validObjectId(body.draftId, "draftId") : undefined,
       documents,
-      singleUpload: singleUpload || undefined,
+      singleUpload: singleUpload.length ? singleUpload : undefined,
       ...indicators,
       isSuperimpose,
-      audio: audio || undefined,
+      audio: audio.length ? audio : undefined,
       others: others || undefined,
       other_documents: other_documents.length ? other_documents : undefined,
     };
@@ -1012,7 +1043,7 @@ const schemas = {
    * Survey draft payload parser (create/update): all fields optional for partial save.
    */
   surveyDraftUpsert(body, { requireAtLeastOne = false } = {}) {
-    const { SURVEY_SKETCH_DOCUMENT_KEYS } = require("../config/constants");
+    const { SURVEY_SKETCH_DOCUMENT_KEYS, SURVEY_SKETCH_MAX_UPLOAD_FILES } = require("../config/constants");
     const payload = {};
 
     if (body.surveyType !== undefined) {
@@ -1038,45 +1069,26 @@ const schemas = {
       if (raw === undefined) continue;
       hasAnyDocumentField = true;
       if (raw == null || raw === "") continue;
-      const url = typeof raw === "string" ? raw.trim() : (raw.url || raw.path || "").toString().trim();
-      if (!url) continue;
-      documents[key] =
-        typeof raw === "string"
-          ? { url }
-          : {
-              url,
-              fileName: raw.fileName != null ? String(raw.fileName).trim() : null,
-              mimeType: raw.mimeType != null ? String(raw.mimeType).trim() : null,
-              size: raw.size != null ? Number(raw.size) : null,
-              uploadedAt: raw.uploadedAt ? new Date(raw.uploadedAt) : new Date(),
-            };
+      const entries = parseSurveyDocumentList(raw, {
+        maxItems: SURVEY_SKETCH_MAX_UPLOAD_FILES,
+        fieldName: key,
+      });
+      if (entries.length) documents[key] = entries;
     }
     if (hasAnyDocumentField) payload.documents = documents;
 
-    if (body.singleUpload !== undefined) {
-      const singleUploadRaw = body.singleUpload;
-      if (singleUploadRaw === null || singleUploadRaw === "") {
-        payload.singleUpload = null;
+    if (body.singleUpload !== undefined || body.files !== undefined) {
+      const uploadFilesRaw =
+        body.singleUpload !== undefined && body.singleUpload !== null && body.singleUpload !== ""
+          ? body.singleUpload
+          : body.files;
+      if (uploadFilesRaw == null || uploadFilesRaw === "") {
+        payload.singleUpload = [];
       } else {
-        const singleUploadUrl =
-          typeof singleUploadRaw === "string"
-            ? singleUploadRaw.trim()
-            : (singleUploadRaw?.url || singleUploadRaw?.path || "").toString().trim();
-        if (!singleUploadUrl) {
-          throw new BadRequestError("singleUpload must have a non-empty url", {
-            errors: [{ field: "singleUpload", message: "Invalid value" }],
-          });
-        }
-        payload.singleUpload =
-          typeof singleUploadRaw === "string"
-            ? { url: singleUploadUrl }
-            : {
-                url: singleUploadUrl,
-                fileName: singleUploadRaw.fileName != null ? String(singleUploadRaw.fileName).trim() : null,
-                mimeType: singleUploadRaw.mimeType != null ? String(singleUploadRaw.mimeType).trim() : null,
-                size: singleUploadRaw.size != null ? Number(singleUploadRaw.size) : null,
-                uploadedAt: singleUploadRaw.uploadedAt ? new Date(singleUploadRaw.uploadedAt) : new Date(),
-              };
+        payload.singleUpload = parseSurveyDocumentList(uploadFilesRaw, {
+          maxItems: SURVEY_SKETCH_MAX_UPLOAD_FILES,
+          fieldName: body.singleUpload !== undefined ? "singleUpload" : "files",
+        });
       }
     }
 
@@ -1099,24 +1111,13 @@ const schemas = {
     }
 
     if (body.audio !== undefined) {
-      const raw = body.audio;
-      if (raw == null || raw === "") {
-        payload.audio = null;
+      if (body.audio == null || body.audio === "") {
+        payload.audio = [];
       } else {
-        const url = typeof raw === "string" ? raw.trim() : (raw?.url || raw?.path || "").toString().trim();
-        if (!url) payload.audio = null;
-        else {
-          payload.audio =
-            typeof raw === "string"
-              ? { url }
-              : {
-                  url,
-                  fileName: raw.fileName != null ? String(raw.fileName).trim() : null,
-                  mimeType: raw.mimeType != null ? String(raw.mimeType).trim() : null,
-                  size: raw.size != null ? Number(raw.size) : null,
-                  uploadedAt: raw.uploadedAt ? new Date(raw.uploadedAt) : new Date(),
-                };
-        }
+        payload.audio = parseSurveyDocumentList(body.audio, {
+          maxItems: SURVEY_SKETCH_MAX_UPLOAD_FILES,
+          fieldName: "audio",
+        });
       }
     }
 
@@ -1124,30 +1125,10 @@ const schemas = {
       if (body.other_documents == null) {
         payload.other_documents = [];
       } else {
-        if (!Array.isArray(body.other_documents)) {
-          throw new BadRequestError("other_documents must be an array");
-        }
-        const maxOtherDocs = 20;
-        if (body.other_documents.length > maxOtherDocs) {
-          throw new BadRequestError(`other_documents must have at most ${maxOtherDocs} items`, {
-            errors: [{ field: "other_documents", message: `Max ${maxOtherDocs} items` }],
-          });
-        }
-        payload.other_documents = body.other_documents
-          .map((raw) => {
-            const url = typeof raw === "string" ? raw.trim() : (raw?.url || raw?.path || "").toString().trim();
-            if (!url) return null;
-            return typeof raw === "string"
-              ? { url }
-              : {
-                  url,
-                  fileName: raw.fileName != null ? String(raw.fileName).trim() : null,
-                  mimeType: raw.mimeType != null ? String(raw.mimeType).trim() : null,
-                  size: raw.size != null ? Number(raw.size) : null,
-                  uploadedAt: raw.uploadedAt ? new Date(raw.uploadedAt) : new Date(),
-                };
-          })
-          .filter(Boolean);
+        payload.other_documents = parseSurveyDocumentList(body.other_documents, {
+          maxItems: SURVEY_SKETCH_MAX_UPLOAD_FILES,
+          fieldName: "other_documents",
+        });
       }
     }
 
@@ -1199,18 +1180,43 @@ const schemas = {
   // -------- Upload (image / audio only) --------
   /** Request body for image upload URL. Required: fileName, contentType. Optional: entityId, fileSizeBytes, expiresIn. */
   uploadImage(body) {
-    requireFields(body, ["fileName", "contentType"]);
+    const { UPLOAD_BATCH_MAX_FILES } = require("../config/constants");
+    if (Array.isArray(body.files) && body.files.length > 0) {
+      if (body.files.length > UPLOAD_BATCH_MAX_FILES) {
+        throw new BadRequestError(`files must have at most ${UPLOAD_BATCH_MAX_FILES} items`, {
+          errors: [{ field: "files", message: `Max ${UPLOAD_BATCH_MAX_FILES} items` }],
+        });
+      }
+      const files = body.files.map((item, index) => {
+        const fileName = String(item?.fileName || "").trim();
+        if (!fileName) {
+          throw new BadRequestError("fileName is required for each file", {
+            errors: [{ field: `files[${index}].fileName`, message: "Required" }],
+          });
+        }
+        return {
+          fileName,
+          contentType: item?.contentType,
+          fileSizeBytes: item?.fileSizeBytes != null ? Number(item.fileSizeBytes) : undefined,
+        };
+      });
+      return {
+        files,
+        entityId: body.entityId != null ? String(body.entityId).trim() : undefined,
+        expiresIn: body.expiresIn != null ? parseInt(body.expiresIn, 10) : undefined,
+      };
+    }
+
+    requireFields(body, ["fileName"]);
     const fileName = String(body.fileName || "").trim();
-    if (!fileName) throw new BadRequestError("fileName is required and must be non-empty", { errors: [{ field: "fileName", message: "Required" }] });
-    const contentType = String(body.contentType || "").trim().toLowerCase();
-    if (!contentType) throw new BadRequestError("contentType is required", { errors: [{ field: "contentType", message: "Required" }] });
-    const { UPLOAD_IMAGE_MIME_TYPES } = require("../config/constants");
-    if (!UPLOAD_IMAGE_MIME_TYPES.includes(contentType)) {
-      throw new BadRequestError(`contentType must be one of: ${UPLOAD_IMAGE_MIME_TYPES.join(", ")}`, { errors: [{ field: "contentType", message: "Invalid image type" }] });
+    if (!fileName) {
+      throw new BadRequestError("fileName is required and must be non-empty", {
+        errors: [{ field: "fileName", message: "Required" }],
+      });
     }
     return {
       fileName,
-      contentType,
+      contentType: body.contentType,
       entityId: body.entityId != null ? String(body.entityId).trim() : undefined,
       fileSizeBytes: body.fileSizeBytes != null ? Number(body.fileSizeBytes) : undefined,
       expiresIn: body.expiresIn != null ? parseInt(body.expiresIn, 10) : undefined,
@@ -1219,18 +1225,43 @@ const schemas = {
 
   /** Request body for audio upload URL. Required: fileName, contentType. Optional: entityId, fileSizeBytes, expiresIn. */
   uploadAudio(body) {
-    requireFields(body, ["fileName", "contentType"]);
+    const { UPLOAD_BATCH_MAX_FILES } = require("../config/constants");
+    if (Array.isArray(body.files) && body.files.length > 0) {
+      if (body.files.length > UPLOAD_BATCH_MAX_FILES) {
+        throw new BadRequestError(`files must have at most ${UPLOAD_BATCH_MAX_FILES} items`, {
+          errors: [{ field: "files", message: `Max ${UPLOAD_BATCH_MAX_FILES} items` }],
+        });
+      }
+      const files = body.files.map((item, index) => {
+        const fileName = String(item?.fileName || "").trim();
+        if (!fileName) {
+          throw new BadRequestError("fileName is required for each file", {
+            errors: [{ field: `files[${index}].fileName`, message: "Required" }],
+          });
+        }
+        return {
+          fileName,
+          contentType: item?.contentType,
+          fileSizeBytes: item?.fileSizeBytes != null ? Number(item.fileSizeBytes) : undefined,
+        };
+      });
+      return {
+        files,
+        entityId: body.entityId != null ? String(body.entityId).trim() : undefined,
+        expiresIn: body.expiresIn != null ? parseInt(body.expiresIn, 10) : undefined,
+      };
+    }
+
+    requireFields(body, ["fileName"]);
     const fileName = String(body.fileName || "").trim();
-    if (!fileName) throw new BadRequestError("fileName is required and must be non-empty", { errors: [{ field: "fileName", message: "Required" }] });
-    const contentType = String(body.contentType || "").trim().toLowerCase();
-    if (!contentType) throw new BadRequestError("contentType is required", { errors: [{ field: "contentType", message: "Required" }] });
-    const { UPLOAD_AUDIO_MIME_TYPES } = require("../config/constants");
-    if (!UPLOAD_AUDIO_MIME_TYPES.includes(contentType)) {
-      throw new BadRequestError(`contentType must be one of: ${UPLOAD_AUDIO_MIME_TYPES.join(", ")}`, { errors: [{ field: "contentType", message: "Invalid audio type" }] });
+    if (!fileName) {
+      throw new BadRequestError("fileName is required and must be non-empty", {
+        errors: [{ field: "fileName", message: "Required" }],
+      });
     }
     return {
       fileName,
-      contentType,
+      contentType: body.contentType,
       entityId: body.entityId != null ? String(body.entityId).trim() : undefined,
       fileSizeBytes: body.fileSizeBytes != null ? Number(body.fileSizeBytes) : undefined,
       expiresIn: body.expiresIn != null ? parseInt(body.expiresIn, 10) : undefined,

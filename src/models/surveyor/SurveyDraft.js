@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const { SURVEY_FLAT_TYPE } = require("../../config/constants");
+const { normalizeStoredDocumentList, normalizeDocumentsField } = require("../../utils/surveyDocuments");
 
 const SurveyDocumentSchema = new mongoose.Schema(
   {
@@ -34,12 +35,12 @@ const SurveyDraftSchema = new mongoose.Schema(
 
     documents: {
       type: Map,
-      of: SurveyDocumentSchema,
+      of: [SurveyDocumentSchema],
       default: () => new Map(),
     },
     singleUpload: {
-      type: SurveyDocumentSchema,
-      default: null,
+      type: [SurveyDocumentSchema],
+      default: () => [],
     },
 
     is_originaltippani: { type: Boolean, default: false },
@@ -51,7 +52,7 @@ const SurveyDraftSchema = new mongoose.Schema(
     is_mulapatra: { type: Boolean, default: false },
     isSuperimpose: { type: Boolean, default: false },
 
-    audio: { type: SurveyDocumentSchema, default: null },
+    audio: { type: [SurveyDocumentSchema], default: () => [] },
     other_documents: { type: [SurveyDocumentSchema], default: () => [] },
     others: { type: String, trim: true, default: null, maxlength: 2000 },
 
@@ -65,5 +66,23 @@ const SurveyDraftSchema = new mongoose.Schema(
 
 SurveyDraftSchema.index({ surveyor: 1, deletedAt: 1, updatedAt: -1 });
 SurveyDraftSchema.index({ deletedAt: 1, updatedAt: -1 });
+
+function normalizeDraftDoc(doc, { forSerialization = false } = {}) {
+  if (!doc || typeof doc !== "object") return doc;
+  doc.singleUpload = normalizeStoredDocumentList(doc.singleUpload);
+  doc.audio = normalizeStoredDocumentList(doc.audio);
+  doc.documents = normalizeDocumentsField(doc.documents, { asPlainObject: forSerialization });
+  return doc;
+}
+
+SurveyDraftSchema.post("init", function normalizeLegacyDraftUploadFields() {
+  normalizeDraftDoc(this, { forSerialization: false });
+});
+
+SurveyDraftSchema.set("toJSON", {
+  transform(_doc, ret) {
+    return normalizeDraftDoc(ret, { forSerialization: true });
+  },
+});
 
 module.exports = mongoose.models.SurveyDraft || mongoose.model("SurveyDraft", SurveyDraftSchema);

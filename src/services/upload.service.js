@@ -67,6 +67,44 @@ function normalizeContentType(contentType) {
   return (contentType || "").trim().toLowerCase();
 }
 
+/** When the browser sends application/octet-stream, infer from file extension (common for PDF). */
+function inferContentType(fileName, contentType) {
+  const ct = normalizeContentType(contentType);
+  if (ct && ct !== "application/octet-stream") return ct;
+  const ext = String(fileName || "")
+    .toLowerCase()
+    .split(".")
+    .pop();
+  const byExt = {
+    pdf: "application/pdf",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+  };
+  return byExt[ext] || ct || "application/octet-stream";
+}
+
+function inferAudioContentType(fileName, contentType) {
+  const ct = normalizeContentType(contentType);
+  if (ct && ct !== "application/octet-stream") return ct;
+  const ext = String(fileName || "")
+    .toLowerCase()
+    .split(".")
+    .pop();
+  const byExt = {
+    mp3: "audio/mpeg",
+    mpeg: "audio/mpeg",
+    wav: "audio/wav",
+    webm: "audio/webm",
+    ogg: "audio/ogg",
+    m4a: "audio/mp4",
+    mp4: "audio/mp4",
+  };
+  return byExt[ext] || ct || "application/octet-stream";
+}
+
 /**
  * Validate image upload params. Returns normalized contentType.
  * @throws {BadRequestError}
@@ -80,7 +118,7 @@ function validateImageUpload(params) {
     });
   }
 
-  const ct = normalizeContentType(contentType);
+  const ct = inferContentType(fileName, contentType);
   if (!ct) {
     throw new BadRequestError("contentType is required", {
       errors: [{ field: "contentType", message: "Required" }],
@@ -119,7 +157,7 @@ function validateAudioUpload(params) {
     });
   }
 
-  const ct = normalizeContentType(contentType);
+  const ct = inferAudioContentType(fileName, contentType);
   if (!ct) {
     throw new BadRequestError("contentType is required", {
       errors: [{ field: "contentType", message: "Required" }],
@@ -180,7 +218,14 @@ async function getImageUploadUrl(params, user = null) {
     userId: user ? (user._id || user.id) : "anonymous",
   });
 
-  return { uploadUrl, fileUrl, key };
+  return {
+    uploadUrl,
+    fileUrl,
+    key,
+    contentType,
+    uploadHeaders: { "Content-Type": contentType },
+    bucket: BUCKET,
+  };
 }
 
 /**
@@ -218,7 +263,14 @@ async function getAudioUploadUrl(params, user = null) {
     userId: user ? (user._id || user.id) : "anonymous",
   });
 
-  return { uploadUrl, fileUrl, key };
+  return {
+    uploadUrl,
+    fileUrl,
+    key,
+    contentType,
+    uploadHeaders: { "Content-Type": contentType },
+    bucket: BUCKET,
+  };
 }
 
 /**
@@ -262,9 +314,57 @@ async function deleteUpload(params, user) {
   return { deleted: true, key };
 }
 
+async function getImageUploadUrls(params, user = null) {
+  assertCanUploadIfAuthenticated(user);
+  const entityId = (params.entityId || "misc").toString().trim() || "misc";
+  const expiresIn = Math.min(
+    Math.max(parseInt(params.expiresIn, 10) || UPLOAD_PRESIGNED_EXPIRES_SECONDS, 60),
+    3600
+  );
+  const files = [];
+  for (const item of params.files || []) {
+  // eslint-disable-next-line no-await-in-loop
+    const result = await getImageUploadUrl(
+      {
+        ...item,
+        entityId,
+        expiresIn,
+      },
+      user
+    );
+    files.push(result);
+  }
+  return { files, entityId, bucket: BUCKET };
+}
+
+async function getAudioUploadUrls(params, user = null) {
+  assertCanUploadIfAuthenticated(user);
+  const entityId = (params.entityId || "misc").toString().trim() || "misc";
+  const expiresIn = Math.min(
+    Math.max(parseInt(params.expiresIn, 10) || UPLOAD_PRESIGNED_EXPIRES_SECONDS, 60),
+    3600
+  );
+  const files = [];
+  for (const item of params.files || []) {
+  // eslint-disable-next-line no-await-in-loop
+    const result = await getAudioUploadUrl(
+      {
+        ...item,
+        entityId,
+        expiresIn,
+      },
+      user
+    );
+    files.push(result);
+  }
+  return { files, entityId, bucket: BUCKET };
+}
+
 module.exports = {
   getImageUploadUrl,
   getAudioUploadUrl,
+  getImageUploadUrls,
+  getAudioUploadUrls,
   deleteUpload,
   validateImageUpload,
   validateAudioUpload,

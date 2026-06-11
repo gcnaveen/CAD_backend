@@ -4,6 +4,7 @@
  */
 
 const District = require("../../models/masters/District");
+const { MASTER_STATUS } = require("../../config/constants");
 const { NotFoundError, ConflictError } = require("../../utils/errors");
 const mongoose = require("mongoose");
 
@@ -40,8 +41,9 @@ async function getByName(name) {
 }
 
 async function list(filters = {}, pagination = null) {
-  const query = {};
-  if (filters.status) query.status = filters.status;
+  const query = {
+    status: filters.status || MASTER_STATUS.ACTIVE,
+  };
   const sort = { name: 1 };
   if (!pagination) {
     return District.find(query).sort(sort).lean();

@@ -5,6 +5,7 @@ const surveyorSketchUploadController = require("../controllers/surveyorSketchUpl
 const surveyDraftController = require("../controllers/surveyDraft.controller");
 const surveySketchAssignmentController = require("../controllers/assignment/surveySketchAssignment.controller");
 const cadWalletController = require("../controllers/cad/cadWallet.controller");
+const cadUserFeedbackController = require("../controllers/cad/cadUserFeedback.controller");
 const surveySketchAssignmentFlowController = require("../controllers/config/surveySketchAssignmentFlow.controller");
 const sketchPricingAdminController = require("../controllers/config/sketchPricingAdmin.controller");
 const notificationController = require("../controllers/notification.controller");
@@ -269,6 +270,26 @@ exports.requestSketchRevision = asyncHandler(async (event) => {
   return await surveySketchAssignmentController.requestSketchRevision(uploadId, user, body);
 });
 
+// -------- Surveyor: Feedback for assigned CAD user --------
+exports.createCadUserFeedback = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SURVEYOR)(event);
+  const { assignmentId } = getPathParams(event);
+  if (!assignmentId) throw new BadRequestError("assignmentId is required");
+  validObjectId(assignmentId, "assignmentId");
+  const body = validate(schemas.surveyorCadFeedbackCreate)(event);
+  return await cadUserFeedbackController.createCadUserFeedback(user, assignmentId, body);
+});
+
+exports.getCadUserFeedback = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SURVEYOR, USER_ROLES.CAD, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)(event);
+  const { assignmentId } = getPathParams(event);
+  if (!assignmentId) throw new BadRequestError("assignmentId is required");
+  validObjectId(assignmentId, "assignmentId");
+  return await cadUserFeedbackController.getCadUserFeedback(user, assignmentId);
+});
+
 exports.listSurveyorSketchUploads = asyncHandler(async (event) => {
   await ensureDb();
   const { user } = await authorize(USER_ROLES.SURVEYOR, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)(event);
@@ -307,6 +328,19 @@ exports.createSurveyDraft = asyncHandler(async (event) => {
 exports.listSurveyDrafts = asyncHandler(async (event) => {
   await ensureDb();
   const { user } = await authorize(USER_ROLES.SURVEYOR, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)(event);
+  const q = getQueryParams(event);
+  const options = {
+    page: q.page,
+    limit: q.limit,
+    surveyorId: q.surveyorId,
+  };
+  return await surveyDraftController.listDrafts(user, options);
+});
+
+// -------- Admin: List all survey draft reports --------
+exports.listAdminSurveyDraftReports = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)(event);
   const q = getQueryParams(event);
   const options = {
     page: q.page,
@@ -440,6 +474,16 @@ exports.updateSurveySketchAssignment = asyncHandler(async (event) => {
   return await surveySketchAssignmentController.updateAssignment(assignmentId, body, user);
 });
 
+exports.pullbackAndReassignSurveySketchAssignment = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const { assignmentId } = getPathParams(event);
+  if (!assignmentId) throw new BadRequestError("assignmentId is required");
+  validObjectId(assignmentId, "assignmentId");
+  const body = validate(schemas.adminAssignmentPullbackReassign)(event);
+  return await surveySketchAssignmentController.pullbackAndReassignAssignment(assignmentId, body, user);
+});
+
 // -------- CAD: Accept or reject assignment (ASSIGNED → IN_PROGRESS or CANCELLED) --------
 exports.acceptAssignmentByCad = asyncHandler(async (event) => {
   await ensureDb();
@@ -513,6 +557,14 @@ exports.recordCadWalletPayment = asyncHandler(async (event) => {
   validObjectId(entryId, "entryId");
   const body = validate(schemas.adminCadWalletRecordPayment)(event);
   return await cadWalletController.recordWalletPayment(user, entryId, body);
+});
+
+// -------- Admin: Pay CAD user by amount (auto-allocates to pending wallet entries) --------
+exports.recordCadWalletPaymentForUser = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const body = validate(schemas.adminCadWalletPayCadUser)(event);
+  return await cadWalletController.recordWalletPaymentForCadUser(user, body);
 });
 
 // -------- CAD: Get source sketch upload (inputs) for work --------

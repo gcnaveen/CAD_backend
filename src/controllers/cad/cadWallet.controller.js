@@ -30,9 +30,15 @@ async function recordWalletPayment(actor, entryId, payload) {
   return ok(data);
 }
 
+async function recordWalletPaymentForCadUser(actor, payload) {
+  const data = await cadWalletService.recordPaymentForCadUser(payload.cadUserId, actor, payload);
+  return ok(data);
+}
+
 module.exports = {
   getWalletSummary,
   listWalletTransactions,
   markWalletEntryPaid,
   recordWalletPayment,
+  recordWalletPaymentForCadUser,
 };

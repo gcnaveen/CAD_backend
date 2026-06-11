@@ -319,6 +319,57 @@ async function markEntryPaid(entryId, actor) {
   return recordPayment(entryId, actor, { payFull: true });
 }
 
+/**
+ * Admin payout by CAD user + amount.
+ * Applies payment to oldest pending ledger entries first.
+ */
+async function recordPaymentForCadUser(cadUserId, actor, { amountPaise }) {
+  const uid =
+    cadUserId instanceof mongoose.Types.ObjectId
+      ? cadUserId
+      : new mongoose.Types.ObjectId(String(cadUserId));
+
+  const amount = Math.floor(Number(amountPaise) || 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new BadRequestError("amountPaise must be a positive integer", {
+      code: "INVALID_PAYMENT_AMOUNT",
+    });
+  }
+
+  let remainingToApply = amount;
+  const pendingRows = await CadWalletLedger.find({ cadUser: uid, status: CAD_WALLET_ENTRY_STATUS.PENDING })
+    .sort({ createdAt: 1, _id: 1 })
+    .lean();
+
+  const touchedEntryIds = [];
+  for (const row of pendingRows) {
+    if (remainingToApply <= 0) break;
+    const paid = effectivePaidPaise(row);
+    const total = Math.max(0, Number(row.amountPaise) || 0);
+    const remaining = Math.max(0, total - paid);
+    if (remaining <= 0) continue;
+    const delta = Math.min(remainingToApply, remaining);
+    await recordPayment(row._id, actor, { payFull: false, amountPaise: delta });
+    touchedEntryIds.push(row._id);
+    remainingToApply -= delta;
+  }
+
+  const appliedPaise = amount - remainingToApply;
+  const cadSummary = await getSummaryForCad(uid);
+
+  return {
+    cadUserId: uid,
+    requestedAmountPaise: amount,
+    requestedAmountRupees: paiseToRupees(amount),
+    appliedAmountPaise: appliedPaise,
+    appliedAmountRupees: paiseToRupees(appliedPaise),
+    unappliedAmountPaise: remainingToApply,
+    unappliedAmountRupees: paiseToRupees(remainingToApply),
+    touchedEntryIds,
+    summary: cadSummary,
+  };
+}
+
 module.exports = {
   getInitialDeliveryPayoutPaise,
   getRevisionDeliveryPayoutPaise,
@@ -326,6 +377,7 @@ module.exports = {
   getSummaryForCad,
   listTransactionsForCad,
   recordPayment,
+  recordPaymentForCadUser,
   markEntryPaid,
   effectivePaidPaise,
   paidPercentForDoc,

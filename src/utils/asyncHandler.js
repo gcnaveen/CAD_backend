@@ -104,11 +104,13 @@ const asyncHandler = (fn) => {
         });
       }
 
-      // Handle unknown errors
+      // Handle unknown errors (include message in non-production to speed up debugging)
+      const exposeDetail = process.env.NODE_ENV !== "production";
       return error({
         statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
-        message: 'An unexpected error occurred',
+        message: exposeDetail && err?.message ? err.message : "An unexpected error occurred",
         code: "UNEXPECTED_ERROR",
+        errors: exposeDetail && err?.message ? [{ message: err.message }] : null,
       });
     }
   };

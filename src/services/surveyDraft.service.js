@@ -24,7 +24,7 @@ async function create(actor, payload) {
   const doc = await SurveyDraft.create({
     ...payload,
     surveyor: actor._id,
-    documents: new Map(Object.entries(payload.documents || {})),
+    documents: require("../utils/surveyDocuments").documentsMapFromObject(payload.documents),
   });
   return doc.toObject();
 }
@@ -83,7 +83,7 @@ async function update(actor, draftId, updates) {
 
   Object.assign(doc, updates);
   if (updates.documents) {
-    doc.documents = new Map(Object.entries(updates.documents));
+    doc.documents = require("../utils/surveyDocuments").documentsMapFromObject(updates.documents);
   }
   await doc.save();
   return doc.toObject();

@@ -6,7 +6,6 @@
  * Bucket: caddrawing. Image/audio upload are public; delete requires auth.
  */
 
-const { connectDB } = require("../config/db");
 const { validate, schemas } = require("../middleware/validator");
 const { authorize } = require("../middleware/auth.middleware");
 const { USER_ROLES } = require("../config/constants");
@@ -14,6 +13,7 @@ const uploadController = require("../controllers/upload.controller");
 const { BadRequestError } = require("../utils/errors");
 const asyncHandler = require("../utils/asyncHandler");
 
+const { connectDB } = require("../config/db");
 let dbConnected = false;
 
 async function ensureDb() {
@@ -27,8 +27,6 @@ const uploadAuth = () =>
   authorize(USER_ROLES.SURVEYOR, USER_ROLES.CAD, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN);
 
 exports.handler = asyncHandler(async (event) => {
-  await ensureDb();
-
   const path = event.rawPath ?? event.requestContext?.http?.path ?? "";
   const routeKey =
     event.routeKey ||
@@ -46,6 +44,7 @@ exports.handler = asyncHandler(async (event) => {
     }
 
     case "POST /api/upload/delete": {
+      await ensureDb();
       const { user } = await uploadAuth()(event);
       const params = validate(schemas.uploadDelete)(event);
       return await uploadController.deleteUpload(params, user);
