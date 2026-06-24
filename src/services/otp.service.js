@@ -7,7 +7,7 @@
  */
 
 const User = require("../models/user/User");
-const { sendOtpSms } = require("../utils/sms");
+const { sendOtpSms, isMsg91Configured } = require("../utils/sms");
 const { UnauthorizedError, BadRequestError, DatabaseError } = require("../utils/errors");
 const logger = require("../utils/logger");
 
@@ -82,9 +82,14 @@ class OtpService {
           otp: otp,
         });
       } else {
+        if (!isMsg91Configured()) {
+          throw new DatabaseError("SMS gateway is not configured (set MSG91_AUTHKEY and MSG91_OTP_TEMPLATE_ID)", {
+            code: "SMS_NOT_CONFIGURED",
+          });
+        }
         const sent = await sendOtpSms(normalizedPhone, otp);
         if (!sent) {
-          throw new DatabaseError("Failed to send OTP");
+          throw new DatabaseError("Failed to send OTP via SMS", { code: "SMS_SEND_FAILED" });
         }
         logger.info("OTP issued", { userId: user._id?.toString(), phone: normalizedPhone });
       }

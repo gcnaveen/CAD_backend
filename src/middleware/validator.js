@@ -35,6 +35,11 @@ function validObjectId(id, fieldName = "id") {
   return id;
 }
 
+/** Surveyor profile category PUBLIC — sketch upload files not mandatory. */
+function isPublicSurveyorCategory(category) {
+  return String(category || "").trim().toUpperCase() === "PUBLIC";
+}
+
 function optionalStatus(body) {
   if (body.status != null) {
     const s = String(body.status).toUpperCase();
@@ -904,13 +909,15 @@ const schemas = {
   // -------- Surveyor Sketch Upload --------
   /**
    * Create surveyor sketch upload (survey info + document URLs).
-   * Required: surveyType, district, taluka, hobli, village, surveyNo.
-   * At least one upload field is required: singleUpload (one or more files) OR known doc keys.
+   * Required: surveyType, district, taluka, surveyNo.
+   * Optional: hobli, village (ObjectIds from masters).
+   * At least one upload field is required for surveyorProfile.category SURVEYOR only.
+   * PUBLIC category surveyors may submit without files.
    * Optional: draftId (to cleanup submitted draft), others (string, max 2000).
    */
-  surveyorSketchUploadCreate(body) {
+  surveyorSketchUploadCreate(body, { surveyorCategory } = {}) {
     const { SURVEY_SKETCH_DOCUMENT_KEYS, SURVEY_SKETCH_MAX_UPLOAD_FILES } = require("../config/constants");
-    requireFields(body, ["surveyType", "district", "taluka", "hobli", "village", "surveyNo"]);
+    requireFields(body, ["surveyType", "district", "taluka", "surveyNo"]);
 
     const surveyType = String(body.surveyType).toLowerCase().trim();
     if (!["joint_flat", "single_flat"].includes(surveyType)) {
@@ -921,8 +928,14 @@ const schemas = {
 
     const district = validObjectId(body.district, "district");
     const taluka = validObjectId(body.taluka, "taluk");
-    const hobli = validObjectId(body.hobli, "hobli");
-    const village = validObjectId(body.village, "village");
+    const hobli =
+      body.hobli != null && body.hobli !== ""
+        ? validObjectId(body.hobli, "hobli")
+        : null;
+    const village =
+      body.village != null && body.village !== ""
+        ? validObjectId(body.village, "village")
+        : null;
 
     const surveyNo = String(body.surveyNo ?? "").trim();
     if (!surveyNo) {
@@ -951,7 +964,8 @@ const schemas = {
     });
 
     const hasTypedDocuments = Object.values(documents).some((entries) => entries.length > 0);
-    if (!singleUpload.length && !hasTypedDocuments) {
+    const uploadsRequired = !isPublicSurveyorCategory(surveyorCategory);
+    if (uploadsRequired && !singleUpload.length && !hasTypedDocuments) {
       throw new BadRequestError(
         "Provide at least one upload: singleUpload, files, or one of moolaTippani/hissaTippani/atlas/rrPakkabook/kharabu",
         {

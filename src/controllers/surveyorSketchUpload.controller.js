@@ -34,6 +34,16 @@ async function listSurveyorOrders(actor, options) {
   });
 }
 
+async function retrySketchPayment(actor, uploadId) {
+  const result = await surveyorSketchUploadService.reinitiateSketchPayment(actor, uploadId);
+  return ok(result.data, result.meta);
+}
+
+async function clearUpload(actor, uploadId) {
+  const result = await surveyorSketchUploadService.clearSketchUpload(actor, uploadId);
+  return ok(result);
+}
+
 async function listAllWithAssignment(options) {
   const result = await surveyorSketchUploadService.listAllWithAssignment(options);
   const { paginationMeta } = require("../../utils/pagination");
@@ -47,5 +57,7 @@ module.exports = {
   getUploadForCad,
   listUploads,
   listSurveyorOrders,
+  retrySketchPayment,
+  clearUpload,
   listAllWithAssignment,
 };

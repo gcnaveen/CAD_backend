@@ -12,7 +12,7 @@ const notificationController = require("../controllers/notification.controller")
 const cadInterestController = require("../controllers/cadInterest.controller");
 const { parsePagination } = require("../utils/pagination");
 const authService = require("../services/auth.service");
-const { validate, schemas, validObjectId } = require("../middleware/validator");
+const { validate, schemas, validObjectId, parseJsonBody } = require("../middleware/validator");
 const { authorize } = require("../middleware/auth.middleware");
 const { USER_ROLES, SURVEY_SKETCH_STATUS } = require("../config/constants");
 const { ok, redirect } = require("../utils/response");
@@ -20,9 +20,16 @@ const asyncHandler = require("../utils/asyncHandler");
 const logger = require("../utils/logger");
 const { BadRequestError } = require("../utils/errors");
 const sketchPaymentPricing = require("../services/sketchPaymentPricing.service");
+const adminDashboardController = require("../controllers/adminDashboard.controller");
 
 function getPathParams(event) {
-  return event.pathParameters || {};
+  const params = { ...(event.pathParameters || {}) };
+  const path = event.rawPath || event.requestContext?.http?.path || "";
+  if (!params.uploadId) {
+    const m = path.match(/\/sketch-uploads\/([a-f0-9]{24})(?:\/|$)/i);
+    if (m) params.uploadId = m[1];
+  }
+  return params;
 }
 
 function getQueryParams(event) {
@@ -246,8 +253,28 @@ exports.getSurveyorSketchPricing = asyncHandler(async (event) => {
 exports.createSurveyorSketchUpload = asyncHandler(async (event) => {
   await ensureDb();
   const { user } = await authorize(USER_ROLES.SURVEYOR)(event);
-  const body = validate(schemas.surveyorSketchUploadCreate)(event);
+  const body = schemas.surveyorSketchUploadCreate(parseJsonBody(event), {
+    surveyorCategory: user.surveyorProfile?.category,
+  });
   return await surveyorSketchUploadController.createUpload(user, body);
+});
+
+exports.retrySurveyorSketchPayment = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SURVEYOR)(event);
+  const { uploadId } = getPathParams(event);
+  if (!uploadId) throw new BadRequestError("uploadId is required");
+  validObjectId(uploadId, "uploadId");
+  return await surveyorSketchUploadController.retrySketchPayment(user, uploadId);
+});
+
+exports.clearSurveyorSketchUpload = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SURVEYOR)(event);
+  const { uploadId } = getPathParams(event);
+  if (!uploadId) throw new BadRequestError("uploadId is required");
+  validObjectId(uploadId, "uploadId");
+  return await surveyorSketchUploadController.clearUpload(user, uploadId);
 });
 
 exports.getSurveyorSketchUpload = asyncHandler(async (event) => {
@@ -416,6 +443,12 @@ exports.getSurveySketchStatuses = asyncHandler(async (event) => {
   await ensureDb();
   await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
   return ok(Object.values(SURVEY_SKETCH_STATUS));
+});
+
+exports.getAdminDashboardStats = asyncHandler(async (event) => {
+  await ensureDb();
+  await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  return await adminDashboardController.getStats();
 });
 
 // -------- Survey Sketch Assignment (Admin: assign survey sketch to CAD center) --------

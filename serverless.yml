@@ -41,6 +41,11 @@ provider:
     # Must match iamRoleStatements S3 Resource ARNs (see custom.s3BucketName).
     S3_BUCKET: ${self:custom.s3BucketName}
     OTP_TEST_MODE: ${env:OTP_TEST_MODE, 'false'}
+    MSG91_AUTHKEY: ${env:MSG91_AUTHKEY, ''}
+    MSG91_OTP_TEMPLATE_ID: ${env:MSG91_OTP_TEMPLATE_ID, ''}
+    MSG91_OTP_VARIABLE_NAME: ${env:MSG91_OTP_VARIABLE_NAME, 'number'}
+    MSG91_SMS_ROUTE: ${env:MSG91_SMS_ROUTE, '4'}
+    MSG91_SENDER_ID: ${env:MSG91_SENDER_ID, 'SSMBAS'}
     # PhonePe sketch checkout: checkout URL is returned only when fee env > 0 and credentials + PUBLIC_API_BASE_URL are set.
     PUBLIC_API_BASE_URL: ${env:PUBLIC_API_BASE_URL, ''}
     PHONEPE_CLIENT_ID: ${env:PHONEPE_CLIENT_ID, env:CLIENT_ID, ''}
@@ -139,6 +144,12 @@ functions:
           path: /api/surveyor/sketch-uploads
           method: post
       - httpApi:
+          path: /api/surveyor/sketch-uploads/{uploadId}/retry-payment
+          method: post
+      - httpApi:
+          path: /api/surveyor/sketch-uploads/{uploadId}/clear
+          method: post
+      - httpApi:
           path: /api/surveyor/sketch-uploads
           method: get
       - httpApi:
@@ -179,6 +190,9 @@ functions:
           method: delete
       - httpApi:
           path: /api/admin/survey-sketch-statuses
+          method: get
+      - httpApi:
+          path: /api/admin/dashboard/stats
           method: get
       - httpApi:
           path: /api/admin/survey-sketch-assignments

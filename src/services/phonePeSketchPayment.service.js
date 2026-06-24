@@ -66,6 +66,33 @@ function getFailureRedirectUrl() {
   return process.env.PHONEPE_FAILURE_REDIRECT_URL || "http://www.localhost:5173/payment-failure";
 }
 
+/** PhonePe transaction / merchant order ids must stay ≤35 chars (alphanumeric + underscore). */
+const PHONEPE_MAX_ORDER_ID_LEN = 35;
+
+function sketchUploadMerchantOrderId(uploadId) {
+  return `sketch_${String(uploadId)}`;
+}
+
+/** Fresh id per retry — shorter than `sketch_<id>_r<ms>` (exceeds 35 chars). Format: sk<24hex>r<base36> */
+function sketchUploadRetryMerchantOrderId(uploadId) {
+  const id = String(uploadId);
+  const suffix = Date.now().toString(36).slice(-6);
+  return `sk${id}r${suffix}`;
+}
+
+/**
+ * @param {string} merchantOrderId
+ * @returns {string|null} Mongo upload ObjectId string
+ */
+function parseSketchUploadIdFromMerchantOrder(merchantOrderId) {
+  const s = String(merchantOrderId || "");
+  let m = s.match(/^sketch_([a-f0-9]{24})(?:_|$)/i);
+  if (m) return m[1];
+  m = s.match(/^sk([a-f0-9]{24})r[a-z0-9]+$/i);
+  if (m) return m[1];
+  return null;
+}
+
 function buildCallbackUrl(merchantOrderId) {
   const base = getPublicApiBaseUrl();
   if (!base) {
@@ -114,15 +141,24 @@ function extractPayRedirectUrl(res) {
  * @returns {Promise<{ redirectUrl: string }>}
  */
 async function initiatePay(merchantOrderId, amountPaise) {
+  const orderId = String(merchantOrderId || "").trim();
+  if (!orderId) {
+    throw new BadRequestError("merchantOrderId is required", { code: "PHONEPE_INVALID_ORDER_ID" });
+  }
+  if (orderId.length > PHONEPE_MAX_ORDER_ID_LEN) {
+    throw new BadRequestError(
+      `merchantOrderId must be at most ${PHONEPE_MAX_ORDER_ID_LEN} characters for PhonePe`,
+      { code: "PHONEPE_INVALID_ORDER_ID" }
+    );
+  }
   const client = getClient();
   if (!client) {
     throw new Error("PhonePe is not configured (set PHONEPE_CLIENT_ID and PHONEPE_CLIENT_SECRET)");
   }
   const { StandardCheckoutPayRequest } = require("pg-sdk-node");
-  const redirectUrl = buildCallbackUrl(merchantOrderId);
-  // Same shape as membership Standard Checkout: builder(merchantOrderId) is ignored by pg-sdk-node v2 if unused.
-  const paymentRequest = StandardCheckoutPayRequest.builder(merchantOrderId)
-    .merchantOrderId(merchantOrderId)
+  const redirectUrl = buildCallbackUrl(orderId);
+  const paymentRequest = StandardCheckoutPayRequest.builder(orderId)
+    .merchantOrderId(orderId)
     .amount(amountPaise)
     .redirectUrl(redirectUrl)
     .build();
@@ -195,8 +231,12 @@ async function handlePhonePeCallback(merchantOrderId) {
   const surveyorSketchUploadService = require("./surveyorSketchUpload.service");
   const surveySketchAssignmentService = require("./assignment/surveySketchAssignment.service");
 
-  if (merchantOrderId.startsWith("sketch_")) {
-    const uploadId = merchantOrderId.slice("sketch_".length);
+  if (merchantOrderId.startsWith("sketch_") || merchantOrderId.startsWith("sk")) {
+    const uploadId = parseSketchUploadIdFromMerchantOrder(merchantOrderId);
+    if (!uploadId) {
+      logger.error("PhonePe callback: could not parse sketch upload id", { merchantOrderId });
+      return { redirectUrl: failUrl };
+    }
     if (!completed) {
       await surveyorSketchUploadService.markSketchPaymentFailed(uploadId, phonepeResponse);
       return { redirectUrl: failUrl };
@@ -230,4 +270,7 @@ module.exports = {
   extractPaidAmountPaise,
   initiatePay,
   handlePhonePeCallback,
+  sketchUploadMerchantOrderId,
+  sketchUploadRetryMerchantOrderId,
+  parseSketchUploadIdFromMerchantOrder,
 };

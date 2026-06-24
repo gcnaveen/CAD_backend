@@ -1535,7 +1535,7 @@ paths:
       description: |
         Public redirect target after PhonePe checkout. No `Authorization` header.
         `merchantOrderId` matches `meta.payment.merchantOrderId` from sketch upload or revision-request when payment is required.
-        Order id formats: `sketch_<uploadObjectId>` (initial submission), `rev_<uploadObjectId>_<revisionNumber>` (revision #2+ when `SKETCH_REVISION_FEE_PAISE` > 0).
+        Order id formats: `sketch_<uploadObjectId>` (initial submission, ≤35 chars), `sk<uploadObjectId>r<suffix>` (payment retry), `rev_<uploadObjectId>_<revisionNumber>` (revision #2+).
         On success or failure the API responds with **302** to `PHONEPE_SUCCESS_REDIRECT_URL` or `PHONEPE_FAILURE_REDIRECT_URL`.
       operationId: phonePeSketchCallback
       parameters:
@@ -1593,10 +1593,10 @@ paths:
         **Auto-generated:** `applicationId` is automatically generated in format `DISTRICT_CODE/TALUKA_CODE/YY/N` (e.g., `KA-BLR/BLR-N/26/1`).
         **Required fields:**
         - `surveyType`: `joint_flat` or `single_flat`
-        - `district`, `taluka`, `hobli`, `village`: ObjectIds from masters
+        - `district`, `taluka`: ObjectIds from masters
         - `surveyNo`: Survey number string
-        - `singleUpload`: one or more upload files (URL string, document object, or array of either; max 20 per field)
-        **Optional:** media document fields (`moolaTippani`, `hissaTippani`, `atlas`, `rrPakkabook`, `kharabu` — each accepts one or more files), checklist flags (`is_originaltippani`, `is_hissatippani`, `is_atlas`, `is_rrpakkabook`, `is_akarabandu`, `is_kharabuttar`, `is_mulapatra`), `audio` (one or more audio files), `other_documents` (array of extra files), `others` (text notes, max 2000 chars).
+        - `singleUpload`: one or more upload files (required for profile category **SURVEYOR** unless another document field is provided; optional for **PUBLIC**)
+        **Optional:** `hobli`, `village` (ObjectIds from masters), media document fields (`moolaTippani`, `hissaTippani`, `atlas`, `rrPakkabook`, `kharabu` — each accepts one or more files), checklist flags (`is_originaltippani`, `is_hissatippani`, `is_atlas`, `is_rrpakkabook`, `is_akarabandu`, `is_kharabuttar`, `is_mulapatra`), `audio` (one or more audio files), `other_documents` (array of extra files), `others` (text notes, max 2000 chars).
         **Checklist behavior:** If `singleUpload` is used, send the `is_*` flags as `true/false` based on what is included in the bundle. If separate files are uploaded for known keys, corresponding `is_*` flags are auto-set to `true` by backend.
       operationId: createSurveyorSketchUpload
       security:
@@ -1839,6 +1839,94 @@ paths:
                     example: true
                   data:
                     $ref: "#/components/schemas/SurveyorSketchUpload"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/surveyor/sketch-uploads/{uploadId}/retry-payment:
+    parameters:
+      - $ref: "#/components/parameters/UploadId"
+    post:
+      tags: [Surveyor Sketch Uploads]
+      summary: Retry sketch upload payment (PhonePe)
+      description: |
+        Re-initiate PhonePe checkout when the initial sketch upload payment **failed** or was **abandoned**.
+        **Authorization:** Surveyor only (must own the upload).
+        **When to call:** `data.status` is `PAYMENT_PENDING` and `data.sketchPayment.status` is `FAILED` or `PENDING`.
+        **Effect:** Sets `sketchPayment.status` back to `PAYMENT_PENDING` workflow and returns a fresh `meta.payment.checkoutPageUrl`.
+        After successful payment, PhonePe redirects to `GET /api/payments/phonepe/callback` and upload moves to `PENDING`.
+      operationId: retrySurveyorSketchPayment
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Checkout link issued for payment retry
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/SurveyorSketchUpload" }
+                  meta:
+                    type: object
+                    properties:
+                      payment:
+                        type: object
+                        properties:
+                          requiresPayment: { type: boolean, example: true }
+                          checkoutPageUrl: { type: string, format: uri }
+                          redirectUrl: { type: string, format: uri }
+                          merchantOrderId: { type: string, example: "sketch_507f1f77bcf86cd799439011" }
+                          amountPaise: { type: integer, example: 50000 }
+                          planAmountRupees: { type: number, nullable: true }
+                          discountRupees: { type: number, nullable: true }
+                          payableRupees: { type: number, nullable: true }
+                          pricingSource: { type: string, nullable: true }
+                          message: { type: string }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/surveyor/sketch-uploads/{uploadId}/clear:
+    parameters:
+      - $ref: "#/components/parameters/UploadId"
+    post:
+      tags: [Surveyor Sketch Uploads]
+      summary: Clear (delete) unpaid sketch upload
+      description: |
+        Permanently removes a survey sketch upload that **has not been paid** and is still awaiting payment.
+        **Authorization:** Surveyor only (must own the upload).
+        **When to call:** `status` is `PAYMENT_PENDING` and `sketchPayment.status` is not `COMPLETED`.
+        **Effect:** Deletes the upload (cannot be undone). Surveyor can submit a new upload afterwards.
+      operationId: clearSurveyorSketchUpload
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Upload removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      uploadId: { type: string }
+                      applicationId: { type: string, nullable: true }
+                      message: { type: string, example: "Survey upload removed" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -2281,6 +2369,32 @@ paths:
                     type: array
                     items: { type: string }
                     example: [PENDING, ASSIGNED, UNDER_REVISION, APPROVED, REJECTED]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/admin/dashboard/stats:
+    get:
+      tags: [Admin - Dashboard]
+      summary: Super Admin dashboard statistics
+      description: |
+        Returns aggregate counts for users, drafts, orders (by sketch upload status), and PhonePe payments.
+        **Authorization:** Super Admin or Admin only.
+      operationId: getAdminDashboardStats
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    $ref: "#/components/schemas/AdminDashboardStats"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -4546,11 +4660,68 @@ components:
           nullable: true
           minimum: 0
 
+    AdminDashboardStats:
+      type: object
+      properties:
+        users:
+          type: object
+          properties:
+            totalUsers: { type: integer, example: 120 }
+            superAdminUsers: { type: integer, example: 1 }
+            adminUsers: { type: integer, example: 5 }
+            cadUsers: { type: integer, example: 20 }
+            surveyorUsers: { type: integer, example: 94 }
+        drafts:
+          type: object
+          properties:
+            totalDrafts: { type: integer, example: 32 }
+        orders:
+          type: object
+          properties:
+            totalOrders: { type: integer, example: 85 }
+            byStatus:
+              type: object
+              additionalProperties: { type: integer }
+              example:
+                PAYMENT_PENDING: 3
+                PENDING: 10
+                ASSIGNED: 15
+                CAD_DELIVERED: 20
+                UNDER_REVISION: 5
+                APPROVED: 30
+                REJECTED: 2
+                total: 85
+        payments:
+          type: object
+          properties:
+            totalReceived:
+              type: object
+              properties:
+                amountPaise: { type: integer, example: 2500000 }
+                amountRupees: { type: number, example: 25000 }
+                sketchUploadPayments: { type: integer, example: 45 }
+                revisionPayments: { type: integer, example: 5 }
+            pending:
+              type: object
+              properties:
+                count: { type: integer, example: 4 }
+                amountPaise: { type: integer, example: 200000 }
+                amountRupees: { type: number, example: 2000 }
+                sketchUploadPending: { type: integer, example: 3 }
+                revisionPaymentPending: { type: integer, example: 1 }
+            failed:
+              type: object
+              properties:
+                count: { type: integer, example: 2 }
+                sketchUploadFailed: { type: integer, example: 1 }
+                revisionPaymentFailed: { type: integer, example: 1 }
+
     SurveyorSketchUploadCreateRequest:
       type: object
-      required: [surveyType, district, taluka, hobli, village, surveyNo]
+      required: [surveyType, district, taluka, surveyNo]
       description: |
-        Provide **either** `singleUpload` (one or more files) **or** at least one document field (`moolaTippani`, `hissaTippani`, `atlas`, `rrPakkabook`, `kharabu` — each accepts one or more files).
+        Provide **either** `singleUpload` (one or more files) **or** at least one document field (`moolaTippani`, `hissaTippani`, `atlas`, `rrPakkabook`, `kharabu` — each accepts one or more files) when the authenticated surveyor's profile **category** is **SURVEYOR**.
+        If profile category is **PUBLIC**, file uploads are optional and the request may succeed with survey info only.
         Media document fields are optional and support aliases (see descriptions/examples).
         Optional: audio (one or more files), other_documents (array of extra files), others (text notes, max 2000 chars). Max **20 files** per multi-upload field.
       properties:
@@ -4569,11 +4740,13 @@ components:
           example: "507f1f77bcf86cd799439013"
         hobli:
           type: string
-          description: ObjectId of Hobli
+          nullable: true
+          description: Optional ObjectId of Hobli
           example: "507f1f77bcf86cd799439014"
         village:
           type: string
-          description: ObjectId of Village
+          nullable: true
+          description: Optional ObjectId of Village
           example: "507f1f77bcf86cd799439015"
         surveyNo:
           type: string

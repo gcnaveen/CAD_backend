@@ -166,13 +166,16 @@ UserSchema.pre("validate", function (next) {
     this.surveyorProfile = null;
   }
 
-  // ADMIN / SUPER_ADMIN / CAD must have email + password
+  // ADMIN / SUPER_ADMIN / CAD must have email + password (on create or password change only).
+  // Password is select:false — partial updates (delete, block) must not re-validate missing hash.
   if ([USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.CAD].includes(this.role)) {
     if (!this.auth?.email) {
       return next(new Error(`${this.role} must have email`));
     }
-    if (!this.auth?.password) {
-      return next(new Error(`${this.role} must have password`));
+    if (this.isNew || this.isModified("auth.password")) {
+      if (!this.auth?.password) {
+        return next(new Error(`${this.role} must have password`));
+      }
     }
   }
 

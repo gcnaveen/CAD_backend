@@ -64,6 +64,10 @@ exports.handler = asyncHandler(async (event) => {
       return authHandler.getSurveyorSketchPricing(event);
     case "POST /api/surveyor/sketch-uploads":
       return authHandler.createSurveyorSketchUpload(event);
+    case "POST /api/surveyor/sketch-uploads/{uploadId}/retry-payment":
+      return authHandler.retrySurveyorSketchPayment(event);
+    case "POST /api/surveyor/sketch-uploads/{uploadId}/clear":
+      return authHandler.clearSurveyorSketchUpload(event);
     case "GET /api/surveyor/sketch-uploads":
       return authHandler.listSurveyorSketchUploads(event);
     case "GET /api/surveyor/orders":
@@ -91,6 +95,8 @@ exports.handler = asyncHandler(async (event) => {
 
     case "GET /api/admin/survey-sketch-statuses":
       return authHandler.getSurveySketchStatuses(event);
+    case "GET /api/admin/dashboard/stats":
+      return authHandler.getAdminDashboardStats(event);
     case "POST /api/admin/survey-sketch-assignments":
       return authHandler.createSurveySketchAssignment(event);
     case "GET /api/admin/survey-sketch-assignments/{assignmentId}":

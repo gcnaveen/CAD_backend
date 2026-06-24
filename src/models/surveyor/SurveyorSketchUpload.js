@@ -93,13 +93,13 @@ const SurveyorSketchUploadSchema = new mongoose.Schema(
     hobli: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Hobli",
-      required: true,
+      default: null,
       index: true,
     },
     village: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Village",
-      required: true,
+      default: null,
       index: true,
     },
     surveyNo: {

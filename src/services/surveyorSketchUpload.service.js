@@ -98,6 +98,220 @@ async function markSketchPaymentFailed(uploadId, phonepeResponse) {
   });
 }
 
+function sketchUploadMerchantOrderId(uploadId) {
+  return phonePeSketchPayment.sketchUploadMerchantOrderId(uploadId);
+}
+
+function sketchUploadRetryMerchantOrderId(uploadId) {
+  return phonePeSketchPayment.sketchUploadRetryMerchantOrderId(uploadId);
+}
+
+async function loadSketchUploadDetail(uploadId) {
+  return SurveyorSketchUpload.findById(uploadId)
+    .populate("surveyor", "name role")
+    .populate("district", "code name")
+    .populate("taluka", "code name")
+    .populate("hobli", "code name")
+    .populate("village", "code name")
+    .lean();
+}
+
+function buildSketchPaymentMeta({
+  checkoutPageUrl,
+  merchantOrderId,
+  feePaise,
+  resolved,
+  message,
+}) {
+  return {
+    payment: {
+      requiresPayment: true,
+      checkoutPageUrl,
+      redirectUrl: checkoutPageUrl,
+      merchantOrderId,
+      amountPaise: feePaise,
+      planAmountRupees: resolved.planAmountRupees,
+      discountRupees: resolved.discountRupees,
+      payableRupees: resolved.payableRupees,
+      pricingSource: resolved.source,
+      ...(message ? { message } : {}),
+    },
+  };
+}
+
+/**
+ * Re-initiate PhonePe checkout when initial sketch upload payment failed or was abandoned.
+ * @param {Object} surveyor
+ * @param {string} uploadId
+ */
+async function reinitiateSketchPayment(surveyor, uploadId) {
+  if (surveyor.role !== USER_ROLES.SURVEYOR) {
+    throw new ForbiddenError("Only surveyors can retry sketch upload payment");
+  }
+
+  const upload = await SurveyorSketchUpload.findById(uploadId);
+  if (!upload) {
+    throw new NotFoundError("Survey sketch upload not found", { code: "SURVEY_SKETCH_NOT_FOUND" });
+  }
+  if (String(upload.surveyor) !== String(surveyor._id)) {
+    throw new ForbiddenError("You can retry payment only for your own uploads", {
+      code: "NOT_YOUR_SKETCH",
+    });
+  }
+  if (upload.status !== SURVEY_SKETCH_STATUS.PAYMENT_PENDING) {
+    const payStatusEarly = upload.sketchPayment?.status || "NONE";
+    if (payStatusEarly === "FAILED" && Number(upload.sketchPayment?.amountPaise) > 0) {
+      upload.status = SURVEY_SKETCH_STATUS.PAYMENT_PENDING;
+    } else {
+      throw new BadRequestError("This upload is not awaiting payment", {
+        code: "SKETCH_NOT_AWAITING_PAYMENT",
+      });
+    }
+  }
+
+  const payStatus = upload.sketchPayment?.status || "NONE";
+  if (payStatus === "COMPLETED") {
+    throw new BadRequestError("Payment is already completed for this upload", {
+      code: "SKETCH_PAYMENT_ALREADY_COMPLETED",
+    });
+  }
+
+  const resolved = await sketchPaymentPricing.resolveSketchUploadFee();
+  const feePaise = Number(upload.sketchPayment?.amountPaise) > 0
+    ? Math.round(Number(upload.sketchPayment.amountPaise))
+    : resolved.feePaise;
+  if (!Number.isFinite(feePaise) || feePaise <= 0) {
+    throw new BadRequestError("No payment is required for this upload", {
+      code: "SKETCH_PAYMENT_NOT_REQUIRED",
+    });
+  }
+
+  const phonePe = phonePeSketchPayment;
+  if (!phonePe.isPhonePeConfigured()) {
+    throw new BadRequestError("Sketch upload fee is configured but PhonePe is not configured.", {
+      code: "PHONEPE_NOT_CONFIGURED",
+    });
+  }
+
+  const merchantOrderId = sketchUploadRetryMerchantOrderId(upload._id);
+  upload.sketchPayment = upload.sketchPayment || {};
+  upload.sketchPayment.status = "PENDING";
+  upload.sketchPayment.merchantOrderId = merchantOrderId;
+  upload.sketchPayment.amountPaise = feePaise;
+  upload.sketchPayment.planAmountRupees = resolved.planAmountRupees ?? upload.sketchPayment.planAmountRupees ?? null;
+  upload.sketchPayment.discountRupees = resolved.discountRupees ?? upload.sketchPayment.discountRupees ?? null;
+  upload.status = SURVEY_SKETCH_STATUS.PAYMENT_PENDING;
+  await upload.save();
+
+  let checkoutPageUrl;
+  try {
+    const pr = await phonePe.initiatePay(merchantOrderId, feePaise);
+    checkoutPageUrl = pr.redirectUrl;
+  } catch (pe) {
+    logger.error("PhonePe initiatePay failed for sketch upload payment retry", pe, {
+      uploadId: String(uploadId),
+    });
+    await SurveyorSketchUpload.findByIdAndUpdate(uploadId, {
+      $set: { "sketchPayment.status": "FAILED" },
+    });
+    if (pe instanceof BadRequestError) throw pe;
+    throw new BadRequestError(pe?.message || "Payment gateway error", { code: "PHONEPE_INIT_FAILED" });
+  }
+
+  const data = await loadSketchUploadDetail(uploadId);
+  return {
+    data,
+    meta: buildSketchPaymentMeta({
+      checkoutPageUrl,
+      merchantOrderId,
+      feePaise,
+      resolved,
+      message:
+        payStatus === "FAILED"
+          ? "Payment retry started. Complete checkout to submit your sketch."
+          : "Checkout link refreshed. Complete payment to submit your sketch.",
+    }),
+  };
+}
+
+/**
+ * Remove an unpaid sketch upload (surveyor "Clear" action).
+ * Allowed only while payment is not completed and upload has not entered workflow.
+ * @param {Object} surveyor
+ * @param {string} uploadId
+ */
+async function clearSketchUpload(surveyor, uploadId) {
+  if (surveyor.role !== USER_ROLES.SURVEYOR) {
+    throw new ForbiddenError("Only surveyors can clear sketch uploads");
+  }
+
+  const upload = await SurveyorSketchUpload.findById(uploadId);
+  if (!upload) {
+    throw new NotFoundError("Survey sketch upload not found", { code: "SURVEY_SKETCH_NOT_FOUND" });
+  }
+  if (String(upload.surveyor) !== String(surveyor._id)) {
+    throw new ForbiddenError("You can clear only your own uploads", { code: "NOT_YOUR_SKETCH" });
+  }
+
+  const payStatus = upload.sketchPayment?.status || "NONE";
+  if (payStatus === "COMPLETED") {
+    throw new BadRequestError("Cannot clear a survey that has already been paid", {
+      code: "SKETCH_ALREADY_PAID",
+    });
+  }
+
+  const clearable =
+    upload.status === SURVEY_SKETCH_STATUS.PAYMENT_PENDING ||
+    (payStatus === "FAILED" && Number(upload.sketchPayment?.amountPaise) > 0);
+
+  if (!clearable) {
+    throw new BadRequestError("Only unpaid surveys awaiting payment can be cleared", {
+      code: "SKETCH_NOT_CLEARABLE",
+    });
+  }
+
+  const activeAssignment = await SurveySketchAssignment.findOne({
+    surveyorSketchUpload: uploadId,
+    status: {
+      $in: [
+        SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED,
+        SURVEY_SKETCH_ASSIGNMENT_STATUS.IN_PROGRESS,
+        SURVEY_SKETCH_ASSIGNMENT_STATUS.ON_HOLD,
+      ],
+    },
+  })
+    .select("_id")
+    .lean();
+
+  if (activeAssignment) {
+    throw new BadRequestError("Cannot clear a survey that is already in CAD workflow", {
+      code: "SKETCH_IN_WORKFLOW",
+    });
+  }
+
+  await SurveySketchAssignment.deleteMany({ surveyorSketchUpload: uploadId });
+  const deleted = await SurveyorSketchUpload.findOneAndDelete({
+    _id: uploadId,
+    surveyor: surveyor._id,
+  });
+
+  if (!deleted) {
+    throw new NotFoundError("Survey sketch upload not found", { code: "SURVEY_SKETCH_NOT_FOUND" });
+  }
+
+  logger.info("Surveyor cleared unpaid sketch upload", {
+    uploadId: String(uploadId),
+    surveyorId: String(surveyor._id),
+    applicationId: deleted.applicationId || null,
+  });
+
+  return {
+    uploadId: String(uploadId),
+    applicationId: deleted.applicationId || null,
+    message: "Survey upload removed",
+  };
+}
+
 /** When several assignment rows exist per sketch (e.g. cancelled then reassigned), show the active one, else latest. */
 function pickDisplayAssignmentForUpload(rows) {
   if (!rows?.length) return null;
@@ -136,12 +350,10 @@ async function create(surveyor, payload) {
     throw new ForbiddenError("Only surveyors can submit sketch uploads");
   }
 
-  // Validate that district, taluka, hobli, village exist before creating
-  const [district, taluka, hobli, village] = await Promise.all([
+  // Validate that district, taluka exist; hobli/village optional but validated when provided
+  const [district, taluka] = await Promise.all([
     District.findById(payload.district).lean(),
     Taluka.findById(payload.taluka).lean(),
-    Hobli.findById(payload.hobli).lean(),
-    Village.findById(payload.village).lean(),
   ]);
 
   if (!district) {
@@ -150,14 +362,7 @@ async function create(surveyor, payload) {
   if (!taluka) {
     throw new NotFoundError("Taluka not found", { code: "TALUKA_NOT_FOUND" });
   }
-  if (!hobli) {
-    throw new NotFoundError("Hobli not found", { code: "HOBLI_NOT_FOUND" });
-  }
-  if (!village) {
-    throw new NotFoundError("Village not found", { code: "VILLAGE_NOT_FOUND" });
-  }
 
-  // Validate hierarchy: taluka belongs to district, hobli belongs to taluka, village belongs to hobli
   const talukaDistrictId = taluka.districtId?.toString ? taluka.districtId.toString() : String(taluka.districtId);
   const districtIdStr = String(payload.district);
   if (talukaDistrictId !== districtIdStr) {
@@ -166,20 +371,47 @@ async function create(surveyor, payload) {
     });
   }
 
-  const hobliTalukaId = hobli.talukaId?.toString ? hobli.talukaId.toString() : String(hobli.talukaId);
-  const talukaIdStr = String(payload.taluka);
-  if (hobliTalukaId !== talukaIdStr) {
-    throw new BadRequestError("Hobli does not belong to the given taluka", {
-      code: "HOBLI_TALUKA_MISMATCH",
-    });
+  let hobli = null;
+  if (payload.hobli) {
+    hobli = await Hobli.findById(payload.hobli).lean();
+    if (!hobli) {
+      throw new NotFoundError("Hobli not found", { code: "HOBLI_NOT_FOUND" });
+    }
+    const hobliTalukaId = hobli.talukaId?.toString ? hobli.talukaId.toString() : String(hobli.talukaId);
+    const talukaIdStr = String(payload.taluka);
+    if (hobliTalukaId !== talukaIdStr) {
+      throw new BadRequestError("Hobli does not belong to the given taluka", {
+        code: "HOBLI_TALUKA_MISMATCH",
+      });
+    }
   }
 
-  const villageHobliId = village.hobliId?.toString ? village.hobliId.toString() : String(village.hobliId);
-  const hobliIdStr = String(payload.hobli);
-  if (villageHobliId !== hobliIdStr) {
-    throw new BadRequestError("Village does not belong to the given hobli", {
-      code: "VILLAGE_HOBLI_MISMATCH",
-    });
+  let village = null;
+  if (payload.village) {
+    village = await Village.findById(payload.village).lean();
+    if (!village) {
+      throw new NotFoundError("Village not found", { code: "VILLAGE_NOT_FOUND" });
+    }
+    const villageTalukaId = village.talukaId?.toString ? village.talukaId.toString() : String(village.talukaId);
+    const villageDistrictId = village.districtId?.toString ? village.districtId.toString() : String(village.districtId);
+    if (villageTalukaId !== String(payload.taluka)) {
+      throw new BadRequestError("Village does not belong to the given taluka", {
+        code: "VILLAGE_TALUKA_MISMATCH",
+      });
+    }
+    if (villageDistrictId !== districtIdStr) {
+      throw new BadRequestError("Village does not belong to the given district", {
+        code: "VILLAGE_DISTRICT_MISMATCH",
+      });
+    }
+    if (payload.hobli) {
+      const villageHobliId = village.hobliId?.toString ? village.hobliId.toString() : String(village.hobliId);
+      if (villageHobliId !== String(payload.hobli)) {
+        throw new BadRequestError("Village does not belong to the given hobli", {
+          code: "VILLAGE_HOBLI_MISMATCH",
+        });
+      }
+    }
   }
 
   const createDoc = () =>
@@ -188,8 +420,8 @@ async function create(surveyor, payload) {
       surveyType: payload.surveyType,
       district: payload.district,
       taluka: payload.taluka,
-      hobli: payload.hobli,
-      village: payload.village,
+      hobli: payload.hobli || null,
+      village: payload.village || null,
       surveyNo: payload.surveyNo,
       documents: require("../utils/surveyDocuments").documentsMapFromObject(payload.documents),
       is_originaltippani: payload.is_originaltippani || false,
@@ -568,4 +800,8 @@ module.exports = {
   listAllWithAssignment,
   completeSketchUploadAfterPayment,
   markSketchPaymentFailed,
+  reinitiateSketchPayment,
+  clearSketchUpload,
+  sketchUploadMerchantOrderId,
+  sketchUploadRetryMerchantOrderId,
 };
