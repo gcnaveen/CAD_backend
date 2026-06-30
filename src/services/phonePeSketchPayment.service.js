@@ -26,7 +26,7 @@ function getClient() {
     _client = null;
     return null;
   }
-  try {
+  try { 
     const { StandardCheckoutClient } = require("pg-sdk-node");
     _client = StandardCheckoutClient.getInstance(clientId, clientSecret, clientVersion, getEnvEnum());
     return _client;

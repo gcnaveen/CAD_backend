@@ -339,6 +339,32 @@ const ORDER_BUCKET_TO_STATUSES = Object.freeze({
   [SURVEYOR_ORDER_BUCKETS.CANCELLED]: ["REJECTED"],
 });
 
+const VALID_ORDER_STATUSES = new Set(Object.values(SURVEY_SKETCH_STATUS));
+
+function normalizeOrderStatus(raw) {
+  const s = String(raw || "").trim().toUpperCase();
+  if (s === "UNDER_REVIEW") return SURVEY_SKETCH_STATUS.UNDER_REVISION;
+  return s;
+}
+
+function parseStatusFilter(raw) {
+  if (raw === undefined || raw === null || String(raw).trim() === "") return null;
+  const parts = String(raw)
+    .split(",")
+    .map((p) => normalizeOrderStatus(p))
+    .filter(Boolean);
+  if (!parts.length) return null;
+  const unique = [...new Set(parts)];
+  const invalid = unique.filter((s) => !VALID_ORDER_STATUSES.has(s));
+  if (invalid.length) {
+    throw new BadRequestError(
+      `status must be one or more of: ${[...VALID_ORDER_STATUSES].join(", ")}`,
+      { code: "INVALID_ORDER_STATUS", errors: invalid.map((s) => ({ field: "status", message: s })) }
+    );
+  }
+  return unique;
+}
+
 /**
  * Create a new survey sketch upload. Surveyor must be the authenticated user.
  * @param {Object} surveyor - Authenticated user (must h ave role SURVEYOR)
@@ -743,10 +769,15 @@ async function listOrdersForSurveyor(actor, options = {}) {
   const selectedBucket = Object.values(SURVEYOR_ORDER_BUCKETS).includes(bucket)
     ? bucket
     : SURVEYOR_ORDER_BUCKETS.ALL;
+  const statusFilter = parseStatusFilter(options.status);
+
+  await surveySketchAssignmentService.repairUploadStatusesForSurveyor(actor._id);
 
   const baseFilter = { surveyor: actor._id };
   const listFilter = { ...baseFilter };
-  if (selectedBucket !== SURVEYOR_ORDER_BUCKETS.ALL) {
+  if (statusFilter?.length) {
+    listFilter.status = statusFilter.length === 1 ? statusFilter[0] : { $in: statusFilter };
+  } else if (selectedBucket !== SURVEYOR_ORDER_BUCKETS.ALL) {
     listFilter.status = { $in: ORDER_BUCKET_TO_STATUSES[selectedBucket] || [] };
   }
 
@@ -767,9 +798,33 @@ async function listOrdersForSurveyor(actor, options = {}) {
     ]),
   ]);
 
+  const uploadIds = data.map((u) => u._id);
+  const assignments = uploadIds.length
+    ? await SurveySketchAssignment.find({ surveyorSketchUpload: { $in: uploadIds } })
+        .populate("assignedTo", "name auth")
+        .populate("cadCenter", "name code")
+        .populate("assignedBy", "name")
+        .lean()
+    : [];
+  const listsByUpload = {};
+  for (const a of assignments) {
+    const id = a.surveyorSketchUpload?.toString?.() || String(a.surveyorSketchUpload);
+    (listsByUpload[id] ||= []).push(a);
+  }
+  const enrichedData = data.map((upload) => ({
+    ...upload,
+    assignment: pickDisplayAssignmentForUpload(listsByUpload[upload._id.toString()] || []) || null,
+  }));
+
   const statusCount = {};
+  for (const s of Object.values(SURVEY_SKETCH_STATUS)) {
+    statusCount[s] = 0;
+  }
   byStatus.forEach((r) => {
-    statusCount[r._id] = r.count;
+    const key = r._id === "UNDER_REVIEW" ? SURVEY_SKETCH_STATUS.UNDER_REVISION : r._id;
+    if (key && statusCount[key] !== undefined) {
+      statusCount[key] += r.count;
+    }
   });
   const activeCount = ORDER_BUCKET_TO_STATUSES[SURVEYOR_ORDER_BUCKETS.ACTIVE]
     .reduce((sum, s) => sum + (statusCount[s] || 0), 0);
@@ -780,13 +835,20 @@ async function listOrdersForSurveyor(actor, options = {}) {
   const allCount = Object.values(statusCount).reduce((sum, n) => sum + n, 0);
 
   return {
-    data,
-    meta: { page, limit, total, bucket: selectedBucket },
+    data: enrichedData,
+    meta: {
+      page,
+      limit,
+      total,
+      bucket: selectedBucket,
+      ...(statusFilter?.length ? { status: statusFilter } : {}),
+    },
     counts: {
       all: allCount,
       active: activeCount,
       completed: completedCount,
       cancelled: cancelledCount,
+      byStatus: statusCount,
     },
   };
 }

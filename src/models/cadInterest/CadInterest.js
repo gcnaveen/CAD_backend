@@ -18,6 +18,14 @@ const CadInterestSchema = new mongoose.Schema(
     },
     yearsOfExperience: { type: Number, required: true, min: 0, max: 60 },
     resumeUrl: { type: String, required: false, trim: true },
+    /** Set when interest is onboarded as a CAD user (POST /api/users role CAD). */
+    convertedAt: { type: Date, default: null, index: true },
+    convertedUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true,
+    },
   },
   { timestamps: true }
 );

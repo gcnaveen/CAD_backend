@@ -825,6 +825,22 @@ const schemas = {
   adminCadWalletPayCadUser(body) {
     requireFields(body, ["cadUserId"]);
     const cadUserId = validObjectId(String(body.cadUserId).trim(), "cadUserId");
+    const payFull =
+      body.payFull === true || String(body.payFull || "").toLowerCase().trim() === "true";
+
+    if (payFull) {
+      if (
+        body.amountPaise !== undefined && body.amountPaise !== null && body.amountPaise !== "" ||
+        body.amountRupees !== undefined && body.amountRupees !== null && body.amountRupees !== "" ||
+        body.amount !== undefined && body.amount !== null && body.amount !== ""
+      ) {
+        throw new BadRequestError("Send payFull: true alone, or a custom amount — not both", {
+          code: "CONFLICTING_PAY_INSTRUCTION",
+        });
+      }
+      return { cadUserId, payFull: true };
+    }
+
     let amountPaise;
     if (body.amountPaise !== undefined && body.amountPaise !== null && body.amountPaise !== "") {
       const n = typeof body.amountPaise === "number" ? body.amountPaise : parseInt(String(body.amountPaise), 10);
@@ -835,25 +851,31 @@ const schemas = {
       }
       amountPaise = n;
     }
-    if (body.amountRupees !== undefined && body.amountRupees !== null && body.amountRupees !== "") {
+    const rupeeSource =
+      body.amountRupees !== undefined && body.amountRupees !== null && body.amountRupees !== ""
+        ? "amountRupees"
+        : body.amount !== undefined && body.amount !== null && body.amount !== ""
+          ? "amount"
+          : null;
+    if (rupeeSource) {
       if (amountPaise !== undefined) {
-        throw new BadRequestError("Send only one of amountPaise or amountRupees", {
+        throw new BadRequestError("Send only one of amountPaise, amountRupees, or amount", {
           errors: [{ field: "body", message: "Conflicting amount fields" }],
         });
       }
-      amountPaise = parseRupeesToPaise(body.amountRupees, "amountRupees");
+      amountPaise = parseRupeesToPaise(body[rupeeSource], rupeeSource);
       if (amountPaise <= 0) {
-        throw new BadRequestError("amountRupees must be greater than zero", {
-          errors: [{ field: "amountRupees", message: "Invalid value" }],
+        throw new BadRequestError(`${rupeeSource} must be greater than zero`, {
+          errors: [{ field: rupeeSource, message: "Invalid value" }],
         });
       }
     }
     if (amountPaise === undefined) {
-      throw new BadRequestError("Provide amountPaise or amountRupees", {
+      throw new BadRequestError("Provide amount, amountRupees, amountPaise, or payFull: true", {
         errors: [{ field: "body", message: "Missing amount" }],
       });
     }
-    return { cadUserId, amountPaise };
+    return { cadUserId, payFull: false, amountPaise };
   },
 
   surveySketchAssignmentFlowUpdate(body) {

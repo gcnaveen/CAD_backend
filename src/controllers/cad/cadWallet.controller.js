@@ -3,6 +3,7 @@ const { ok } = require("../../utils/response");
 const { paginationMeta } = require("../../utils/pagination");
 
 async function getWalletSummary(cadUser) {
+  await cadWalletService.syncCadWalletFromCompletedAssignments(cadUser._id);
   const data = await cadWalletService.getSummaryForCad(cadUser._id);
   return ok(data);
 }
@@ -35,10 +36,17 @@ async function recordWalletPaymentForCadUser(actor, payload) {
   return ok(data);
 }
 
+async function getPendingPayoutSummary(query = {}) {
+  const cadUserId = query.cadUserId ? String(query.cadUserId).trim() : undefined;
+  const data = await cadWalletService.getPendingPayoutSummaryForAdmin(cadUserId || undefined);
+  return ok(data);
+}
+
 module.exports = {
   getWalletSummary,
   listWalletTransactions,
   markWalletEntryPaid,
   recordWalletPayment,
   recordWalletPaymentForCadUser,
+  getPendingPayoutSummary,
 };

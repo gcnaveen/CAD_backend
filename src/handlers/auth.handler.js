@@ -5,6 +5,7 @@ const surveyorSketchUploadController = require("../controllers/surveyorSketchUpl
 const surveyDraftController = require("../controllers/surveyDraft.controller");
 const surveySketchAssignmentController = require("../controllers/assignment/surveySketchAssignment.controller");
 const cadWalletController = require("../controllers/cad/cadWallet.controller");
+const cadDashboardController = require("../controllers/cad/cadDashboard.controller");
 const cadUserFeedbackController = require("../controllers/cad/cadUserFeedback.controller");
 const surveySketchAssignmentFlowController = require("../controllers/config/surveySketchAssignmentFlow.controller");
 const sketchPricingAdminController = require("../controllers/config/sketchPricingAdmin.controller");
@@ -340,6 +341,7 @@ exports.listSurveyorOrders = asyncHandler(async (event) => {
     page: q.page,
     limit: q.limit,
     bucket: q.bucket || q.statusBucket || q.filter || "all",
+    status: q.status,
   };
   return await surveyorSketchUploadController.listSurveyorOrders(user, options);
 });
@@ -557,6 +559,13 @@ exports.getCadDashboardStats = asyncHandler(async (event) => {
 /** Same data as `GET /api/cad/dashboard/stats` (shorter path for dashboards). */
 exports.getCadDashboard = exports.getCadDashboardStats;
 
+// -------- CAD: Dashboard overview (wallet + order counts) --------
+exports.getCadDashboardOverview = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.CAD)(event);
+  return await cadDashboardController.getOverview(user);
+});
+
 // -------- CAD: Wallet summary & transaction history --------
 exports.getCadWalletSummary = asyncHandler(async (event) => {
   await ensureDb();
@@ -598,6 +607,15 @@ exports.recordCadWalletPaymentForUser = asyncHandler(async (event) => {
   const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
   const body = validate(schemas.adminCadWalletPayCadUser)(event);
   return await cadWalletController.recordWalletPaymentForCadUser(user, body);
+});
+
+// -------- Admin: CAD pending payout summary (one user or all) --------
+exports.getAdminCadPendingPayoutSummary = asyncHandler(async (event) => {
+  await ensureDb();
+  await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const q = getQueryParams(event);
+  if (q.cadUserId) validObjectId(q.cadUserId, "cadUserId");
+  return await cadWalletController.getPendingPayoutSummary(q);
 });
 
 // -------- CAD: Get source sketch upload (inputs) for work --------

@@ -35,6 +35,53 @@ const ACTIVE_ASSIGNMENT_STATUSES = [
   SURVEY_SKETCH_ASSIGNMENT_STATUS.ON_HOLD,
 ];
 
+/** Keep upload.status in sync when an active assignment exists (fixes stale PENDING after admin assign). */
+async function syncUploadStatusWithActiveAssignment(uploadId) {
+  if (!uploadId) return;
+  const upload = await SurveyorSketchUpload.findById(uploadId).select("status").lean();
+  if (!upload) return;
+  if (
+    upload.status === SURVEY_SKETCH_STATUS.PAYMENT_PENDING ||
+    upload.status === SURVEY_SKETCH_STATUS.APPROVED ||
+    upload.status === SURVEY_SKETCH_STATUS.REJECTED
+  ) {
+    return;
+  }
+
+  const active = await SurveySketchAssignment.findOne({
+    surveyorSketchUpload: uploadId,
+    status: { $in: ACTIVE_ASSIGNMENT_STATUSES },
+  })
+    .select("_id")
+    .lean();
+  if (!active) return;
+
+  if (
+    upload.status === SURVEY_SKETCH_STATUS.PENDING ||
+    upload.status === SURVEY_SKETCH_STATUS.UNDER_REVISION
+  ) {
+    await SurveyorSketchUpload.findByIdAndUpdate(uploadId, {
+      status: SURVEY_SKETCH_STATUS.ASSIGNED,
+    });
+  }
+}
+
+/** Repair uploads for one surveyor that have active assignments but stale workflow status. */
+async function repairUploadStatusesForSurveyor(surveyorId) {
+  const uploadIds = await SurveySketchAssignment.distinct("surveyorSketchUpload", {
+    status: { $in: ACTIVE_ASSIGNMENT_STATUSES },
+  });
+  if (!uploadIds.length) return;
+  await SurveyorSketchUpload.updateMany(
+    {
+      _id: { $in: uploadIds },
+      surveyor: surveyorId,
+      status: { $in: [SURVEY_SKETCH_STATUS.PENDING, SURVEY_SKETCH_STATUS.UNDER_REVISION] },
+    },
+    { $set: { status: SURVEY_SKETCH_STATUS.ASSIGNED } }
+  );
+}
+
 function idFromRef(ref) {
   if (ref == null) return null;
   return ref._id != null ? ref._id : ref;
@@ -178,6 +225,7 @@ async function create(payload, assignedBy) {
         existing.dueDate = dueDate ? new Date(dueDate) : existing.dueDate || null;
         existing.notes = notes ? String(notes).trim().slice(0, 1000) : existing.notes || null;
         await existing.save();
+        await syncUploadStatusWithActiveAssignment(surveyorSketchUploadId);
 
         const reassigned = await SurveySketchAssignment.findById(existing._id)
           .populate("surveyorSketchUpload", "applicationId surveyNo status")
@@ -362,6 +410,10 @@ async function update(assignmentId, updates, actor) {
   Object.assign(doc, allowed);
   await doc.save();
 
+  if (reassignedCad && doc.surveyorSketchUpload) {
+    await syncUploadStatusWithActiveAssignment(doc.surveyorSketchUpload);
+  }
+
   // When assignment is cancelled, revert survey sketch status to PENDING so admin can reassign
   if (allowed.status === SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED && doc.surveyorSketchUpload) {
     await SurveyorSketchUpload.findByIdAndUpdate(doc.surveyorSketchUpload, {
@@ -438,6 +490,9 @@ async function pullbackAndReassign(assignmentId, { assignedCadUserId, reason }, 
   doc.completedAt = null;
   doc.rejectedByCad = null;
   await doc.save();
+  if (doc.surveyorSketchUpload) {
+    await syncUploadStatusWithActiveAssignment(doc.surveyorSketchUpload);
+  }
 
   const populated = await SurveySketchAssignment.findById(doc._id)
     .populate("surveyorSketchUpload", "applicationId surveyNo status")
@@ -946,6 +1001,7 @@ async function commitRevisionToUploadAndAssign(uploadDoc, surveyor, payload, nex
     notes: `Auto-assigned for revision request #${nextRevisionNo}`,
   });
   await reassignment.save();
+  await syncUploadStatusWithActiveAssignment(uploadDoc._id);
 
   return SurveyorSketchUpload.findById(uploadDoc._id)
     .populate("surveyor", "name role")
@@ -1410,4 +1466,6 @@ module.exports = {
   autoRejectExpiredAssignments,
   getCadDashboardStats,
   pullbackAndReassign,
+  syncUploadStatusWithActiveAssignment,
+  repairUploadStatusesForSurveyor,
 };

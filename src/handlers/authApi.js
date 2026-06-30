@@ -114,6 +114,8 @@ exports.handler = asyncHandler(async (event) => {
       return authHandler.getCadDashboard(event);
     case "GET /api/cad/dashboard/stats":
       return authHandler.getCadDashboardStats(event);
+    case "GET /api/cad/dashboard/overview":
+      return authHandler.getCadDashboardOverview(event);
     case "GET /api/cad/wallet":
       return authHandler.getCadWalletSummary(event);
     case "GET /api/cad/wallet/transactions":
@@ -142,6 +144,8 @@ exports.handler = asyncHandler(async (event) => {
       return authHandler.recordCadWalletPayment(event);
     case "POST /api/admin/cad-wallet/pay-user":
       return authHandler.recordCadWalletPaymentForUser(event);
+    case "GET /api/admin/cad-wallet/pending-summary":
+      return authHandler.getAdminCadPendingPayoutSummary(event);
     case "GET /api/notifications":
       return authHandler.listNotifications(event);
     case "GET /api/notifications/{notificationId}":

@@ -5,7 +5,16 @@
 
 const mongoose = require("mongoose");
 const CadWalletLedger = require("../models/cad/CadWalletLedger");
-const { CAD_WALLET_ENTRY_STATUS, CAD_WALLET_ENTRY_KIND } = require("../config/constants");
+const User = require("../models/user/User");
+const SurveySketchAssignment = require("../models/assignment/SurveySketchAssignment");
+const SurveyorSketchUpload = require("../models/surveyor/SurveyorSketchUpload");
+const {
+  CAD_WALLET_ENTRY_STATUS,
+  CAD_WALLET_ENTRY_KIND,
+  USER_ROLES,
+  SURVEY_SKETCH_ASSIGNMENT_STATUS,
+} = require("../config/constants");
+const cadPayoutPricing = require("./cadPayoutPricing.service");
 const { NotFoundError, BadRequestError } = require("../utils/errors");
 const logger = require("../utils/logger");
 
@@ -24,8 +33,58 @@ function getRevisionDeliveryPayoutPaise() {
   return parseNonNegativeIntEnv("CAD_REVISION_DELIVERY_PAYOUT_PAISE", 0);
 }
 
+function formatLedgerEntryRow(row) {
+  const paid = effectivePaidPaise(row);
+  const total = Math.max(0, Number(row.amountPaise) || 0);
+  const remaining = Math.max(0, total - paid);
+  let balanceStatus = "PENDING";
+  if (total <= 0 || remaining <= 0) balanceStatus = "PAID";
+  else if (paid > 0) balanceStatus = "PARTIAL";
+  const sourcePaid = Math.max(0, Number(row.sourcePaidAmountPaise) || 0);
+  return {
+    ledgerId: row._id,
+    kind: row.kind,
+    revisionNo: row.revisionNo,
+    sourcePaidAmountPaise: sourcePaid,
+    sourcePaidRupees: paiseToRupees(sourcePaid),
+    payoutPercent: row.payoutPercent != null ? Number(row.payoutPercent) : cadPayoutPricing.getCadPayoutPercent(),
+    amountPaise: total,
+    amountRupees: paiseToRupees(total),
+    paidAmountPaise: paid,
+    paidAmountRupees: paiseToRupees(paid),
+    remainingPaise: remaining,
+    remainingRupees: paiseToRupees(remaining),
+    paidPercent: paidPercentForDoc(row),
+    balanceStatus,
+    status: row.status,
+    paidAt: row.paidAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
 function paiseToRupees(paise) {
   return Math.round(Number(paise) || 0) / 100;
+}
+
+function formatWalletSummary(totalEarningsPaise, receivedPaymentPaise, pendingPaymentPaise) {
+  const total = Math.max(0, Number(totalEarningsPaise) || 0);
+  const received = Math.max(0, Math.min(total, Number(receivedPaymentPaise) || 0));
+  const pending = Math.max(0, Number(pendingPaymentPaise) ?? total - received);
+  return {
+    totalEarningsPaise: total,
+    pendingPaymentPaise: pending,
+    receivedPaymentPaise: received,
+    totalEarningsRupees: paiseToRupees(total),
+    pendingPaymentRupees: paiseToRupees(pending),
+    receivedPaymentRupees: paiseToRupees(received),
+    totalEarnings: paiseToRupees(total),
+    pendingPayment: paiseToRupees(pending),
+    receivedPayment: paiseToRupees(received),
+    /** Plural aliases for dashboard cards */
+    pendingPayments: paiseToRupees(pending),
+    receivedPayments: paiseToRupees(received),
+  };
 }
 
 /** Amount already paid toward this entry (handles legacy PAID rows without paidAmountPaise). */
@@ -47,7 +106,7 @@ function paidPercentForDoc(doc) {
 }
 
 /**
- * Record a pending earning if env payout for this kind is > 0. Idempotent per (assignment, kind, revisionNo).
+ * Record a pending earning from surveyor payment × CAD_PAYOUT_PERCENT. Idempotent per (assignment, kind, revisionNo).
  */
 async function recordPendingEarningIfConfigured({
   cadUserId,
@@ -56,10 +115,19 @@ async function recordPendingEarningIfConfigured({
   kind,
   revisionNo,
 }) {
-  const amountPaise =
-    kind === CAD_WALLET_ENTRY_KIND.INITIAL_DELIVERY
-      ? getInitialDeliveryPayoutPaise()
-      : getRevisionDeliveryPayoutPaise();
+  const upload = surveyorSketchUploadId
+    ? await SurveyorSketchUpload.findById(surveyorSketchUploadId)
+        .select("sketchPayment revisionFeePayments")
+        .lean()
+    : null;
+
+  const sourcePaidAmountPaise = cadPayoutPricing.resolveSourcePaidPaiseForLedgerKind(
+    upload,
+    kind,
+    revisionNo
+  );
+  const payoutPercent = cadPayoutPricing.getCadPayoutPercent();
+  const amountPaise = cadPayoutPricing.computeCadPayoutPaiseFromSourcePaid(sourcePaidAmountPaise);
   if (!amountPaise || amountPaise <= 0) return null;
 
   const rev =
@@ -80,6 +148,8 @@ async function recordPendingEarningIfConfigured({
           kind,
           revisionNo: rev,
           amountPaise,
+          sourcePaidAmountPaise,
+          payoutPercent,
           paidAmountPaise: 0,
           paymentLog: [],
           status: CAD_WALLET_ENTRY_STATUS.PENDING,
@@ -163,18 +233,7 @@ async function getSummaryForCad(cadUserId) {
   const receivedPaymentPaise = Math.max(0, Math.min(totalEarningsPaise, agg?.receivedPaymentPaise ?? 0));
   const pendingPaymentPaise = Math.max(0, totalEarningsPaise - receivedPaymentPaise);
 
-  return {
-    totalEarningsPaise,
-    pendingPaymentPaise,
-    receivedPaymentPaise,
-    totalEarningsRupees: paiseToRupees(totalEarningsPaise),
-    pendingPaymentRupees: paiseToRupees(pendingPaymentPaise),
-    receivedPaymentRupees: paiseToRupees(receivedPaymentPaise),
-    /** Same values in rupees, names requested by frontend. */
-    totalEarnings: paiseToRupees(totalEarningsPaise),
-    pendingPayment: paiseToRupees(pendingPaymentPaise),
-    receivedPayment: paiseToRupees(receivedPaymentPaise),
-  };
+  return formatWalletSummary(totalEarningsPaise, receivedPaymentPaise, pendingPaymentPaise);
 }
 
 async function listTransactionsForCad(cadUserId, options = {}) {
@@ -195,34 +254,13 @@ async function listTransactionsForCad(cadUserId, options = {}) {
     CadWalletLedger.countDocuments(filter),
   ]);
 
-  const rows = data.map((row) => {
-    const paid = effectivePaidPaise(row);
-    const total = Math.max(0, Number(row.amountPaise) || 0);
-    const remaining = Math.max(0, total - paid);
-    let balanceStatus = "PENDING";
-    if (total <= 0 || remaining <= 0) balanceStatus = "PAID";
-    else if (paid > 0) balanceStatus = "PARTIAL";
-    return {
-      _id: row._id,
-      kind: row.kind,
-      revisionNo: row.revisionNo,
-      amountPaise: row.amountPaise,
-      amountRupees: paiseToRupees(row.amountPaise),
-      paidAmountPaise: paid,
-      paidAmountRupees: paiseToRupees(paid),
-      remainingPaise: remaining,
-      remainingRupees: paiseToRupees(remaining),
-      paidPercent: paidPercentForDoc(row),
-      balanceStatus,
-      status: row.status,
-      paidAt: row.paidAt,
-      paymentLog: row.paymentLog || [],
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      assignment: row.assignment,
-      surveyorSketchUpload: row.surveyorSketchUpload,
-    };
-  });
+  const rows = data.map((row) => ({
+    _id: row._id,
+    ...formatLedgerEntryRow(row),
+    paymentLog: row.paymentLog || [],
+    assignment: row.assignment,
+    surveyorSketchUpload: row.surveyorSketchUpload,
+  }));
 
   return { data: rows, total, page, limit };
 }
@@ -323,17 +361,28 @@ async function markEntryPaid(entryId, actor) {
  * Admin payout by CAD user + amount.
  * Applies payment to oldest pending ledger entries first.
  */
-async function recordPaymentForCadUser(cadUserId, actor, { amountPaise }) {
+async function recordPaymentForCadUser(cadUserId, actor, { amountPaise, payFull }) {
   const uid =
     cadUserId instanceof mongoose.Types.ObjectId
       ? cadUserId
       : new mongoose.Types.ObjectId(String(cadUserId));
 
-  const amount = Math.floor(Number(amountPaise) || 0);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new BadRequestError("amountPaise must be a positive integer", {
-      code: "INVALID_PAYMENT_AMOUNT",
-    });
+  let amount;
+  if (payFull) {
+    const pendingSummary = await getSummaryForCad(uid);
+    amount = Math.floor(Number(pendingSummary.pendingPaymentPaise) || 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new BadRequestError("No pending balance to pay for this CAD user", {
+        code: "NO_PENDING_BALANCE",
+      });
+    }
+  } else {
+    amount = Math.floor(Number(amountPaise) || 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new BadRequestError("amount must be a positive integer (paise)", {
+        code: "INVALID_PAYMENT_AMOUNT",
+      });
+    }
   }
 
   let remainingToApply = amount;
@@ -359,6 +408,7 @@ async function recordPaymentForCadUser(cadUserId, actor, { amountPaise }) {
 
   return {
     cadUserId: uid,
+    payFull: Boolean(payFull),
     requestedAmountPaise: amount,
     requestedAmountRupees: paiseToRupees(amount),
     appliedAmountPaise: appliedPaise,
@@ -368,6 +418,304 @@ async function recordPaymentForCadUser(cadUserId, actor, { amountPaise }) {
     touchedEntryIds,
     summary: cadSummary,
   };
+}
+
+function ledgerEffectivePaidAddFields() {
+  const paidStr = CAD_WALLET_ENTRY_STATUS.PAID;
+  return [
+    {
+      $addFields: {
+        _paidRaw: { $ifNull: ["$paidAmountPaise", 0] },
+      },
+    },
+    {
+      $addFields: {
+        effectivePaidPaise: {
+          $min: [
+            "$amountPaise",
+            {
+              $cond: [
+                { $eq: ["$status", paidStr] },
+                {
+                  $cond: [{ $gt: ["$_paidRaw", 0] }, "$_paidRaw", "$amountPaise"],
+                },
+                { $max: [0, "$_paidRaw"] },
+              ],
+            },
+          ],
+        },
+      },
+    },
+    {
+      $addFields: {
+        remainingPaise: {
+          $max: [0, { $subtract: ["$amountPaise", "$effectivePaidPaise"] }],
+        },
+      },
+    },
+  ];
+}
+
+async function countOpenEntriesForCad(cadUserId) {
+  const uid =
+    cadUserId instanceof mongoose.Types.ObjectId
+      ? cadUserId
+      : new mongoose.Types.ObjectId(String(cadUserId));
+  const [agg] = await CadWalletLedger.aggregate([
+    { $match: { cadUser: uid } },
+    ...ledgerEffectivePaidAddFields(),
+    { $match: { remainingPaise: { $gt: 0 } } },
+    { $count: "count" },
+  ]);
+  return agg?.count ?? 0;
+}
+
+async function loadCadUserForAdmin(cadUserId) {
+  const user = await User.findOne({
+    _id: cadUserId,
+    role: USER_ROLES.CAD,
+    deletedAt: null,
+  })
+    .select("name role auth.email auth.phone")
+    .lean();
+  if (!user) {
+    throw new NotFoundError("CAD user not found", { code: "CAD_USER_NOT_FOUND" });
+  }
+  return user;
+}
+
+/**
+ * Ensure wallet ledger rows exist for completed assignments (backfill + new deliveries).
+ */
+async function syncCadWalletFromCompletedAssignments(cadUserId) {
+  const uid =
+    cadUserId instanceof mongoose.Types.ObjectId
+      ? cadUserId
+      : new mongoose.Types.ObjectId(String(cadUserId));
+
+  const assignments = await SurveySketchAssignment.find({
+    assignedTo: uid,
+    status: SURVEY_SKETCH_ASSIGNMENT_STATUS.COMPLETED,
+  })
+    .select("_id surveyorSketchUpload")
+    .lean();
+
+  for (const assignment of assignments) {
+    const upload = await SurveyorSketchUpload.findById(assignment.surveyorSketchUpload)
+      .select("sketchPayment revisionFeePayments cadDeliverableHistory")
+      .lean();
+    if (!upload) continue;
+
+    const history = Array.isArray(upload.cadDeliverableHistory) ? upload.cadDeliverableHistory : [];
+    const hasInitial = history.some((h) => h && !h.isRevision);
+    if (hasInitial) {
+      await recordPendingEarningIfConfigured({
+        cadUserId: uid,
+        assignmentId: assignment._id,
+        surveyorSketchUploadId: assignment.surveyorSketchUpload,
+        kind: CAD_WALLET_ENTRY_KIND.INITIAL_DELIVERY,
+        revisionNo: 0,
+      });
+    }
+
+    const revisionNos = [
+      ...new Set(
+        history
+          .filter((h) => h?.isRevision && h.revisionNo != null)
+          .map((h) => Number(h.revisionNo))
+          .filter((n) => Number.isFinite(n))
+      ),
+    ];
+    for (const revNo of revisionNos) {
+      await recordPendingEarningIfConfigured({
+        cadUserId: uid,
+        assignmentId: assignment._id,
+        surveyorSketchUploadId: assignment.surveyorSketchUpload,
+        kind: CAD_WALLET_ENTRY_KIND.REVISION_DELIVERY,
+        revisionNo: revNo,
+      });
+    }
+  }
+}
+
+function buildStatisticsFromSummary(summary, entries) {
+  const payoutPercent = cadPayoutPricing.getCadPayoutPercent();
+  const totalSourcePaidPaise = entries.reduce(
+    (sum, row) => sum + Math.max(0, Number(row.sourcePaidAmountPaise) || 0),
+    0
+  );
+  const assignmentIds = new Set(
+    entries.map((row) => String(row.assignment?._id || row.assignment || "")).filter(Boolean)
+  );
+
+  return {
+    payoutPercent,
+    assignmentCount: assignmentIds.size,
+    completedDeliveryCount: entries.length,
+    totalSourcePaidPaise,
+    totalSourcePaidRupees: paiseToRupees(totalSourcePaidPaise),
+    totalSourcePaid: paiseToRupees(totalSourcePaidPaise),
+    totalEarningsPaise: summary.totalEarningsPaise,
+    totalEarningsRupees: summary.totalEarningsRupees,
+    totalEarnings: summary.totalEarnings,
+    receivedPaymentPaise: summary.receivedPaymentPaise,
+    receivedPaymentRupees: summary.receivedPaymentRupees,
+    receivedPayment: summary.receivedPayment,
+    pendingPaymentPaise: summary.pendingPaymentPaise,
+    pendingPaymentRupees: summary.pendingPaymentRupees,
+    pendingPayment: summary.pendingPayment,
+  };
+}
+
+async function buildAssignmentPayoutsForCad(cadUserId) {
+  const entries = await CadWalletLedger.find({ cadUser: cadUserId })
+    .sort({ createdAt: 1 })
+    .populate({
+      path: "assignment",
+      select: "status completedAt assignedAt surveyorSketchUpload",
+      populate: { path: "surveyorSketchUpload", select: "applicationId surveyNo" },
+    })
+    .populate("surveyorSketchUpload", "applicationId surveyNo")
+    .lean();
+
+  const byAssignment = new Map();
+  for (const row of entries) {
+    const assignmentDoc = row.assignment && typeof row.assignment === "object" ? row.assignment : null;
+    const assignmentId = String(assignmentDoc?._id || row.assignment || row._id);
+    const upload =
+      assignmentDoc?.surveyorSketchUpload && typeof assignmentDoc.surveyorSketchUpload === "object"
+        ? assignmentDoc.surveyorSketchUpload
+        : row.surveyorSketchUpload && typeof row.surveyorSketchUpload === "object"
+          ? row.surveyorSketchUpload
+          : null;
+
+    if (!byAssignment.has(assignmentId)) {
+      byAssignment.set(assignmentId, {
+        assignmentId: assignmentDoc?._id || row.assignment || null,
+        applicationId: upload?.applicationId || null,
+        surveyNo: upload?.surveyNo || null,
+        status: assignmentDoc?.status || null,
+        assignedAt: assignmentDoc?.assignedAt || null,
+        completedAt: assignmentDoc?.completedAt || null,
+        entries: [],
+        assignmentEarnedPaise: 0,
+        assignmentPaidPaise: 0,
+        assignmentRemainingPaise: 0,
+      });
+    }
+
+    const bucket = byAssignment.get(assignmentId);
+    const formatted = formatLedgerEntryRow(row);
+    bucket.entries.push(formatted);
+    bucket.assignmentEarnedPaise += formatted.amountPaise;
+    bucket.assignmentPaidPaise += formatted.paidAmountPaise;
+    bucket.assignmentRemainingPaise += formatted.remainingPaise;
+  }
+
+  return [...byAssignment.values()].map((item) => ({
+    ...item,
+    assignmentEarnedRupees: paiseToRupees(item.assignmentEarnedPaise),
+    assignmentPaidRupees: paiseToRupees(item.assignmentPaidPaise),
+    assignmentRemainingRupees: paiseToRupees(item.assignmentRemainingPaise),
+  }));
+}
+
+async function buildCadUserPayoutBundle(cadUser, { includeAssignments = true } = {}) {
+  await syncCadWalletFromCompletedAssignments(cadUser._id);
+  const [summary, pendingEntryCount, assignments] = await Promise.all([
+    getSummaryForCad(cadUser._id),
+    countOpenEntriesForCad(cadUser._id),
+    includeAssignments ? buildAssignmentPayoutsForCad(cadUser._id) : Promise.resolve([]),
+  ]);
+
+  let statistics;
+  if (includeAssignments) {
+    const flatEntries = assignments.flatMap((a) => a.entries);
+    statistics = buildStatisticsFromSummary(summary, flatEntries);
+  } else {
+    const ledgerRows = await CadWalletLedger.find({ cadUser: cadUser._id })
+      .select("sourcePaidAmountPaise assignment")
+      .lean();
+    statistics = buildStatisticsFromSummary(summary, ledgerRows);
+  }
+
+  const result = {
+    cadUser,
+    summary,
+    statistics,
+    pendingEntryCount,
+    payment: {
+      maxPayablePaise: summary.pendingPaymentPaise,
+      maxPayableRupees: summary.pendingPaymentRupees,
+      maxPayable: summary.pendingPayment,
+      canPayFull: summary.pendingPaymentPaise > 0,
+    },
+  };
+  if (includeAssignments) {
+    result.assignments = assignments;
+  }
+  return result;
+}
+
+/**
+ * Admin: pending payout for one CAD user, or all CAD users (from User collection, role CAD).
+ * @param {string|undefined} cadUserId
+ */
+async function getPendingPayoutSummaryForAdmin(cadUserId) {
+  if (cadUserId) {
+    validObjectIdOrThrow(cadUserId);
+    const cadUser = await loadCadUserForAdmin(cadUserId);
+    return buildCadUserPayoutBundle(cadUser, { includeAssignments: true });
+  }
+
+  const users = await User.find({ role: USER_ROLES.CAD, deletedAt: null })
+    .select("name role auth.email auth.phone")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const cadUsers = await Promise.all(
+    users.map((cadUser) => buildCadUserPayoutBundle(cadUser, { includeAssignments: false }))
+  );
+
+  const totalPendingPaise = cadUsers.reduce((sum, item) => sum + item.summary.pendingPaymentPaise, 0);
+  const totalEarningsPaise = cadUsers.reduce((sum, item) => sum + item.summary.totalEarningsPaise, 0);
+  const totalReceivedPaise = cadUsers.reduce((sum, item) => sum + item.summary.receivedPaymentPaise, 0);
+  const totalSourcePaidPaise = cadUsers.reduce(
+    (sum, item) => sum + (item.statistics?.totalSourcePaidPaise || 0),
+    0
+  );
+
+  return {
+    payoutPercent: cadPayoutPricing.getCadPayoutPercent(),
+    totalPendingPaise,
+    totalPendingRupees: paiseToRupees(totalPendingPaise),
+    totalPending: paiseToRupees(totalPendingPaise),
+    statistics: {
+      payoutPercent: cadPayoutPricing.getCadPayoutPercent(),
+      cadUserCount: cadUsers.length,
+      assignmentCount: cadUsers.reduce((s, u) => s + (u.statistics?.assignmentCount || 0), 0),
+      completedDeliveryCount: cadUsers.reduce((s, u) => s + (u.statistics?.completedDeliveryCount || 0), 0),
+      totalSourcePaidPaise,
+      totalSourcePaidRupees: paiseToRupees(totalSourcePaidPaise),
+      totalSourcePaid: paiseToRupees(totalSourcePaidPaise),
+      totalEarningsPaise,
+      totalEarningsRupees: paiseToRupees(totalEarningsPaise),
+      totalEarnings: paiseToRupees(totalEarningsPaise),
+      receivedPaymentPaise: totalReceivedPaise,
+      receivedPaymentRupees: paiseToRupees(totalReceivedPaise),
+      receivedPayment: paiseToRupees(totalReceivedPaise),
+      pendingPaymentPaise: totalPendingPaise,
+      pendingPaymentRupees: paiseToRupees(totalPendingPaise),
+      pendingPayment: paiseToRupees(totalPendingPaise),
+    },
+    cadUsers,
+  };
+}
+
+function validObjectIdOrThrow(id) {
+  if (!mongoose.Types.ObjectId.isValid(String(id))) {
+    throw new BadRequestError("cadUserId must be a valid ObjectId", { code: "INVALID_CAD_USER_ID" });
+  }
 }
 
 module.exports = {
@@ -381,4 +729,6 @@ module.exports = {
   markEntryPaid,
   effectivePaidPaise,
   paidPercentForDoc,
+  getPendingPayoutSummaryForAdmin,
+  syncCadWalletFromCompletedAssignments,
 };

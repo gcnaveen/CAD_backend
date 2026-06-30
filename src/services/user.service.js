@@ -183,6 +183,9 @@ async function createCadUser(creator, { email, password, firstName, lastName, ca
 
   const user = await User.create(userPayload);
 
+  const cadInterestService = require("./cadInterest.service");
+  await cadInterestService.markConvertedByCadUserEmail(normalizedEmail, user._id);
+
   return { user };
 }
 

@@ -427,7 +427,8 @@ paths:
       tags: [Authentication]
       summary: List CAD Interests (Admin only)
       description: |
-        Admin/Super Admin can view CAD interest submissions with pagination.
+        Admin/Super Admin can view **open** CAD interest submissions (not yet onboarded as CAD users).
+        Excludes interests already converted via `POST /api/users` with `role: CAD` (same email), or marked `convertedAt`.
       operationId: listCadInterests
       security:
         - bearerAuth: []
@@ -2000,11 +2001,14 @@ paths:
       summary: List Surveyor Orders with Status Tabs
       description: |
         Returns only the logged-in surveyor's orders with status bucket filter and tab counts.
+        Each order includes the current **assignment** (if any) with `assignedTo` / `cadCenter`.
         Buckets:
         - `all`
         - `active` (PAYMENT_PENDING, PENDING, ASSIGNED, CAD_DELIVERED, UNDER_REVISION)
         - `completed` (APPROVED)
         - `cancelled` (REJECTED)
+        **Status filter:** optional `status` query (single or comma-separated). When set, it filters the list by exact workflow status and overrides `bucket` for filtering.
+        Example: `?status=PENDING` or `?status=ASSIGNED,CAD_DELIVERED`
       operationId: listSurveyorOrders
       security:
         - bearerAuth: []
@@ -2016,6 +2020,17 @@ paths:
             type: string
             enum: [all, active, completed, cancelled]
             default: all
+          description: Tab bucket (ignored for list filtering when `status` is provided).
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            example: PENDING
+          description: |
+            Filter by exact status. Comma-separated for multiple.
+            Values: PAYMENT_PENDING, PENDING, ASSIGNED, CAD_DELIVERED, UNDER_REVISION, APPROVED, REJECTED
+            (UNDER_REVIEW accepted as alias for UNDER_REVISION).
         - name: page
           in: query
           required: false
@@ -2050,6 +2065,10 @@ paths:
                       limit: { type: integer, example: 20 }
                       total: { type: integer, example: 1 }
                       bucket: { type: string, example: all }
+                      status:
+                        type: array
+                        items: { type: string }
+                        description: Present when `status` query filter was applied
                       counts:
                         type: object
                         properties:
@@ -2057,6 +2076,19 @@ paths:
                           active: { type: integer, example: 0 }
                           completed: { type: integer, example: 0 }
                           cancelled: { type: integer, example: 0 }
+                          byStatus:
+                            type: object
+                            description: Per-status order counts for filter chips
+                            additionalProperties:
+                              type: integer
+                            example:
+                              PAYMENT_PENDING: 1
+                              PENDING: 2
+                              ASSIGNED: 0
+                              CAD_DELIVERED: 1
+                              UNDER_REVISION: 0
+                              APPROVED: 3
+                              REJECTED: 0
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -2618,9 +2650,9 @@ paths:
       tags: [Admin - Assignments]
       summary: Pay CAD user by amount
       description: |
-        Admin/Super Admin provides a CAD user and amount.
-        The amount is auto-applied to that CAD user's **oldest pending** wallet entries first.
-        CAD wallet summary immediately reflects this as received payment.
+        Admin/Super Admin pays a CAD user. **Enter a custom amount** or send `payFull: true` to settle entire pending balance.
+        Custom amount fields (send **one** only): `amount` (₹), `amountRupees`, or `amountPaise`.
+        Payment is applied to **oldest pending** ledger entries first.
       operationId: recordCadWalletPaymentForUser
       security:
         - bearerAuth: []
@@ -2631,14 +2663,24 @@ paths:
             schema:
               $ref: "#/components/schemas/AdminCadWalletPayCadUserRequest"
             examples:
+              customRupees:
+                summary: Enter amount in rupees
+                value:
+                  cadUserId: "507f1f77bcf86cd799439011"
+                  amount: 150
+              amountRupees:
+                value:
+                  cadUserId: "507f1f77bcf86cd799439011"
+                  amountRupees: 150
               paise:
                 value:
                   cadUserId: "507f1f77bcf86cd799439011"
                   amountPaise: 15000
-              rupees:
+              payFull:
+                summary: Pay entire pending balance
                 value:
                   cadUserId: "507f1f77bcf86cd799439011"
-                  amountRupees: 150
+                  payFull: true
       responses:
         "200":
           description: Amount applied to user's pending entries
@@ -2649,6 +2691,53 @@ paths:
                 properties:
                   success: { type: boolean, example: true }
                   data: { $ref: "#/components/schemas/AdminCadWalletPayCadUserResponse" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/admin/cad-wallet/pending-summary:
+    get:
+      tags: [Admin - Assignments]
+      summary: CAD pending payout summary (admin)
+      description: |
+        Returns CAD payout statistics per user from **completed assignments**.
+        CAD earning = **surveyor paid amount × `CAD_PAYOUT_PERCENT`** (default **20%**).
+        Example: survey paid ₹500 → CAD earns ₹100; survey paid ₹1000 → CAD earns ₹200.
+        Admin-recorded payouts reduce `pendingPayment`.
+        - **Without** `cadUserId`: all active CAD users (`role: CAD`) with totals + per-user `statistics` (no assignment list).
+        - **With** `cadUserId`: one CAD user with `statistics`, `assignments[]` breakdown, and per-delivery rows.
+        Use before `POST /api/admin/cad-wallet/pay-user`.
+      operationId: getAdminCadPendingPayoutSummary
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cadUserId
+          in: query
+          required: false
+          schema: { type: string }
+          description: CAD user ObjectId. Omit to list all active CAD users with wallet totals.
+      responses:
+        "200":
+          description: Pending payout summary
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      success: { type: boolean, example: true }
+                      data:
+                        $ref: "#/components/schemas/AdminCadPendingPayoutSingle"
+                  - type: object
+                    properties:
+                      success: { type: boolean, example: true }
+                      data:
+                        $ref: "#/components/schemas/AdminCadPendingPayoutList"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2940,14 +3029,40 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/cad/dashboard/overview:
+    get:
+      tags: [CAD - Assignments]
+      summary: CAD dashboard overview (wallet + orders)
+      description: |
+        Single call for the CAD user home dashboard: **wallet summary** and **order counts**.
+        Same data as `GET /api/cad/wallet` + `GET /api/cad/dashboard/stats` combined.
+      operationId: getCadDashboardOverview
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Wallet and order summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/CadDashboardOverview" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /api/cad/wallet:
     get:
       tags: [CAD - Assignments]
       summary: CAD wallet summary (earnings)
       description: |
         Aggregates **CadWalletLedger** for this user. Amounts are in paise and rupees.
-        Ledger rows are created when a sketch **initial** or **revision** delivery completes, only if the matching env payout is &gt; 0:
-        `CAD_INITIAL_DELIVERY_PAYOUT_PAISE`, `CAD_REVISION_DELIVERY_PAYOUT_PAISE`.
+        Ledger rows are created when a sketch **initial** or **revision** delivery completes.
+        CAD earning = **surveyor paid amount × `CAD_PAYOUT_PERCENT`** (default 20%).
+        Example: survey paid ₹500 → CAD credited ₹100.
         **totalEarnings** / **totalEarningsPaise** — full credited amounts per row.
         **receivedPayment** — cumulative amount admin has marked paid (including partial payments).
         **pendingPayment** — remaining balance across all rows (`totalEarnings − receivedPayment`).
@@ -4410,6 +4525,130 @@ components:
         totalEarnings: { type: number, description: Alias of totalEarningsRupees (₹) }
         pendingPayment: { type: number, description: Alias of pendingPaymentRupees (₹) }
         receivedPayment: { type: number, description: Alias of receivedPaymentRupees (₹) }
+        pendingPayments: { type: number, description: Dashboard alias of pendingPayment (₹) }
+        receivedPayments: { type: number, description: Dashboard alias of receivedPayment (₹) }
+
+    CadDashboardOverview:
+      type: object
+      properties:
+        wallet: { $ref: "#/components/schemas/CadWalletSummary" }
+        orders: { $ref: "#/components/schemas/CadDashboardStats" }
+
+    AdminCadPendingPayoutUserRef:
+      type: object
+      properties:
+        _id: { type: string }
+        name:
+          type: object
+          properties:
+            first: { type: string }
+            last: { type: string, nullable: true }
+        role: { type: string, example: CAD }
+        auth:
+          type: object
+          properties:
+            email: { type: string, nullable: true }
+            phone: { type: string, nullable: true }
+
+    AdminCadPendingPayoutSingle:
+      type: object
+      properties:
+        cadUser: { $ref: "#/components/schemas/AdminCadPendingPayoutUserRef" }
+        summary: { $ref: "#/components/schemas/CadWalletSummary" }
+        statistics: { $ref: "#/components/schemas/AdminCadPayoutStatistics" }
+        payment:
+          $ref: "#/components/schemas/AdminCadPayFormHints"
+        pendingEntryCount:
+          type: integer
+          minimum: 0
+          description: Ledger rows with remaining balance
+        assignments:
+          type: array
+          items: { $ref: "#/components/schemas/AdminCadAssignmentPayout" }
+
+    AdminCadPendingPayoutList:
+      type: object
+      properties:
+        payoutPercent: { type: number, example: 20, description: Server CAD_PAYOUT_PERCENT }
+        totalPendingPaise: { type: integer, minimum: 0 }
+        totalPendingRupees: { type: number }
+        totalPending: { type: number, description: Alias of totalPendingRupees (₹) }
+        statistics: { $ref: "#/components/schemas/AdminCadPayoutStatistics" }
+        cadUsers:
+          type: array
+          items:
+            type: object
+            properties:
+              cadUser: { $ref: "#/components/schemas/AdminCadPendingPayoutUserRef" }
+              summary: { $ref: "#/components/schemas/CadWalletSummary" }
+              statistics: { $ref: "#/components/schemas/AdminCadPayoutStatistics" }
+              payment: { $ref: "#/components/schemas/AdminCadPayFormHints" }
+              pendingEntryCount: { type: integer, minimum: 0 }
+
+    AdminCadPayFormHints:
+      type: object
+      description: Use for pay modal — max allowed and whether Pay full is available
+      properties:
+        maxPayablePaise: { type: integer, minimum: 0 }
+        maxPayableRupees: { type: number }
+        maxPayable: { type: number, description: Alias of maxPayableRupees (₹) }
+        canPayFull: { type: boolean }
+
+    AdminCadPayoutStatistics:
+      type: object
+      properties:
+        payoutPercent: { type: number, example: 20 }
+        assignmentCount: { type: integer, minimum: 0 }
+        completedDeliveryCount: { type: integer, minimum: 0 }
+        cadUserCount: { type: integer, minimum: 0, description: Present on platform-wide list only }
+        totalSourcePaidPaise: { type: integer, minimum: 0, description: Sum of surveyor payments that generated CAD earnings }
+        totalSourcePaidRupees: { type: number }
+        totalSourcePaid: { type: number }
+        totalEarningsPaise: { type: integer, minimum: 0 }
+        totalEarningsRupees: { type: number }
+        totalEarnings: { type: number }
+        receivedPaymentPaise: { type: integer, minimum: 0, description: Amount admin already paid to CAD }
+        receivedPaymentRupees: { type: number }
+        receivedPayment: { type: number }
+        pendingPaymentPaise: { type: integer, minimum: 0 }
+        pendingPaymentRupees: { type: number }
+        pendingPayment: { type: number }
+
+    AdminCadAssignmentPayout:
+      type: object
+      properties:
+        assignmentId: { type: string }
+        applicationId: { type: string, nullable: true }
+        surveyNo: { type: string, nullable: true }
+        status: { type: string, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+        assignmentEarnedPaise: { type: integer, minimum: 0 }
+        assignmentEarnedRupees: { type: number }
+        assignmentPaidPaise: { type: integer, minimum: 0 }
+        assignmentPaidRupees: { type: number }
+        assignmentRemainingPaise: { type: integer, minimum: 0 }
+        assignmentRemainingRupees: { type: number }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/AdminCadPayoutLedgerEntry" }
+
+    AdminCadPayoutLedgerEntry:
+      type: object
+      properties:
+        ledgerId: { type: string }
+        kind: { type: string, enum: [INITIAL_DELIVERY, REVISION_DELIVERY] }
+        revisionNo: { type: integer, nullable: true }
+        sourcePaidAmountPaise: { type: integer, minimum: 0, description: Surveyor payment for this delivery }
+        sourcePaidRupees: { type: number }
+        payoutPercent: { type: number, example: 20 }
+        amountPaise: { type: integer, minimum: 0, description: CAD earning for this delivery }
+        amountRupees: { type: number }
+        paidAmountPaise: { type: integer, minimum: 0 }
+        paidAmountRupees: { type: number }
+        remainingPaise: { type: integer, minimum: 0 }
+        remainingRupees: { type: number }
+        paidPercent: { type: integer, minimum: 0, maximum: 100 }
+        balanceStatus: { type: string, enum: [PENDING, PARTIAL, PAID] }
 
     CadWalletPaymentLogItem:
       type: object
@@ -4471,13 +4710,21 @@ components:
       required: [cadUserId]
       properties:
         cadUserId: { type: string }
-        amountPaise: { type: integer, minimum: 1, description: Amount to pay in paise }
-        amountRupees: { type: number, minimum: 0, description: Amount to pay in rupees }
+        payFull:
+          type: boolean
+          description: When true, pays entire pending balance (do not send amount fields)
+        amount:
+          type: number
+          minimum: 0
+          description: Custom amount in rupees (same as amountRupees; for pay forms)
+        amountPaise: { type: integer, minimum: 1, description: Custom amount in paise }
+        amountRupees: { type: number, minimum: 0, description: Custom amount in rupees }
 
     AdminCadWalletPayCadUserResponse:
       type: object
       properties:
         cadUserId: { type: string }
+        payFull: { type: boolean }
         requestedAmountPaise: { type: integer }
         requestedAmountRupees: { type: number }
         appliedAmountPaise: { type: integer }
@@ -5250,6 +5497,11 @@ components:
                 _id: { type: string }
                 name: { type: object }
                 role: { type: string }
+                auth:
+                  type: object
+                  properties:
+                    phone: { type: string, nullable: true }
+                    email: { type: string, nullable: true }
         surveyType:
           type: string
           enum: [joint_flat, single_flat]

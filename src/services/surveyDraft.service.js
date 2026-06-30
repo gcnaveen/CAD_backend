@@ -31,7 +31,7 @@ async function create(actor, payload) {
 
 async function getById(actor, draftId) {
   const doc = await SurveyDraft.findOne({ _id: draftId, ...notDeleted })
-    .populate("surveyor", "name role")
+    .populate("surveyor", "name role auth")
     .populate("district", "code name")
     .populate("taluka", "code name")
     .populate("hobli", "code name")
@@ -59,7 +59,7 @@ async function list(actor, options = {}) {
       .sort({ updatedAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate("surveyor", "name role")
+      .populate("surveyor", "name role auth")
       .populate("district", "code name")
       .populate("taluka", "code name")
       .populate("hobli", "code name")

@@ -41,6 +41,18 @@ const CadWalletLedgerSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    /** Surveyor amount paid for this delivery (upload or revision fee), in paise. */
+    sourcePaidAmountPaise: {
+      type: Number,
+      default: null,
+      min: 0,
+    },
+    /** Payout percent used when crediting this row (e.g. 20 = 20%). */
+    payoutPercent: {
+      type: Number,
+      default: null,
+      min: 0,
+    },
     /** Cumulative amount marked paid by admin (paise). Remaining = amountPaise − paidAmountPaise until fully settled. */
     paidAmountPaise: {
       type: Number,
