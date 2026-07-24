@@ -1590,7 +1590,7 @@ paths:
         Submit a survey sketch upload with survey info and document URLs.
         **Authorization:** Surveyor only (Bearer token required).
         **Flow:** Frontend uploads files (e.g., to S3/presigned URL), then POSTs this payload with document URLs.
-        **Payment:** If the resolved upload fee (see `GET /api/surveyor/sketch-pricing`) is **> 0** and PhonePe is configured, the upload is created with `status` **PAYMENT_PENDING** and the response includes `meta.payment.checkoutPageUrl`. After payment, PhonePe redirects to `GET /api/payments/phonepe/callback`. The amount is **standard for all uploads**: admin plan/discount from `PATCH /api/admin/survey-sketch-pricing` when set, else `SKETCH_UPLOAD_FEE_PAISE`. If the fee is 0, behavior is unchanged (`PENDING`, auto-assign and notifications immediately). On success, `data.sketchPayment.paidAmountPaise` stores the amount paid (paise).
+        **Payment:** Prefer **`amount` / `amountRupees` / `amountPaise` from the request body** — that exact value is sent to PhonePe (no hardcoded fee in code). Priority: (1) frontend amount, (2) admin plan/discount from `PATCH /api/admin/survey-sketch-pricing`, (3) `SKETCH_UPLOAD_FEE_PAISE`. If the resolved fee is **> 0** and PhonePe is configured, the upload is created with `status` **PAYMENT_PENDING** and the response includes `meta.payment.checkoutPageUrl` with `meta.payment.amountPaise` / `payableRupees`. After payment, PhonePe redirects to `GET /api/payments/phonepe/callback`. If the fee is 0, behavior is unchanged (`PENDING`, auto-assign and notifications immediately). On success, `data.sketchPayment.paidAmountPaise` stores the amount paid (paise).
         **Auto-generated:** `applicationId` is automatically generated in format `DISTRICT_CODE/TALUKA_CODE/YY/N` (e.g., `KA-BLR/BLR-N/26/1`).
         **Required fields:**
         - `surveyType`: `joint_flat` or `single_flat`
@@ -1856,12 +1856,25 @@ paths:
       description: |
         Re-initiate PhonePe checkout when the initial sketch upload payment **failed** or was **abandoned**.
         **Authorization:** Surveyor only (must own the upload).
+        Optional body: send `amount` / `amountRupees` / `amountPaise` to override the charged amount; otherwise the previously stored amount is reused.
         **When to call:** `data.status` is `PAYMENT_PENDING` and `data.sketchPayment.status` is `FAILED` or `PENDING`.
         **Effect:** Sets `sketchPayment.status` back to `PAYMENT_PENDING` workflow and returns a fresh `meta.payment.checkoutPageUrl`.
         After successful payment, PhonePe redirects to `GET /api/payments/phonepe/callback` and upload moves to `PENDING`.
       operationId: retrySurveyorSketchPayment
       security:
         - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount: { type: number, minimum: 0, description: Amount in rupees }
+                amountRupees: { type: number, minimum: 0 }
+                amountPaise: { type: integer, minimum: 1 }
+            example:
+              amount: 500
       responses:
         "200":
           description: Checkout link issued for payment retry
@@ -4487,7 +4500,7 @@ components:
       type: object
       description: |
         At least one of `remarks`, `audio`, or `retryPayment` (boolean).
-        Revision fee is **standard** (admin flow or env); not set per request.
+        Optional amount: send `amount` / `amountRupees` / `amountPaise` for PhonePe (preferred over admin/env).
       properties:
         remarks:
           type: string
@@ -4504,6 +4517,17 @@ components:
         retryPayment:
           type: boolean
           description: Optional; when true, remarks/audio not required if resuming checkout (validator allows retry-only).
+        amount:
+          type: number
+          minimum: 0
+          description: Payable amount in rupees for PhonePe (preferred)
+        amountRupees:
+          type: number
+          minimum: 0
+        amountPaise:
+          type: integer
+          minimum: 1
+          description: Payable amount in paise
 
     CadDashboardStats:
       type: object
@@ -5000,6 +5024,21 @@ components:
           minLength: 1
           description: Survey number
           example: "123"
+        amount:
+          type: number
+          minimum: 0
+          description: |
+            Payable amount in **rupees** for PhonePe checkout. Preferred when UI already shows the fee.
+            Send only one of `amount`, `amountRupees`, or `amountPaise`. Overrides admin/env pricing.
+          example: 500
+        amountRupees:
+          type: number
+          minimum: 0
+          description: Same as `amount` (rupees)
+        amountPaise:
+          type: integer
+          minimum: 1
+          description: Payable amount in paise (e.g. 50000 = ₹500)
         isSuperimpose:
           type: boolean
           description: |

@@ -1140,8 +1140,15 @@ async function requestSketchRevision(uploadId, surveyor, payload) {
           code: "PHONEPE_NOT_CONFIGURED",
         });
       }
-      const merchantOrderId = pendingPay.merchantOrderId;
-      const revisionFeePaise = Number(pendingPay.amountPaise);
+      // Prefer amount from frontend when retrying/resuming checkout; else keep stored pending amount.
+      if (payload.amountPaise != null && Number(payload.amountPaise) > 0) {
+        uploadDoc.pendingRevisionPayment.amountPaise = Math.round(Number(payload.amountPaise));
+        uploadDoc.pendingRevisionPayment.planAmountRupees = null;
+        uploadDoc.pendingRevisionPayment.discountRupees = null;
+        await uploadDoc.save();
+      }
+      const merchantOrderId = uploadDoc.pendingRevisionPayment.merchantOrderId || pendingPay.merchantOrderId;
+      const revisionFeePaise = Number(uploadDoc.pendingRevisionPayment.amountPaise);
       if (!merchantOrderId || !Number.isFinite(revisionFeePaise) || revisionFeePaise <= 0) {
         await SurveyorSketchUpload.findByIdAndUpdate(uploadId, { $unset: { pendingRevisionPayment: 1 } });
         throw new BadRequestError("Pending revision payment data is invalid; please submit the revision request again.", {
@@ -1150,6 +1157,12 @@ async function requestSketchRevision(uploadId, surveyor, payload) {
       }
       let checkoutPageUrl;
       try {
+        logger.info("PhonePe initiatePay pending revision resume", {
+          uploadId: String(uploadId),
+          merchantOrderId,
+          amountPaise: revisionFeePaise,
+          payableRupees: revisionFeePaise / 100,
+        });
         const pr = await phonePe.initiatePay(merchantOrderId, revisionFeePaise);
         checkoutPageUrl = pr.redirectUrl;
       } catch (pe) {
@@ -1221,7 +1234,7 @@ async function requestSketchRevision(uploadId, surveyor, payload) {
 
   const nextRevisionNo = (uploadDoc.revisionRequests?.length || 0) + 1;
   const phonePe = phonePeSketchPayment;
-  const resolvedRevision = await sketchPaymentPricing.resolveSketchRevisionFee();
+  const resolvedRevision = await sketchPaymentPricing.resolveSketchRevisionFee(payload.amountPaise);
   const revisionFeePaise = resolvedRevision.feePaise;
   const mustPay = nextRevisionNo >= 2 && revisionFeePaise > 0;
 
@@ -1246,6 +1259,14 @@ async function requestSketchRevision(uploadId, surveyor, payload) {
     await uploadDoc.save();
     let checkoutPageUrl;
     try {
+      logger.info("PhonePe initiatePay sketch revision", {
+        uploadId: String(uploadId),
+        merchantOrderId,
+        amountPaise: revisionFeePaise,
+        payableRupees: revisionFeePaise / 100,
+        pricingSource: resolvedRevision.source,
+        revisionNo: nextRevisionNo,
+      });
       const pr = await phonePe.initiatePay(merchantOrderId, revisionFeePaise);
       checkoutPageUrl = pr.redirectUrl;
     } catch (pe) {

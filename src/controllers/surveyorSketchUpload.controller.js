@@ -34,8 +34,8 @@ async function listSurveyorOrders(actor, options) {
   });
 }
 
-async function retrySketchPayment(actor, uploadId) {
-  const result = await surveyorSketchUploadService.reinitiateSketchPayment(actor, uploadId);
+async function retrySketchPayment(actor, uploadId, options = {}) {
+  const result = await surveyorSketchUploadService.reinitiateSketchPayment(actor, uploadId, options);
   return ok(result.data, result.meta);
 }
 

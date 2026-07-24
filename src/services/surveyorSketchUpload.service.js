@@ -144,7 +144,11 @@ function buildSketchPaymentMeta({
  * @param {Object} surveyor
  * @param {string} uploadId
  */
-async function reinitiateSketchPayment(surveyor, uploadId) {
+/**
+ * Re-initiate PhonePe checkout for an unpaid sketch upload.
+ * Optional body.amountPaise / amountRupees / amount overrides the charged amount.
+ */
+async function reinitiateSketchPayment(surveyor, uploadId, options = {}) {
   if (surveyor.role !== USER_ROLES.SURVEYOR) {
     throw new ForbiddenError("Only surveyors can retry sketch upload payment");
   }
@@ -176,10 +180,27 @@ async function reinitiateSketchPayment(surveyor, uploadId) {
     });
   }
 
-  const resolved = await sketchPaymentPricing.resolveSketchUploadFee();
-  const feePaise = Number(upload.sketchPayment?.amountPaise) > 0
-    ? Math.round(Number(upload.sketchPayment.amountPaise))
-    : resolved.feePaise;
+  const clientAmountPaise = options.amountPaise;
+  const baseResolved = await sketchPaymentPricing.resolveSketchUploadFee(clientAmountPaise);
+  const feePaise =
+    clientAmountPaise != null && Number(clientAmountPaise) > 0
+      ? Math.round(Number(clientAmountPaise))
+      : Number(upload.sketchPayment?.amountPaise) > 0
+        ? Math.round(Number(upload.sketchPayment.amountPaise))
+        : baseResolved.feePaise;
+  const resolved =
+    clientAmountPaise != null && Number(clientAmountPaise) > 0
+      ? baseResolved
+      : Number(upload.sketchPayment?.amountPaise) > 0
+        ? {
+            feePaise,
+            planAmountRupees: upload.sketchPayment.planAmountRupees ?? null,
+            discountRupees: upload.sketchPayment.discountRupees ?? null,
+            payableRupees: feePaise / 100,
+            source: "stored",
+          }
+        : baseResolved;
+
   if (!Number.isFinite(feePaise) || feePaise <= 0) {
     throw new BadRequestError("No payment is required for this upload", {
       code: "SKETCH_PAYMENT_NOT_REQUIRED",
@@ -205,6 +226,13 @@ async function reinitiateSketchPayment(surveyor, uploadId) {
 
   let checkoutPageUrl;
   try {
+    logger.info("PhonePe initiatePay sketch upload retry", {
+      uploadId: String(uploadId),
+      merchantOrderId,
+      amountPaise: feePaise,
+      payableRupees: feePaise / 100,
+      pricingSource: resolved.source,
+    });
     const pr = await phonePe.initiatePay(merchantOrderId, feePaise);
     checkoutPageUrl = pr.redirectUrl;
   } catch (pe) {
@@ -478,7 +506,7 @@ async function create(surveyor, payload) {
       await doc.save();
 
       const phonePe = phonePeSketchPayment;
-      const resolved = await sketchPaymentPricing.resolveSketchUploadFee();
+      const resolved = await sketchPaymentPricing.resolveSketchUploadFee(payload.amountPaise);
       const feePaise = resolved.feePaise;
       if (feePaise > 0) {
         if (!phonePe.isPhonePeConfigured()) {
@@ -498,6 +526,13 @@ async function create(surveyor, payload) {
         await doc.save();
         let checkoutPageUrl;
         try {
+          logger.info("PhonePe initiatePay sketch upload", {
+            uploadId: String(doc._id),
+            merchantOrderId,
+            amountPaise: feePaise,
+            payableRupees: feePaise / 100,
+            pricingSource: resolved.source,
+          });
           const pr = await phonePe.initiatePay(merchantOrderId, feePaise);
           checkoutPageUrl = pr.redirectUrl;
         } catch (pe) {

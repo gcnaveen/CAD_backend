@@ -84,6 +84,44 @@ function parseRupeesToPaise(raw, field = "amountRupees") {
   return Math.round(n * 100);
 }
 
+/**
+ * Optional payment amount from frontend for PhonePe checkout.
+ * Accepts one of: amount / amountRupees (₹) or amountPaise.
+ * @returns {number|undefined} paise, or undefined if none sent
+ */
+function parseOptionalClientPaymentAmountPaise(body = {}) {
+  let amountPaise;
+  if (body.amountPaise !== undefined && body.amountPaise !== null && body.amountPaise !== "") {
+    const n = typeof body.amountPaise === "number" ? body.amountPaise : parseInt(String(body.amountPaise), 10);
+    if (!Number.isFinite(n) || n <= 0) {
+      throw new BadRequestError("amountPaise must be a positive integer", {
+        errors: [{ field: "amountPaise", message: "Invalid value" }],
+      });
+    }
+    amountPaise = n;
+  }
+  const rupeeSource =
+    body.amountRupees !== undefined && body.amountRupees !== null && body.amountRupees !== ""
+      ? "amountRupees"
+      : body.amount !== undefined && body.amount !== null && body.amount !== ""
+        ? "amount"
+        : null;
+  if (rupeeSource) {
+    if (amountPaise !== undefined) {
+      throw new BadRequestError("Send only one of amountPaise, amountRupees, or amount", {
+        errors: [{ field: "body", message: "Conflicting amount fields" }],
+      });
+    }
+    amountPaise = parseRupeesToPaise(body[rupeeSource], rupeeSource);
+    if (amountPaise <= 0) {
+      throw new BadRequestError(`${rupeeSource} must be greater than zero`, {
+        errors: [{ field: rupeeSource, message: "Invalid value" }],
+      });
+    }
+  }
+  return amountPaise;
+}
+
 const schemas = {
   /** Super Admin: firstName, email, password. lastName optional. */
   superAdminRegister(body) {
@@ -689,7 +727,17 @@ const schemas = {
     if (!payload.retryPayment && !hasContent) {
       throw new BadRequestError("At least one of remarks or audio is required");
     }
+    const clientAmountPaise = parseOptionalClientPaymentAmountPaise(body);
+    if (clientAmountPaise !== undefined) {
+      payload.amountPaise = clientAmountPaise;
+    }
     return payload;
+  },
+
+  /** Surveyor: retry upload payment — optional amount override from frontend. */
+  sketchPaymentRetry(body = {}) {
+    const clientAmountPaise = parseOptionalClientPaymentAmountPaise(body || {});
+    return clientAmountPaise !== undefined ? { amountPaise: clientAmountPaise } : {};
   },
 
   surveyorCadFeedbackCreate(body) {
@@ -1057,6 +1105,8 @@ const schemas = {
       }
     }
 
+    const clientAmountPaise = parseOptionalClientPaymentAmountPaise(body);
+
     return {
       surveyType,
       district,
@@ -1072,6 +1122,7 @@ const schemas = {
       audio: audio.length ? audio : undefined,
       others: others || undefined,
       other_documents: other_documents.length ? other_documents : undefined,
+      ...(clientAmountPaise !== undefined ? { amountPaise: clientAmountPaise } : {}),
     };
   },
 

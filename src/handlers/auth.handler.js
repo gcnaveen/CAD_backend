@@ -266,7 +266,8 @@ exports.retrySurveyorSketchPayment = asyncHandler(async (event) => {
   const { uploadId } = getPathParams(event);
   if (!uploadId) throw new BadRequestError("uploadId is required");
   validObjectId(uploadId, "uploadId");
-  return await surveyorSketchUploadController.retrySketchPayment(user, uploadId);
+  const body = schemas.sketchPaymentRetry(parseJsonBody(event) || {});
+  return await surveyorSketchUploadController.retrySketchPayment(user, uploadId, body);
 });
 
 exports.clearSurveyorSketchUpload = asyncHandler(async (event) => {
