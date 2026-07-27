@@ -1,41 +1,59 @@
 /**
  * Authentication Service
- * Super Admin/Admin/CAD: email + password login.
+ * Super Admin/Admin/CAD: email + password (+ admin MFA).
  * Surveyor: phone + password login (OTP only during first-time registration).
+ * Audit H-02: throttling, short access tokens, rotating refresh tokens, MFA for admins.
  */
 
 const User = require("../models/user/User");
-const { generateToken } = require("../middleware/auth.middleware");
+const {
+  generateAccessToken,
+  generateMfaPendingToken,
+  verifyMfaPendingToken,
+} = require("../middleware/auth.middleware");
 const otpService = require("./otp.service");
+const authAudit = require("./authAudit.service");
+const authThrottle = require("./authThrottle.service");
+const refreshTokenService = require("./refreshToken.service");
+const totp = require("../utils/totp");
+const notificationService = require("./notification.service");
 const { USER_ROLES, USER_STATUS } = require("../config/constants");
+const { ACCESS_TOKEN_EXPIRES_IN } = require("../config/authSecurity");
 const {
   BadRequestError,
   ConflictError,
   UnauthorizedError,
   ForbiddenError,
   NotFoundError,
+  DatabaseError,
+  TooManyRequestsError,
 } = require("../utils/errors");
+const logger = require("../utils/logger");
 
-/** Roles that use email + password login */
 const EMAIL_PASSWORD_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN, USER_ROLES.CAD];
-
-/** Role that uses phone + password login (OTP only for registration) */
 const SURVEYOR_ROLE = USER_ROLES.SURVEYOR;
+const MFA_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN];
+
+async function issueSession(user, requestMeta = {}) {
+  const accessToken = generateAccessToken(user);
+  const refresh = await refreshTokenService.issueRefreshToken(user._id, requestMeta);
+  return {
+    token: accessToken,
+    accessToken,
+    refreshToken: refresh.refreshToken,
+    expiresIn: ACCESS_TOKEN_EXPIRES_IN,
+    refreshExpiresAt: refresh.expiresAt,
+    sessionId: refresh.sessionId,
+  };
+}
 
 class AuthService {
-  /**
-   * Returns true if at least one Super Admin exists (used to protect registration).
-   */
   async hasSuperAdmin() {
     const count = await User.countDocuments({ role: USER_ROLES.SUPER_ADMIN });
     return count > 0;
   }
 
-  /**
-   * Register new Super Admin.
-   * Password role → create as ACTIVE, return user + token.
-   */
-  async registerSuperAdmin(payload) {
+  async registerSuperAdmin(payload, requestMeta = {}) {
     const { firstName, lastName, email, password } = payload;
 
     if (!email || !password || !firstName) {
@@ -57,20 +75,16 @@ class AuthService {
       createdBy: null,
     });
 
-    const token = generateToken(user);
+    const session = await issueSession(user, requestMeta);
     return {
       user,
-      token,
+      ...session,
       otpRequired: false,
-      message: "Registration successful",
+      message: "Registration successful. Enable MFA via POST /api/auth/mfa/setup.",
     };
   }
 
-  /**
-   * Surveyor step 1: create/find user by phone + name, send OTP.
-   * Returns otpRequired: true (verify next to get token).
-   */
-  async surveyorSendOtp(payload) {
+  async surveyorSendOtp(payload, requestMeta = {}) {
     const { phone, firstName, lastName } = payload;
 
     if (!phone || !firstName) {
@@ -89,11 +103,9 @@ class AuthService {
           name: { first: firstName.trim(), last: (lastName || "").trim() },
           auth: { phone: normalizedPhone },
         });
-        // Reload with OTP fields selected
         user = await User.findById(user._id).select("+auth.otpCode +auth.otpExpires");
       } catch (err) {
-        // If user creation fails (e.g., duplicate phone), try to find again
-        if (err.code === 11000 || err.name === 'MongoServerError') {
+        if (err.code === 11000 || err.name === "MongoServerError") {
           user = await User.findOne({ "auth.phone": normalizedPhone }).select(
             "+auth.otpCode +auth.otpExpires"
           );
@@ -113,13 +125,11 @@ class AuthService {
       await user.save();
     }
 
-    // Ensure user is saved before issuing OTP
     if (!user._id) {
       throw new DatabaseError("User not properly saved");
     }
 
-    // Pass the user instance to avoid re-querying (now with OTP fields selected)
-    const result = await otpService.issueOtp(normalizedPhone, user);
+    const result = await otpService.issueOtp(normalizedPhone, user, { ip: requestMeta.ip });
     return {
       message: result.message,
       expiresAt: result.expiresAt,
@@ -127,18 +137,16 @@ class AuthService {
     };
   }
 
-  /**
-   * Surveyor step 2: verify OTP during registration. Marks user as verified.
-   * Returns message indicating next step (complete registration).
-   */
-  async surveyorVerifyOtp(payload) {
+  async surveyorVerifyOtp(payload, requestMeta = {}) {
     const { phone, otp } = payload;
 
     if (!phone || !otp) {
       throw new BadRequestError("phone and otp are required");
     }
 
-    const user = await otpService.verifyOtp(String(phone).trim(), String(otp).trim());
+    const user = await otpService.verifyOtp(String(phone).trim(), String(otp).trim(), {
+      ip: requestMeta.ip,
+    });
 
     if (user.role !== USER_ROLES.SURVEYOR) {
       throw new BadRequestError("User is not a surveyor");
@@ -155,11 +163,7 @@ class AuthService {
     };
   }
 
-  /**
-   * Surveyor step 3: complete registration - set password and profile in one call.
-   * Requires OTP to be verified first. Returns user + token.
-   */
-  async surveyorCompleteRegistration(payload) {
+  async surveyorCompleteRegistration(payload, requestMeta = {}) {
     const { phone, password, district, taluka, category, surveyType, firstName, lastName } = payload;
 
     if (!phone || !password) {
@@ -193,7 +197,6 @@ class AuthService {
       throw new ConflictError("Registration already completed. Use login instead.");
     }
 
-    // Update name if provided in payload
     if (firstName) {
       user.name.first = firstName.trim();
     }
@@ -201,10 +204,7 @@ class AuthService {
       user.name.last = lastName ? lastName.trim() : "";
     }
 
-    // Set password
     user.auth.password = password;
-
-    // Set profile
     user.surveyorProfile = {
       district,
       taluka,
@@ -214,19 +214,15 @@ class AuthService {
 
     await user.save();
 
-    const token = generateToken(user);
+    const session = await issueSession(user, requestMeta);
     return {
       user,
-      token,
+      ...session,
       message: "Registration completed successfully.",
     };
   }
 
-  /**
-   * Surveyor forgot password - step 1: send OTP to phone.
-   * Body: { phone }
-   */
-  async surveyorForgotPasswordStart(payload) {
+  async surveyorForgotPasswordStart(payload, requestMeta = {}) {
     const { phone } = payload;
     if (!phone) {
       throw new BadRequestError("phone is required");
@@ -245,19 +241,17 @@ class AuthService {
       throw new UnauthorizedError("User account is not active");
     }
 
-    const result = await otpService.issueOtp(normalizedPhone, user);
+    const result = await otpService.issueOtp(normalizedPhone, user, { ip: requestMeta.ip });
     return { ...result, otpRequired: true };
   }
 
-  /**
-   * Surveyor forgot password - step 2: verify OTP and reset password.
-   * Body: { phone, otp, password }
-   */
-  async surveyorForgotPasswordReset(payload) {
+  async surveyorForgotPasswordReset(payload, requestMeta = {}) {
     const { phone, otp, password } = payload;
 
     const normalizedPhone = String(phone).trim();
-    const verifiedUser = await otpService.verifyOtp(normalizedPhone, String(otp).trim());
+    const verifiedUser = await otpService.verifyOtp(normalizedPhone, String(otp).trim(), {
+      ip: requestMeta.ip,
+    });
 
     if (verifiedUser.role !== SURVEYOR_ROLE) {
       throw new BadRequestError("User is not a surveyor");
@@ -266,30 +260,22 @@ class AuthService {
       throw new UnauthorizedError("User account is not active");
     }
 
-    // Pre-validate hook requires otpVerified=true for surveyors; verifyOtp sets it.
-    // Also require profile exists so we don't accidentally enable password-only accounts.
-    // if (!verifiedUser.surveyorProfile) {
-    //   throw new ForbiddenError("Complete registration/profile before resetting password");
-    // }
-
     verifiedUser.auth.password = password;
     await verifiedUser.save();
+    await refreshTokenService.revokeAllForUser(verifiedUser._id);
 
-    const token = generateToken(verifiedUser);
+    const session = await issueSession(verifiedUser, requestMeta);
     return {
       user: verifiedUser,
-      token,
+      ...session,
       message: "Password reset successful",
       otpRequired: false,
     };
   }
 
-  /**
-   * Login: email + password (Super Admin / Admin / CAD) OR phone + password (Surveyor).
-   * Returns user + token.
-   */
-  async login(payload) {
+  async login(payload, requestMeta = {}) {
     const { email, phone, password } = payload;
+    const identifier = email ? String(email).toLowerCase().trim() : phone ? String(phone).trim() : null;
 
     if (!password) {
       throw new BadRequestError("password is required");
@@ -299,63 +285,267 @@ class AuthService {
       throw new BadRequestError("email or phone is required");
     }
 
+    const throttleKey = await authThrottle.assertLoginAllowed({
+      ip: requestMeta.ip,
+      identifier,
+    });
+
     let user;
 
-    if (email) {
-      // Email + password login (Super Admin / Admin / CAD)
-      user = await User.findOne({ "auth.email": email.toLowerCase().trim() }).select(
-        "+auth.password"
-      );
+    try {
+      if (email) {
+        user = await User.findOne({ "auth.email": email.toLowerCase().trim() }).select(
+          "+auth.password +auth.mfaSecret"
+        );
 
-      if (!user) {
+        if (!user) {
+          throw new UnauthorizedError("Invalid credentials");
+        }
+
+        if (!EMAIL_PASSWORD_ROLES.includes(user.role)) {
+          throw new BadRequestError(
+            "This account uses phone + password login. Use phone number and password to sign in."
+          );
+        }
+      } else {
+        const normalizedPhone = String(phone).trim();
+        user = await User.findOne({ "auth.phone": normalizedPhone }).select(
+          "+auth.password +auth.mfaSecret"
+        );
+
+        if (!user) {
+          throw new UnauthorizedError("Invalid credentials");
+        }
+
+        if (user.role !== SURVEYOR_ROLE) {
+          throw new BadRequestError(
+            "This account uses email + password login. Use email and password to sign in."
+          );
+        }
+
+        if (!user.auth.password) {
+          throw new BadRequestError(
+            "Password not set. Complete registration by setting your password."
+          );
+        }
+      }
+
+      if (user.status !== USER_STATUS.ACTIVE) {
+        throw new UnauthorizedError("User account is not active");
+      }
+
+      const match = await user.comparePassword(password);
+      if (!match) {
         throw new UnauthorizedError("Invalid credentials");
       }
 
-      if (!EMAIL_PASSWORD_ROLES.includes(user.role)) {
-        throw new BadRequestError(
-          "This account uses phone + password login. Use phone number and password to sign in."
-        );
-      }
-    } else {
-      // Phone + password login (Surveyor)
-      const normalizedPhone = String(phone).trim();
-      user = await User.findOne({ "auth.phone": normalizedPhone }).select("+auth.password");
+      await authThrottle.recordLoginSuccess(throttleKey);
 
-      if (!user) {
-        throw new UnauthorizedError("Invalid credentials");
+      // Admin MFA gate
+      if (MFA_ROLES.includes(user.role) && user.auth?.mfaEnabled) {
+        const mfaToken = generateMfaPendingToken(user);
+        await authAudit.recordLoginEvent({
+          success: true,
+          user,
+          identifier,
+          reason: "MFA_REQUIRED",
+          requestMeta,
+        });
+        return {
+          user: null,
+          mfaRequired: true,
+          mfaToken,
+          message: "MFA required. Submit code to POST /api/auth/mfa/verify",
+        };
       }
 
-      if (user.role !== SURVEYOR_ROLE) {
-        throw new BadRequestError(
-          "This account uses email + password login. Use email and password to sign in."
-        );
+      await this._finalizeLogin(user, identifier, requestMeta);
+      const session = await issueSession(user, requestMeta);
+      return {
+        user,
+        ...session,
+        mfaRequired: false,
+        otpRequired: false,
+        message: "Login successful",
+      };
+    } catch (err) {
+      if (err instanceof UnauthorizedError) {
+        try {
+          await authThrottle.recordLoginFailure(throttleKey);
+        } catch (lockErr) {
+          if (lockErr instanceof TooManyRequestsError) throw lockErr;
+        }
+        await authAudit.recordLoginEvent({
+          success: false,
+          user: user || null,
+          identifier,
+          reason: "INVALID_CREDENTIALS",
+          requestMeta,
+        });
       }
+      throw err;
+    }
+  }
 
-      if (!user.auth.password) {
-        throw new BadRequestError(
-          "Password not set. Complete registration by setting your password."
-        );
+  async _finalizeLogin(user, identifier, requestMeta) {
+    const prevIp = user.auth?.lastLoginIp || null;
+    const newIp = requestMeta.ip || null;
+    user.auth.lastLoginAt = new Date();
+    user.auth.lastLoginIp = newIp;
+    await user.save();
+
+    await authAudit.recordLoginEvent({
+      success: true,
+      user,
+      identifier,
+      requestMeta,
+    });
+
+    if (prevIp && newIp && prevIp !== newIp && MFA_ROLES.includes(user.role)) {
+      try {
+        await notificationService.create({
+          type: "SUSPICIOUS_LOGIN",
+          title: "Suspicious login",
+          message: `Login from new IP ${newIp} (previous ${prevIp})`,
+          entityType: "User",
+          entityId: user._id,
+          targetRoles: [USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN],
+          targetUsers: [user._id],
+          createdBy: user._id,
+          data: { ip: newIp, previousIp: prevIp },
+        });
+      } catch (err) {
+        logger.error("Failed to create suspicious login notification", err);
       }
     }
+  }
 
-    const match = await user.comparePassword(password);
-    if (!match) {
-      throw new UnauthorizedError("Invalid credentials");
+  async verifyMfa({ mfaToken, code }, requestMeta = {}) {
+    if (!mfaToken || !code) {
+      throw new BadRequestError("mfaToken and code are required");
     }
-
-    const token = generateToken(user);
+    const decoded = verifyMfaPendingToken(mfaToken);
+    const user = await User.findById(decoded.userId).select("+auth.mfaSecret");
+    if (!user || !user.auth?.mfaEnabled || !user.auth?.mfaSecret) {
+      throw new UnauthorizedError("MFA not configured");
+    }
+    if (!totp.verifyTotp(user.auth.mfaSecret, code)) {
+      throw new UnauthorizedError("Invalid MFA code");
+    }
+    const identifier = user.auth.email || user.auth.phone;
+    await this._finalizeLogin(user, identifier, requestMeta);
+    const session = await issueSession(user, requestMeta);
     return {
       user,
-      token,
-      otpRequired: false,
-      message: "Login successful",
+      ...session,
+      mfaRequired: false,
+      message: "MFA verified",
     };
   }
 
-  /**
-   * Resend OTP during surveyor registration. Only for users without password set.
-   */
-  async resendSurveyorOtp(phone) {
+  async setupMfa(actor) {
+    if (!MFA_ROLES.includes(actor.role)) {
+      throw new ForbiddenError("MFA setup is for Admin / Super Admin only");
+    }
+    const user = await User.findById(actor._id).select("+auth.mfaSecret");
+    if (!user) throw new NotFoundError("User not found");
+    const secret = totp.generateMfaSecret();
+    user.auth.mfaSecret = secret;
+    user.auth.mfaEnabled = false;
+    await user.save();
+    return {
+      secret,
+      otpauthUrl: totp.otpauthUrl({
+        secret,
+        email: user.auth.email,
+        issuer: "CAD Backend",
+      }),
+      message: "Scan otpauthUrl in authenticator app, then POST /api/auth/mfa/enable with a code",
+    };
+  }
+
+  async enableMfa(actor, { code }) {
+    if (!MFA_ROLES.includes(actor.role)) {
+      throw new ForbiddenError("MFA enable is for Admin / Super Admin only");
+    }
+    if (!code) throw new BadRequestError("code is required");
+    const user = await User.findById(actor._id).select("+auth.mfaSecret");
+    if (!user?.auth?.mfaSecret) {
+      throw new BadRequestError("Call /api/auth/mfa/setup first", { code: "MFA_SETUP_REQUIRED" });
+    }
+    if (!totp.verifyTotp(user.auth.mfaSecret, code)) {
+      throw new UnauthorizedError("Invalid MFA code");
+    }
+    user.auth.mfaEnabled = true;
+    await user.save();
+    return { mfaEnabled: true, message: "MFA enabled" };
+  }
+
+  async refreshSession({ refreshToken }, requestMeta = {}) {
+    if (!refreshToken) {
+      throw new BadRequestError("refreshToken is required");
+    }
+    const rotated = await refreshTokenService.rotateRefreshToken(refreshToken, requestMeta);
+    if (!rotated.ok) {
+      throw new UnauthorizedError("Invalid or expired refresh token", {
+        code: rotated.reason || "INVALID_REFRESH",
+      });
+    }
+    const user = await User.findById(rotated.userId);
+    if (!user || user.status !== USER_STATUS.ACTIVE) {
+      throw new UnauthorizedError("User not found or inactive");
+    }
+    const accessToken = generateAccessToken(user);
+    return {
+      token: accessToken,
+      accessToken,
+      refreshToken: rotated.refreshToken,
+      expiresIn: ACCESS_TOKEN_EXPIRES_IN,
+      refreshExpiresAt: rotated.expiresAt,
+      sessionId: rotated.sessionId || null,
+    };
+  }
+
+  async listSessions(actor, requestMeta = {}, currentRefreshToken = null) {
+    if (!actor?._id) throw new UnauthorizedError("Authentication required");
+    const sessions = await refreshTokenService.listSessionsForUser(actor._id, {
+      currentRawToken: currentRefreshToken,
+    });
+    return {
+      sessions,
+      maxSessions: refreshTokenService.getMaxSessionsPerUser(),
+      accessTokenTtl: ACCESS_TOKEN_EXPIRES_IN,
+      refreshTtlMs: require("../config/authSecurity").REFRESH_TOKEN_TTL_MS,
+    };
+  }
+
+  async revokeSession(actor, sessionId) {
+    if (!actor?._id) throw new UnauthorizedError("Authentication required");
+    if (!sessionId) throw new BadRequestError("sessionId is required");
+    const result = await refreshTokenService.revokeSessionById(actor._id, sessionId);
+    if (!result.ok && result.reason === "NOT_FOUND") {
+      throw new NotFoundError("Session not found", { code: "SESSION_NOT_FOUND" });
+    }
+    return { message: "Session revoked", sessionId: String(sessionId) };
+  }
+
+  async logout({ refreshToken, allSessions = false } = {}, actor = null) {
+    if (allSessions && actor?._id) {
+      await refreshTokenService.revokeAllForUser(actor._id, "LOGOUT_ALL");
+      return { message: "Logged out of all sessions", revokedAll: true };
+    }
+    if (refreshToken) {
+      await refreshTokenService.revokeRefreshToken(refreshToken, "LOGOUT");
+      return { message: "Logged out" };
+    }
+    if (actor?._id) {
+      await refreshTokenService.revokeAllForUser(actor._id, "LOGOUT_ALL");
+      return { message: "Logged out of all sessions", revokedAll: true };
+    }
+    return { message: "Logged out" };
+  }
+
+  async resendSurveyorOtp(phone, requestMeta = {}) {
     const normalizedPhone = String(phone).trim();
     const user = await User.findOne({ "auth.phone": normalizedPhone }).select("+auth.password");
 
@@ -375,7 +565,7 @@ class AuthService {
       );
     }
 
-    return otpService.issueOtp(normalizedPhone);
+    return otpService.issueOtp(normalizedPhone, user, { ip: requestMeta.ip });
   }
 }
 

@@ -23,6 +23,11 @@ function parseSurveyDocumentEntry(raw) {
     mimeType: raw.mimeType != null ? String(raw.mimeType).trim() : null,
     size: raw.size != null ? Number(raw.size) : null,
     uploadedAt: raw.uploadedAt ? new Date(raw.uploadedAt) : new Date(),
+    role: raw.role === "source" || raw.role === "preview" ? raw.role : null,
+    s3Key: raw.s3Key != null ? String(raw.s3Key).trim() : raw.key != null ? String(raw.key).trim() : null,
+    sha256: raw.sha256 != null ? String(raw.sha256).trim() : null,
+    confirmed: raw.confirmed === true || raw.scanPassed === true,
+    contractVersion: raw.contractVersion != null ? String(raw.contractVersion).trim() : null,
   };
 }
 

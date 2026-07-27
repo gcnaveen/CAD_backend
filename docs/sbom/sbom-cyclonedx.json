@@ -1,0 +1,121 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-07-25T07:55:30.562Z",
+    "component": {
+      "type": "application",
+      "name": "cad-backend-api",
+      "version": "1.0.0",
+      "description": "CAD Backend API - Serverless (AWS Lambda + HTTP API)"
+    },
+    "tools": [
+      {
+        "vendor": "cad-backend",
+        "name": "generate-sbom.js",
+        "version": "1.0.0"
+      }
+    ],
+    "properties": [
+      {
+        "name": "cad:classification",
+        "value": "runtime=dependencies; build/dev=devDependencies (not packaged to Lambda)"
+      },
+      {
+        "name": "cad:lockfile",
+        "value": "package-lock.json (committed; npm ci required in CI)"
+      }
+    ]
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "@aws-sdk/client-s3",
+      "version": "3.1095.0",
+      "scope": "required",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1095.0",
+      "purl": "pkg:npm/%40aws-sdk%2Fclient-s3@3.1095.0"
+    },
+    {
+      "type": "library",
+      "name": "@aws-sdk/s3-request-presigner",
+      "version": "3.1095.0",
+      "scope": "required",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1095.0",
+      "purl": "pkg:npm/%40aws-sdk%2Fs3-request-presigner@3.1095.0"
+    },
+    {
+      "type": "library",
+      "name": "bcryptjs",
+      "version": "2.4.3",
+      "scope": "required",
+      "bom-ref": "pkg:npm/bcryptjs@2.4.3",
+      "purl": "pkg:npm/bcryptjs@2.4.3"
+    },
+    {
+      "type": "library",
+      "name": "dotenv",
+      "version": "16.6.1",
+      "scope": "required",
+      "bom-ref": "pkg:npm/dotenv@16.6.1",
+      "purl": "pkg:npm/dotenv@16.6.1"
+    },
+    {
+      "type": "library",
+      "name": "js-yaml",
+      "version": "4.3.0",
+      "scope": "required",
+      "bom-ref": "pkg:npm/js-yaml@4.3.0",
+      "purl": "pkg:npm/js-yaml@4.3.0"
+    },
+    {
+      "type": "library",
+      "name": "jsonwebtoken",
+      "version": "9.0.3",
+      "scope": "required",
+      "bom-ref": "pkg:npm/jsonwebtoken@9.0.3",
+      "purl": "pkg:npm/jsonwebtoken@9.0.3"
+    },
+    {
+      "type": "library",
+      "name": "mongoose",
+      "version": "8.24.1",
+      "scope": "required",
+      "bom-ref": "pkg:npm/mongoose@8.24.1",
+      "purl": "pkg:npm/mongoose@8.24.1"
+    },
+    {
+      "type": "library",
+      "name": "pg-sdk-node",
+      "version": "2.0.2",
+      "scope": "required",
+      "bom-ref": "pkg:npm/pg-sdk-node@2.0.2",
+      "purl": "pkg:npm/pg-sdk-node@2.0.2"
+    },
+    {
+      "type": "library",
+      "name": "cross-env",
+      "version": "7.0.3",
+      "scope": "optional",
+      "bom-ref": "pkg:npm/cross-env@7.0.3",
+      "purl": "pkg:npm/cross-env@7.0.3"
+    },
+    {
+      "type": "library",
+      "name": "serverless",
+      "version": "3.40.0",
+      "scope": "optional",
+      "bom-ref": "pkg:npm/serverless@3.40.0",
+      "purl": "pkg:npm/serverless@3.40.0"
+    },
+    {
+      "type": "library",
+      "name": "serverless-offline",
+      "version": "13.9.0",
+      "scope": "optional",
+      "bom-ref": "pkg:npm/serverless-offline@13.9.0",
+      "purl": "pkg:npm/serverless-offline@13.9.0"
+    }
+  ]
+}

@@ -1,11 +1,8 @@
 /**
  * Lambda HTTP response helpers (API Gateway HTTP API v2 friendly).
  *
- * Design goals (enterprise-grade):
- * - Single place for response shape and default headers
- * - Consistent JSON envelope for success/error
- * - Safe error serialization (no stack traces in prod)
- * - Easy override of headers/status/content-type
+ * CORS allow-list + security headers are applied in asyncHandler via httpSecurity
+ * (audit M-01). Do not set Access-Control-Allow-Origin: * here.
  */
 
 function normalizeHeaders(headers) {
@@ -15,13 +12,10 @@ function normalizeHeaders(headers) {
   return out;
 }
 
-function defaultCorsHeaders() {
-  // NOTE: For cookie-based auth you must NOT use "*".
-  const allowOrigin = process.env.CORS_ALLOW_ORIGIN || "*";
+function defaultApiHeaders() {
+  const { securityHeaders } = require("./httpSecurity");
   return {
-    "access-control-allow-origin": allowOrigin,
-    "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-    "access-control-allow-headers": "content-type,authorization",
+    ...securityHeaders(),
   };
 }
 
@@ -37,7 +31,7 @@ function response(statusCode, body, { headers, isBase64Encoded } = {}) {
 function json(statusCode, payload, headers) {
   const base = {
     "content-type": "application/json; charset=utf-8",
-    ...defaultCorsHeaders(),
+    ...defaultApiHeaders(),
   };
   return response(statusCode, JSON.stringify(payload ?? null), {
     headers: { ...base, ...normalizeHeaders(headers) },
@@ -47,7 +41,7 @@ function json(statusCode, payload, headers) {
 function text(statusCode, body, contentType, headers) {
   const base = {
     "content-type": contentType || "text/plain; charset=utf-8",
-    ...defaultCorsHeaders(),
+    ...defaultApiHeaders(),
   };
   return response(statusCode, body == null ? "" : String(body), {
     headers: { ...base, ...normalizeHeaders(headers) },
@@ -66,7 +60,7 @@ function created(data, meta) {
 function redirect(url, statusCode = 302) {
   const base = {
     Location: String(url),
-    ...defaultCorsHeaders(),
+    ...defaultApiHeaders(),
   };
   return response(statusCode, "", { headers: base });
 }

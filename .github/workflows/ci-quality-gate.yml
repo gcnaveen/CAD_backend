@@ -1,0 +1,46 @@
+# H-04 CI quality gate — runs on every PR and protected branches
+name: ci-quality-gate
+
+on:
+  pull_request:
+  push:
+    branches: [main, master, develop]
+  release:
+    types: [published]
+
+concurrency:
+  group: ci-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: lint-test-security
+    runs-on: ubuntu-latest
+    env:
+      JWT_SECRET: "ci-quality-gate-jwt-secret-32chars-min"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install (pinned lockfile)
+        run: npm ci
+
+      - name: Lint (syntax check)
+        run: npm run lint
+
+      - name: Unit tests (pricing, authz, payment, upload, contract)
+        run: npm run test:unit
+
+      - name: Acceptance suite (C-02, payment model, H-02, H-03, H-04)
+        run: npm run test:acceptance
+
+      - name: Production dependency SCA
+        run: npm run audit:prod
+
+      - name: Generate SBOM
+        run: npm run sbom

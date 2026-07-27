@@ -1,118 +1,157 @@
 /**
- * Async Handler Wrapper
- * Wraps async route handlers to automatically catch errors
+ * Async Handler Wrapper — correlation ID + structured errors (M-07).
  */
 
-const logger = require('./logger');
-const { error } = require('./response');
-const { AppError, DatabaseError } = require('./errors');
-const { HTTP_STATUS } = require('../config/constants');
+const logger = require("./logger");
+const { error } = require("./response");
+const { applySecurityHeaders } = require("./httpSecurity");
+const {
+  runWithRequestContext,
+  extractIncomingCorrelationId,
+} = require("./requestContext");
+const { AppError } = require("./errors");
+const { HTTP_STATUS } = require("../config/constants");
 
-/**
- * Wraps async function to catch errors and return appropriate response
- * @param {Function} fn - Async function to wrap
- * @returns {Function} Wrapped function
- */
+function withCorrelationHeader(event, result, correlationId) {
+  if (!result || typeof result !== "object") return result;
+  const headers = { ...(result.headers || {}) };
+  headers["x-correlation-id"] = correlationId;
+  return applySecurityHeaders(event, { ...result, headers });
+}
+
 const asyncHandler = (fn) => {
   return async (event, context) => {
-    try {
-      return await fn(event, context);
-    } catch (err) {
-      const method = event?.requestContext?.http?.method || event?.httpMethod;
-      const path = event?.rawPath || event?.path || event?.requestContext?.http?.path;
-      const requestId = context?.awsRequestId || event?.requestContext?.requestId;
+    const correlationId = extractIncomingCorrelationId(event);
+    const awsRequestId = context?.awsRequestId || event?.requestContext?.requestId || null;
 
-      // Log the error with more details
-      logger.error('Unhandled error in async handler', err, {
-        path,
-        method,
-        requestId,
-        errorName: err?.name,
-        errorMessage: err?.message,
-        errorStack: err?.stack,
-      });
+    return runWithRequestContext({ correlationId, awsRequestId }, async () => {
+      try {
+        const result = await fn(event, context);
+        return withCorrelationHeader(event, result, correlationId);
+      } catch (err) {
+        const method = event?.requestContext?.http?.method || event?.httpMethod;
+        const path = event?.rawPath || event?.path || event?.requestContext?.http?.path;
 
-      // Handle known application errors
-      if (err instanceof AppError) {
-        return error({
-          statusCode: err.statusCode,
-          message: err.message,
-          errors: err.errors || null,
-          code: err.code,
+        logger.error("Unhandled error in async handler", err, {
+          path,
+          method,
+          requestId: awsRequestId,
+          correlationId,
         });
-      }
 
-      // Handle database errors
-      if (err.name === 'ValidationError') {
-        const validationErrors = Object.values(err.errors || {}).map(e => ({
-          field: e.path,
-          message: e.message
-        }));
-        
-        return error({
-          statusCode: HTTP_STATUS.BAD_REQUEST,
-          message: 'Validation failed',
-          errors: validationErrors,
-        });
-      }
-
-      if (err.name === 'MongoServerError' || err.name === 'MongooseError' || err.name === 'MongoError' || err.name === 'MongoNetworkError' || err.name === 'MongoTimeoutError' || err.name === 'MongooseServerSelectionError') {
-        logger.error('MongoDB error details', err, {
-          code: err.code,
-          codeName: err.codeName,
-          errorLabels: err.errorLabels,
-          reason: err.reason?.message,
-        });
-        
-        // Check for connection timeout - likely VPC/network issue
-        if (err.name === 'MongooseServerSelectionError' || err.message?.includes('timed out')) {
-          return error({
-            statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
-            message: 'Database connection timeout - check Lambda VPC configuration and network access',
-            code: "DB_CONNECTION_TIMEOUT",
-            errors: [{ 
-              message: err.message || 'Unable to reach MongoDB. Ensure Lambda has internet access or is configured with NAT Gateway if in VPC.',
-              hint: 'If Lambda is in a VPC, ensure NAT Gateway is configured for internet access, or remove VPC configuration if not needed.'
-            }],
-          });
+        if (err instanceof AppError) {
+          return withCorrelationHeader(
+            event,
+            error({
+              statusCode: err.statusCode,
+              message: err.message,
+              errors: err.errors || null,
+              code: err.code,
+            }),
+            correlationId
+          );
         }
-        
-        return error({
-          statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
-          message: 'Database error occurred',
-          code: "DB_ERROR",
-          errors: [{ message: err.message || 'Database operation failed' }],
-        });
-      }
 
-      // Handle CastError (invalid ObjectId, etc.)
-      if (err.name === 'CastError') {
-        return error({
-          statusCode: HTTP_STATUS.BAD_REQUEST,
-          message: `Invalid ${err.path || 'value'}`,
-          code: "VALIDATION_ERROR",
-          errors: [{ field: err.path, message: err.message }],
-        });
-      }
+        if (err.name === "ValidationError") {
+          const validationErrors = Object.values(err.errors || {}).map((e) => ({
+            field: e.path,
+            message: e.message,
+          }));
+          return withCorrelationHeader(
+            event,
+            error({
+              statusCode: HTTP_STATUS.BAD_REQUEST,
+              message: "Validation failed",
+              errors: validationErrors,
+            }),
+            correlationId
+          );
+        }
 
-      // Handle JWT errors
-      if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
-        return error({
-          statusCode: HTTP_STATUS.UNAUTHORIZED,
-          message: 'Invalid or expired token',
-          code: "AUTH_INVALID_TOKEN",
-        });
-      }
+        if (
+          err.name === "MongoServerError" ||
+          err.name === "MongooseError" ||
+          err.name === "MongoError" ||
+          err.name === "MongoNetworkError" ||
+          err.name === "MongoTimeoutError" ||
+          err.name === "MongooseServerSelectionError"
+        ) {
+          logger.error("MongoDB error details", err, {
+            code: err.code,
+            codeName: err.codeName,
+            correlationId,
+          });
 
-      // Handle unknown errors (include message in non-production to speed up debugging)
-      const exposeDetail = process.env.NODE_ENV !== "production";
-      return error({
-        statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
-        message: exposeDetail && err?.message ? err.message : "An unexpected error occurred",
-        code: "UNEXPECTED_ERROR",
-        errors: exposeDetail && err?.message ? [{ message: err.message }] : null,
-      });
-    }
+          if (err.name === "MongooseServerSelectionError" || err.message?.includes("timed out")) {
+            return withCorrelationHeader(
+              event,
+              error({
+                statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+                message:
+                  "Database connection timeout - check Lambda VPC configuration and network access",
+                code: "DB_CONNECTION_TIMEOUT",
+                errors: [
+                  {
+                    message:
+                      err.message ||
+                      "Unable to reach MongoDB. Ensure Lambda has internet access or is configured with NAT Gateway if in VPC.",
+                  },
+                ],
+              }),
+              correlationId
+            );
+          }
+
+          return withCorrelationHeader(
+            event,
+            error({
+              statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+              message: "Database error occurred",
+              code: "DB_ERROR",
+              errors: [{ message: err.message || "Database operation failed" }],
+            }),
+            correlationId
+          );
+        }
+
+        if (err.name === "CastError") {
+          return withCorrelationHeader(
+            event,
+            error({
+              statusCode: HTTP_STATUS.BAD_REQUEST,
+              message: `Invalid ${err.path || "value"}`,
+              code: "VALIDATION_ERROR",
+              errors: [{ field: err.path, message: err.message }],
+            }),
+            correlationId
+          );
+        }
+
+        if (err.name === "JsonWebTokenError" || err.name === "TokenExpiredError") {
+          return withCorrelationHeader(
+            event,
+            error({
+              statusCode: HTTP_STATUS.UNAUTHORIZED,
+              message: "Invalid or expired token",
+              code: "AUTH_INVALID_TOKEN",
+            }),
+            correlationId
+          );
+        }
+
+        const exposeDetail = process.env.NODE_ENV !== "production";
+        return withCorrelationHeader(
+          event,
+          error({
+            statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+            message: exposeDetail && err?.message ? err.message : "An unexpected error occurred",
+            code: "UNEXPECTED_ERROR",
+            errors: exposeDetail && err?.message ? [{ message: err.message }] : null,
+          }),
+          correlationId
+        );
+      }
+    });
   };
 };
 

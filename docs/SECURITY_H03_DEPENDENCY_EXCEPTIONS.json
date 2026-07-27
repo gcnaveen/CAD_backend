@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "policy": {
+    "productionScan": "npm audit --omit=dev",
+    "acceptance": "Zero Critical and zero unaccepted High on productionScan. Full-tree Critical/High allowed only if listed here with owner + future expiry.",
+    "reviewCadence": "Monthly or on advisory for serverless/pg-sdk-node"
+  },
+  "exceptions": [
+    {
+      "id": "H03-EX-001",
+      "packages": ["decompress", "@serverless/utils", "serverless"],
+      "severity": "critical",
+      "cveOrAdvisory": "GHSA-mp2f-45pm-3cg9 (decompress path traversal; no fixed release on 4.x). Parent: serverless@3 via @serverless/utils.",
+      "exploitability": "Dev/build only. decompress is not packaged into Lambda runtime (devDependency tree). Exploit requires attacker-controlled archive processed by Serverless CLI on a developer/CI machine.",
+      "compensatingControl": "Do not install untrusted Serverless plugins; restrict CI runners; production SCA gate uses --omit=dev (must stay clean). Track upgrade to Serverless Framework v4 when packaging/deploy scripts are validated.",
+      "owner": "Engineering lead",
+      "expiry": "2026-10-25",
+      "status": "accepted"
+    },
+    {
+      "id": "H03-EX-002",
+      "packages": ["tar"],
+      "severity": "critical",
+      "cveOrAdvisory": "Multiple node-tar advisories (e.g. GHSA-34x7-hfp2-rc4v, GHSA-23hp-3jrh-7fpw). Mitigated in-tree via overrides.tar>=7.5.22 where install succeeds; residual meta-finding may still flag serverless parent until Framework v4.",
+      "exploitability": "Dev/build only (serverless packaging). Not in Lambda production dependency set.",
+      "compensatingControl": "npm overrides pin tar@7.5.22; production audit --omit=dev must remain clean; no untrusted tarballs in deploy pipeline.",
+      "owner": "Engineering lead",
+      "expiry": "2026-10-25",
+      "status": "accepted"
+    }
+  ]
+}

@@ -1,61 +1,81 @@
 const authService = require("../services/auth.service");
 const { ok, created } = require("../utils/response");
+const authCookies = require("../utils/authCookies");
 
-/**
- * Super Admin registration. Returns { user, token }.
- */
-async function registerSuperAdmin(payload) {
-  const result = await authService.registerSuperAdmin(payload);
-  return created(result);
+function withSessionCookies(response, sessionLike) {
+  if (!sessionLike || (!sessionLike.refreshToken && !sessionLike.accessToken)) {
+    return response;
+  }
+  return authCookies.attachSessionCookies(response, sessionLike);
 }
 
-/**
- * Surveyor step 1: send OTP to phone. Body: phone, firstName, lastName?.
- */
-async function surveyorSendOtp(payload) {
-  const result = await authService.surveyorSendOtp(payload);
+async function registerSuperAdmin(payload, requestMeta) {
+  const result = await authService.registerSuperAdmin(payload, requestMeta);
+  return withSessionCookies(created(result), result);
+}
+
+async function surveyorSendOtp(payload, requestMeta) {
+  const result = await authService.surveyorSendOtp(payload, requestMeta);
   return ok(result);
 }
 
-/**
- * Surveyor step 2: verify OTP. Body: phone, otp. Returns { user, message }.
- */
-async function surveyorVerifyOtp(payload) {
-  const result = await authService.surveyorVerifyOtp(payload);
+async function surveyorVerifyOtp(payload, requestMeta) {
+  const result = await authService.surveyorVerifyOtp(payload, requestMeta);
   return ok(result);
 }
 
-/**
- * Surveyor step 3: complete registration - set password and profile. Body: phone, password, district, taluka, category, surveyType?.
- * Returns { user, token }.
- */
-async function surveyorCompleteRegistration(payload) {
-  const result = await authService.surveyorCompleteRegistration(payload);
-  return created(result);
+async function surveyorCompleteRegistration(payload, requestMeta) {
+  const result = await authService.surveyorCompleteRegistration(payload, requestMeta);
+  return withSessionCookies(created(result), result);
 }
 
-/**
- * Surveyor forgot password step 1: send OTP to phone.
- */
-async function surveyorForgotPasswordStart(payload) {
-  const result = await authService.surveyorForgotPasswordStart(payload);
+async function surveyorForgotPasswordStart(payload, requestMeta) {
+  const result = await authService.surveyorForgotPasswordStart(payload, requestMeta);
   return ok(result);
 }
 
-/**
- * Surveyor forgot password step 2: verify OTP and reset password.
- * Returns user + token.
- */
-async function surveyorForgotPasswordReset(payload) {
-  const result = await authService.surveyorForgotPasswordReset(payload);
+async function surveyorForgotPasswordReset(payload, requestMeta) {
+  const result = await authService.surveyorForgotPasswordReset(payload, requestMeta);
+  return withSessionCookies(ok(result), result);
+}
+
+async function login(payload, requestMeta) {
+  const result = await authService.login(payload, requestMeta);
+  return withSessionCookies(ok(result), result);
+}
+
+async function refresh(payload, requestMeta) {
+  const result = await authService.refreshSession(payload, requestMeta);
+  return withSessionCookies(ok(result), result);
+}
+
+async function listSessions(actor, requestMeta, currentRefreshToken) {
+  const result = await authService.listSessions(actor, requestMeta, currentRefreshToken);
   return ok(result);
 }
 
-/**
- * Login with email + password. Returns { user, token }.
- */
-async function login(payload) {
-  const result = await authService.login(payload);
+async function revokeSession(actor, sessionId) {
+  const result = await authService.revokeSession(actor, sessionId);
+  return ok(result);
+}
+
+async function logout(payload, actor) {
+  const result = await authService.logout(payload, actor);
+  return authCookies.clearSessionCookies(ok(result));
+}
+
+async function verifyMfa(payload, requestMeta) {
+  const result = await authService.verifyMfa(payload, requestMeta);
+  return withSessionCookies(ok(result), result);
+}
+
+async function setupMfa(actor) {
+  const result = await authService.setupMfa(actor);
+  return ok(result);
+}
+
+async function enableMfa(actor, payload) {
+  const result = await authService.enableMfa(actor, payload);
   return ok(result);
 }
 
@@ -67,4 +87,11 @@ module.exports = {
   surveyorForgotPasswordStart,
   surveyorForgotPasswordReset,
   login,
+  refresh,
+  listSessions,
+  revokeSession,
+  logout,
+  verifyMfa,
+  setupMfa,
+  enableMfa,
 };

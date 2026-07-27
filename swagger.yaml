@@ -1554,11 +1554,12 @@ paths:
   /api/surveyor/sketch-pricing:
     get:
       tags: [Surveyor Sketch Uploads]
-      summary: Get resolved sketch upload and revision fees
+      summary: Get resolved sketch upload, revision, and balance fees
       description: |
         Effective amounts for the UI before checkout — **same standard for every sketch**:
         1. **Admin plan + discount** via `PATCH /api/admin/survey-sketch-pricing` (when plan fields are set),
-        2. else global **`SKETCH_UPLOAD_FEE_PAISE` / `SKETCH_REVISION_FEE_PAISE`** env on the server.
+        2. else global **`SKETCH_UPLOAD_FEE_PAISE` / `SKETCH_REVISION_FEE_PAISE` / `SKETCH_BALANCE_FEE_PAISE`** env on the server.
+        `data.balance` is the post-delivery fee required before CAD download (audit C-02; default ₹400).
         Surveyors cannot set a per-sketch price in the request body.
       operationId: getSurveyorSketchPricing
       security:
@@ -1590,7 +1591,7 @@ paths:
         Submit a survey sketch upload with survey info and document URLs.
         **Authorization:** Surveyor only (Bearer token required).
         **Flow:** Frontend uploads files (e.g., to S3/presigned URL), then POSTs this payload with document URLs.
-        **Payment:** Prefer **`amount` / `amountRupees` / `amountPaise` from the request body** — that exact value is sent to PhonePe (no hardcoded fee in code). Priority: (1) frontend amount, (2) admin plan/discount from `PATCH /api/admin/survey-sketch-pricing`, (3) `SKETCH_UPLOAD_FEE_PAISE`. If the resolved fee is **> 0** and PhonePe is configured, the upload is created with `status` **PAYMENT_PENDING** and the response includes `meta.payment.checkoutPageUrl` with `meta.payment.amountPaise` / `payableRupees`. After payment, PhonePe redirects to `GET /api/payments/phonepe/callback`. If the fee is 0, behavior is unchanged (`PENDING`, auto-assign and notifications immediately). On success, `data.sketchPayment.paidAmountPaise` stores the amount paid (paise).
+        **Payment:** Amount is computed **server-side only** (audit C-01): admin plan/discount from `PATCH /api/admin/survey-sketch-pricing`, else `SKETCH_UPLOAD_FEE_PAISE`. Client `amount` / `amountRupees` / `amountPaise` are **rejected**. If fee **> 0** and PhonePe is configured, upload is created with `status` **PAYMENT_PENDING**, immutable `sketchPayment.amountPaise`, and `meta.payment.checkoutPageUrl`. Callback verifies PhonePe paid amount matches expected; mismatch → `AMOUNT_MISMATCH` (order does not progress). If fee is 0, behavior is unchanged (`PENDING`, auto-assign immediately).
         **Auto-generated:** `applicationId` is automatically generated in format `DISTRICT_CODE/TALUKA_CODE/YY/N` (e.g., `KA-BLR/BLR-N/26/1`).
         **Required fields:**
         - `surveyType`: `joint_flat` or `single_flat`
@@ -1854,12 +1855,12 @@ paths:
       tags: [Surveyor Sketch Uploads]
       summary: Retry sketch upload payment (PhonePe)
       description: |
-        Re-initiate PhonePe checkout when the initial sketch upload payment **failed** or was **abandoned**.
+        Re-initiate PhonePe checkout when the initial sketch upload payment **failed**, **amount-mismatched**, or was **abandoned**.
         **Authorization:** Surveyor only (must own the upload).
-        Optional body: send `amount` / `amountRupees` / `amountPaise` to override the charged amount; otherwise the previously stored amount is reused.
-        **When to call:** `data.status` is `PAYMENT_PENDING` and `data.sketchPayment.status` is `FAILED` or `PENDING`.
-        **Effect:** Sets `sketchPayment.status` back to `PAYMENT_PENDING` workflow and returns a fresh `meta.payment.checkoutPageUrl`.
-        After successful payment, PhonePe redirects to `GET /api/payments/phonepe/callback` and upload moves to `PENDING`.
+        Amount is **server-side only** (immutable expected amount from first initiation, or re-resolved admin/env pricing). Client amount fields are rejected.
+        **When to call:** `data.status` is `PAYMENT_PENDING` and `data.sketchPayment.status` is `FAILED`, `AMOUNT_MISMATCH`, or `PENDING`.
+        **Effect:** Sets `sketchPayment.status` back to `PAYMENT_PENDING` and returns a fresh `meta.payment.checkoutPageUrl`.
+        After successful payment, PhonePe redirects to `GET /api/payments/phonepe/callback` and upload moves to `PENDING` only if paid amount matches expected.
       operationId: retrySurveyorSketchPayment
       security:
         - bearerAuth: []
@@ -1869,12 +1870,8 @@ paths:
           application/json:
             schema:
               type: object
-              properties:
-                amount: { type: number, minimum: 0, description: Amount in rupees }
-                amountRupees: { type: number, minimum: 0 }
-                amountPaise: { type: integer, minimum: 1 }
-            example:
-              amount: 500
+              description: Empty body. Do not send amount fields.
+            example: {}
       responses:
         "200":
           description: Checkout link issued for payment retry
@@ -1941,6 +1938,118 @@ paths:
                       message: { type: string, example: "Survey upload removed" }
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/surveyor/sketch-uploads/{uploadId}/balance-payment:
+    parameters:
+      - $ref: "#/components/parameters/UploadId"
+    post:
+      tags: [Surveyor Sketch Uploads]
+      summary: Pay CAD balance (unlock download) — audit C-02
+      description: |
+        After CAD delivery, surveyor must pay the **server-priced balance** (default ₹400) before download.
+        Amount is immutable on `balancePayment.amountPaise` (locked at delivery). Client amounts are rejected.
+        Returns PhonePe `meta.payment.checkoutPageUrl`. Callback verifies paid amount; mismatch → `AMOUNT_MISMATCH` (no entitlement).
+        See `docs/FRONTEND_C02_CAD_DOWNLOAD_ENTITLEMENT.md`.
+      operationId: initiateSurveyorBalancePayment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Empty body. Do not send amount / amountRupees / amountPaise.
+              additionalProperties: false
+      responses:
+        "200":
+          description: Checkout created or already entitled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/SurveyorSketchUpload" }
+                  meta:
+                    type: object
+                    properties:
+                      payment:
+                        type: object
+                        properties:
+                          requiresPayment: { type: boolean }
+                          alreadyEntitled: { type: boolean }
+                          checkoutPageUrl: { type: string, format: uri }
+                          redirectUrl: { type: string, format: uri }
+                          merchantOrderId: { type: string }
+                          amountPaise: { type: integer, example: 40000 }
+                          payableRupees: { type: number, example: 400 }
+                          purpose: { type: string, example: CAD_BALANCE }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/surveyor/sketch-uploads/{uploadId}/cad-download:
+    parameters:
+      - $ref: "#/components/parameters/UploadId"
+      - name: grantId
+        in: query
+        required: false
+        schema: { type: string, format: uuid }
+        description: Optional prior grantId — replay/expired grants are rejected
+    get:
+      tags: [Surveyor Sketch Uploads]
+      summary: Get short-lived CAD download URLs — audit C-02
+      description: |
+        Authorizes surveyor ownership, delivery presence, reconciled balance payment, and non-refunded state.
+        Returns short-lived S3 signed GET URLs. Surveyor GET detail/list **never** returns permanent `cadDeliverable.url`.
+      operationId: getSurveyorCadDownload
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Signed download URLs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      uploadId: { type: string }
+                      applicationId: { type: string, nullable: true }
+                      grantId: { type: string, format: uuid }
+                      expiresAt: { type: string, format: date-time }
+                      expiresInSeconds: { type: integer, example: 120 }
+                      files:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            fileName: { type: string, nullable: true }
+                            mimeType: { type: string, nullable: true }
+                            size: { type: number, nullable: true }
+                            downloadUrl: { type: string, format: uri }
+                            expiresAt: { type: string, format: date-time }
+                            expiresInSeconds: { type: integer }
+                      downloadEntitlement:
+                        type: object
+                        properties:
+                          granted: { type: boolean }
+                          reason: { type: string }
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -4495,12 +4604,15 @@ components:
           $ref: "#/components/schemas/SketchPricingLine"
         revision:
           $ref: "#/components/schemas/SketchPricingLine"
+        balance:
+          $ref: "#/components/schemas/SketchPricingLine"
+          description: Post-delivery balance fee that unlocks CAD download (audit C-02)
 
     SketchRevisionRequest:
       type: object
       description: |
         At least one of `remarks`, `audio`, or `retryPayment` (boolean).
-        Optional amount: send `amount` / `amountRupees` / `amountPaise` for PhonePe (preferred over admin/env).
+        Revision fee is **server-side only** (admin pricing or env). Do not send amount fields.
       properties:
         remarks:
           type: string
@@ -4517,17 +4629,6 @@ components:
         retryPayment:
           type: boolean
           description: Optional; when true, remarks/audio not required if resuming checkout (validator allows retry-only).
-        amount:
-          type: number
-          minimum: 0
-          description: Payable amount in rupees for PhonePe (preferred)
-        amountRupees:
-          type: number
-          minimum: 0
-        amountPaise:
-          type: integer
-          minimum: 1
-          description: Payable amount in paise
 
     CadDashboardStats:
       type: object
@@ -4898,6 +4999,13 @@ components:
         sketchRevisionDiscountRupees:
           type: number
           nullable: true
+        sketchBalancePlanAmountRupees:
+          type: number
+          nullable: true
+          description: Admin list price (₹) for post-delivery balance (CAD download unlock)
+        sketchBalanceDiscountRupees:
+          type: number
+          nullable: true
         pricing:
           $ref: "#/components/schemas/SketchPricingResponse"
         updatedBy:
@@ -4927,6 +5035,14 @@ components:
           nullable: true
           minimum: 0
         sketchRevisionDiscountRupees:
+          type: number
+          nullable: true
+          minimum: 0
+        sketchBalancePlanAmountRupees:
+          type: number
+          nullable: true
+          minimum: 0
+        sketchBalanceDiscountRupees:
           type: number
           nullable: true
           minimum: 0
@@ -5024,21 +5140,6 @@ components:
           minLength: 1
           description: Survey number
           example: "123"
-        amount:
-          type: number
-          minimum: 0
-          description: |
-            Payable amount in **rupees** for PhonePe checkout. Preferred when UI already shows the fee.
-            Send only one of `amount`, `amountRupees`, or `amountPaise`. Overrides admin/env pricing.
-          example: 500
-        amountRupees:
-          type: number
-          minimum: 0
-          description: Same as `amount` (rupees)
-        amountPaise:
-          type: integer
-          minimum: 1
-          description: Payable amount in paise (e.g. 50000 = ₹500)
         isSuperimpose:
           type: boolean
           description: |

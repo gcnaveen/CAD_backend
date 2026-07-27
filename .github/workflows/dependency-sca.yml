@@ -1,0 +1,37 @@
+# H-03: software composition analysis on every PR / main push
+name: dependency-sca
+
+on:
+  pull_request:
+  push:
+    branches: [main, master, develop]
+
+jobs:
+  sca:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install (pinned lockfile)
+        run: npm ci
+
+      - name: Generate SBOM
+        run: npm run sbom
+
+      - name: Production audit (omit dev) — must be clean
+        run: npm run audit:prod
+
+      - name: H-03 acceptance (exceptions + prod gate)
+        run: npm run test:h03
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: docs/sbom/sbom-cyclonedx.json

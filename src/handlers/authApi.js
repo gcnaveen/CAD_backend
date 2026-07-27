@@ -13,6 +13,9 @@ exports.handler = asyncHandler(async (event) => {
     `${(event.requestContext?.http?.method || "").toUpperCase()} ${event.rawPath || event.requestContext?.http?.path || ""}`.trim();
 
   switch (routeKey) {
+    case "GET /api/health":
+      return authHandler.getHealth(event);
+
     case "GET /api/payments/phonepe/callback":
       return authHandler.phonePeSketchCallback(event);
 
@@ -36,6 +39,20 @@ exports.handler = asyncHandler(async (event) => {
 
     case "POST /api/auth/login":
       return authHandler.login(event);
+    case "POST /api/auth/refresh":
+      return authHandler.refreshSession(event);
+    case "GET /api/auth/sessions":
+      return authHandler.listSessions(event);
+    case "DELETE /api/auth/sessions/{sessionId}":
+      return authHandler.revokeSession(event);
+    case "POST /api/auth/logout":
+      return authHandler.logout(event);
+    case "POST /api/auth/mfa/verify":
+      return authHandler.verifyMfa(event);
+    case "POST /api/auth/mfa/setup":
+      return authHandler.setupMfa(event);
+    case "POST /api/auth/mfa/enable":
+      return authHandler.enableMfa(event);
 
     case "POST /api/cad-interest":
       return authHandler.createCadInterest(event);
@@ -68,6 +85,12 @@ exports.handler = asyncHandler(async (event) => {
       return authHandler.retrySurveyorSketchPayment(event);
     case "POST /api/surveyor/sketch-uploads/{uploadId}/clear":
       return authHandler.clearSurveyorSketchUpload(event);
+    case "POST /api/surveyor/sketch-uploads/{uploadId}/balance-payment":
+      return authHandler.initiateSurveyorBalancePayment(event);
+    case "GET /api/surveyor/sketch-uploads/{uploadId}/cad-download":
+      return authHandler.getSurveyorCadDownload(event);
+    case "POST /api/admin/sketch-uploads/{uploadId}/balance-refund":
+      return authHandler.adminMarkBalanceRefunded(event);
     case "GET /api/surveyor/sketch-uploads":
       return authHandler.listSurveyorSketchUploads(event);
     case "GET /api/surveyor/orders":
@@ -97,6 +120,8 @@ exports.handler = asyncHandler(async (event) => {
       return authHandler.getSurveySketchStatuses(event);
     case "GET /api/admin/dashboard/stats":
       return authHandler.getAdminDashboardStats(event);
+    case "GET /api/admin/ops/observability":
+      return authHandler.getAdminOpsObservability(event);
     case "POST /api/admin/survey-sketch-assignments":
       return authHandler.createSurveySketchAssignment(event);
     case "GET /api/admin/survey-sketch-assignments/{assignmentId}":
@@ -105,6 +130,8 @@ exports.handler = asyncHandler(async (event) => {
       return authHandler.updateSurveySketchAssignment(event);
     case "POST /api/admin/survey-sketch-assignments/{assignmentId}/pullback-reassign":
       return authHandler.pullbackAndReassignSurveySketchAssignment(event);
+    case "POST /api/admin/survey-sketch-assignments/{assignmentId}/sla-extend":
+      return authHandler.extendAssignmentSla(event);
     case "GET /api/admin/cad-centers/{cadCenterId}/assignments":
       return authHandler.listAssignmentsByCadCenter(event);
 
@@ -134,10 +161,20 @@ exports.handler = asyncHandler(async (event) => {
       return authHandler.getSurveySketchAssignmentFlow(event);
     case "PATCH /api/admin/survey-sketch-assignment-flow":
       return authHandler.updateSurveySketchAssignmentFlow(event);
+    case "GET /api/admin/auto-assign/exceptions":
+      return authHandler.listAutoAssignExceptions(event);
+    case "POST /api/admin/sketch-uploads/{uploadId}/auto-assign/retry":
+      return authHandler.retryAutoAssign(event);
+    case "GET /api/admin/sketch-uploads/{uploadId}/auto-assign/attempts":
+      return authHandler.getAutoAssignAttempts(event);
+    case "GET /api/admin/sketch-uploads/{uploadId}/auto-assign/manual-gate":
+      return authHandler.getAutoAssignManualGate(event);
     case "GET /api/admin/survey-sketch-pricing":
       return authHandler.getAdminSurveySketchPricing(event);
     case "PATCH /api/admin/survey-sketch-pricing":
       return authHandler.updateAdminSurveySketchPricing(event);
+    case "GET /api/admin/payments/reconciliation":
+      return authHandler.getAdminPaymentReconciliation(event);
     case "POST /api/admin/cad-wallet-entries/{entryId}/mark-paid":
       return authHandler.markCadWalletEntryPaid(event);
     case "POST /api/admin/cad-wallet-entries/{entryId}/record-payment":

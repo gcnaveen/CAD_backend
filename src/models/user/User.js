@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const { USER_ROLES, USER_STATUS } = require("../../config/constants");
+const { BCRYPT_COST } = require("../../config/authSecurity");
 
 const AuthSchema = require("./subSchemas/Auth.schema");
 const CadProfileSchema = require("./subSchemas/CadProfile.schema");
@@ -121,13 +122,34 @@ UserSchema.index({ deletedAt: 1, "cadProfile.cadCenter": 1, status: 1 });
 
 // -------- Password Hash Hook --------
 UserSchema.pre("save", async function (next) {
+  if (!this.isNew) {
+    if (this.isModified("role")) {
+      this.$locals = this.$locals || {};
+      this.$locals.revokeSessionsReason = "ROLE_CHANGED";
+    } else if (this.isModified("auth.password") && this.auth?.password) {
+      this.$locals = this.$locals || {};
+      this.$locals.revokeSessionsReason = "PASSWORD_CHANGED";
+    }
+  }
   if (!this.isModified("auth.password") || !this.auth?.password) return next();
 
   try {
-    this.auth.password = await bcrypt.hash(this.auth.password, 12);
+    this.auth.password = await bcrypt.hash(this.auth.password, BCRYPT_COST);
     next();
   } catch (err) {
     next(err);
+  }
+});
+
+/** M-12: invalidate refresh sessions on password / role change. */
+UserSchema.post("save", async function (doc) {
+  const reason = doc?.$locals?.revokeSessionsReason;
+  if (!reason) return;
+  try {
+    const refreshTokenService = require("../services/refreshToken.service");
+    await refreshTokenService.revokeAllForUser(doc._id, reason);
+  } catch (_) {
+    /* best-effort */
   }
 });
 
@@ -195,6 +217,7 @@ UserSchema.set("toJSON", {
       delete ret.auth.password;
       delete ret.auth.otpCode;
       delete ret.auth.otpExpires;
+      delete ret.auth.mfaSecret;
     }
     return ret;
   },

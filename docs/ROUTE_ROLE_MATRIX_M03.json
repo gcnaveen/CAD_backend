@@ -1,0 +1,53 @@
+{
+  "baselineId": "CAD_ROUTE_ROLE_MATRIX_M03",
+  "reviewDate": "2026-07-25",
+  "roles": ["SUPER_ADMIN", "ADMIN", "CAD", "SURVEYOR"],
+  "note": "Backend authorize() is the final control. FE must not render shells outside allowedRoles.",
+  "appShells": [
+    {
+      "shell": "superadmin",
+      "pathPrefix": ["/superadmin", "/admin"],
+      "allowedRoles": ["SUPER_ADMIN", "ADMIN"],
+      "forbiddenRoles": ["CAD", "SURVEYOR"]
+    },
+    {
+      "shell": "cad",
+      "pathPrefix": ["/cad", "/operator"],
+      "allowedRoles": ["CAD"],
+      "forbiddenRoles": ["SURVEYOR"],
+      "note": "ADMIN/SUPER_ADMIN may use admin APIs for CAD ops; do not put them in CAD operator shell unless product requires it."
+    },
+    {
+      "shell": "surveyor",
+      "pathPrefix": ["/surveyor", "/user", "/dashboard/user"],
+      "allowedRoles": ["SURVEYOR"],
+      "forbiddenRoles": ["CAD"]
+    },
+    {
+      "shell": "public",
+      "pathPrefix": ["/login", "/register", "/cad-interest", "/"],
+      "allowedRoles": ["*"]
+    }
+  ],
+  "apiPrefixes": [
+    { "prefix": "/api/admin/", "allowedRoles": ["SUPER_ADMIN", "ADMIN"] },
+    { "prefix": "/api/users", "allowedRoles": ["SUPER_ADMIN", "ADMIN"] },
+    { "prefix": "/api/masters/", "allowedRoles": ["SUPER_ADMIN", "ADMIN"] },
+    { "prefix": "/api/cad/", "allowedRoles": ["CAD"] },
+    { "prefix": "/api/surveyor/", "allowedRoles": ["SURVEYOR"], "exceptions": [
+      { "pathContains": "/api/surveyor/sketch-uploads", "methods": ["GET"], "also": ["CAD", "ADMIN", "SUPER_ADMIN"], "note": "Some read paths allow CAD/admin — still hide surveyor shell from CAD." }
+    ]},
+    { "prefix": "/api/upload/", "allowedRoles": ["SURVEYOR", "CAD", "ADMIN", "SUPER_ADMIN"] },
+    { "prefix": "/api/notifications", "allowedRoles": ["SURVEYOR", "CAD", "ADMIN", "SUPER_ADMIN"] },
+    { "prefix": "/api/auth/mfa/", "allowedRoles": ["SUPER_ADMIN", "ADMIN"] },
+    { "prefix": "/api/public/", "allowedRoles": ["*"] },
+    { "prefix": "/api/version", "allowedRoles": ["*"] }
+  ],
+  "feRules": [
+    "ProtectedRoute must check token AND role against route map",
+    "Unauthorized role → navigate to /403 (do not render target shell)",
+    "Nav items filtered by role before render",
+    "On 401 clear session; on 403 show Forbidden page, do not retry as another role",
+    "Never trust JWT role claim alone for long sessions — prefer user.role from login/me response refreshed from server"
+  ]
+}

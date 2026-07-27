@@ -2,44 +2,69 @@
  * OTP Service
  * Handles OTP generation, storage, verification, and delivery to phone.
  *
- * Testing: Set COMMON_OTP (e.g. "123456") or OTP_TEST_MODE=true in env to use a fixed OTP
- * for all generations. Change/remove for production or after DLT completion.
+ * Audit H-02: crypto.randomInt for OTP; test/common OTP forbidden in production.
  */
 
+const crypto = require("crypto");
 const User = require("../models/user/User");
 const { sendOtpSms, isMsg91Configured } = require("../utils/sms");
-const { UnauthorizedError, BadRequestError, DatabaseError } = require("../utils/errors");
+const { UnauthorizedError, BadRequestError, DatabaseError, TooManyRequestsError } = require("../utils/errors");
 const logger = require("../utils/logger");
+const { isProductionRuntime } = require("../config/authSecurity");
+const authThrottle = require("./authThrottle.service");
 
 const OTP_EXPIRY_MINUTES = 10;
 
-/** For testing: common OTP for all generations. Set COMMON_OTP or OTP_TEST_MODE=true; remove for production. */
-const TEST_OTP = process.env.COMMON_OTP || (process.env.OTP_TEST_MODE === "true" ? "123456" : null);
-
-const generateOtp = () => {
-  if (TEST_OTP) {
-    return String(TEST_OTP).trim();
+function assertOtpTestModeAllowed() {
+  const testMode = String(process.env.OTP_TEST_MODE || "").toLowerCase() === "true";
+  const common = String(process.env.COMMON_OTP || "").trim();
+  if (isProductionRuntime() && (testMode || common)) {
+    throw new DatabaseError("OTP test mode is not allowed in production", {
+      code: "OTP_TEST_MODE_FORBIDDEN",
+    });
   }
-  return String(100000 + Math.floor(Math.random() * 900000));
-};
+}
+
+function isOtpTestModeEnabled() {
+  assertOtpTestModeAllowed();
+  if (String(process.env.OTP_TEST_MODE || "").toLowerCase() === "true") return true;
+  if (String(process.env.COMMON_OTP || "").trim()) return true;
+  return false;
+}
+
+function getTestOtpValue() {
+  assertOtpTestModeAllowed();
+  const common = String(process.env.COMMON_OTP || "").trim();
+  if (common) return common;
+  if (String(process.env.OTP_TEST_MODE || "").toLowerCase() === "true") return "123456";
+  return null;
+}
+
+/** Cryptographically secure 6-digit OTP (audit H-02). */
+function generateOtp() {
+  const test = getTestOtpValue();
+  if (test) return String(test);
+  return String(crypto.randomInt(100000, 1000000));
+}
 
 class OtpService {
   /**
-   * Issue OTP for a phone number. Finds user by auth.phone, sets OTP, sends SMS.
-   * @param {string} phone - Phone number
-   * @param {Object} [userInstance] - Optional user instance to use instead of finding by phone
-   * @returns {Promise<{ message: string, expiresAt: Date }>}
+   * @param {string} phone
+   * @param {Object} [userInstance]
+   * @param {{ ip?: string }} [meta]
    */
-  async issueOtp(phone, userInstance = null) {
+  async issueOtp(phone, userInstance = null, meta = {}) {
     try {
+      assertOtpTestModeAllowed();
       if (!phone || !String(phone).trim()) {
         throw new BadRequestError("Phone number is required");
       }
 
       const normalizedPhone = String(phone).trim();
+      await authThrottle.assertOtpIssueAllowed({ phone: normalizedPhone, ip: meta.ip });
+
       let user = userInstance;
 
-      // If user instance not provided, find by phone
       if (!user) {
         user = await User.findOne({ "auth.phone": normalizedPhone }).select(
           "+auth.otpCode +auth.otpExpires"
@@ -49,8 +74,6 @@ class OtpService {
           throw new UnauthorizedError("No user found with this phone number");
         }
       } else {
-        // If user instance provided, reload with OTP fields to ensure they're accessible
-        // (OTP fields are select: false by default)
         if (user._id) {
           user = await User.findById(user._id).select("+auth.otpCode +auth.otpExpires");
           if (!user) {
@@ -61,7 +84,6 @@ class OtpService {
         }
       }
 
-      // Ensure auth object exists
       if (!user.auth) {
         throw new BadRequestError("User auth object is missing");
       }
@@ -74,12 +96,10 @@ class OtpService {
       user.auth.otpVerified = false;
       await user.save();
 
-      if (TEST_OTP) {
-        // Testing: skip SMS to avoid cost/DLT; OTP is stored and can be verified with COMMON_OTP value
+      if (isOtpTestModeEnabled()) {
         logger.info("OTP issued (test mode – SMS skipped)", {
           userId: user._id?.toString(),
           phone: normalizedPhone,
-          otp: otp,
         });
       } else {
         if (!isMsg91Configured()) {
@@ -98,7 +118,8 @@ class OtpService {
       if (
         error instanceof UnauthorizedError ||
         error instanceof BadRequestError ||
-        error instanceof DatabaseError
+        error instanceof DatabaseError ||
+        error instanceof TooManyRequestsError
       ) {
         throw error;
       }
@@ -108,13 +129,13 @@ class OtpService {
   }
 
   /**
-   * Verify OTP for a phone number. Marks user as otpVerified and clears OTP fields.
-   * @param {string} phone - Phone number
-   * @param {string} otp - OTP code
-   * @returns {Promise<import("../models/user/User")>} User document
+   * @param {string} phone
+   * @param {string} otp
+   * @param {{ ip?: string }} [meta]
    */
-  async verifyOtp(phone, otp) {
+  async verifyOtp(phone, otp, meta = {}) {
     try {
+      assertOtpTestModeAllowed();
       if (!phone || !String(phone).trim()) {
         throw new BadRequestError("Phone number is required");
       }
@@ -123,6 +144,11 @@ class OtpService {
       }
 
       const normalizedPhone = String(phone).trim();
+      const throttleKey = await authThrottle.assertOtpVerifyAllowed({
+        phone: normalizedPhone,
+        ip: meta.ip,
+      });
+
       const user = await User.findOne({ "auth.phone": normalizedPhone }).select(
         "+auth.otpCode +auth.otpExpires"
       );
@@ -140,6 +166,7 @@ class OtpService {
       }
 
       if (user.auth.otpCode !== String(otp).trim()) {
+        await authThrottle.recordOtpVerifyFailure(throttleKey);
         throw new UnauthorizedError("Invalid OTP");
       }
 
@@ -147,13 +174,15 @@ class OtpService {
       user.auth.otpCode = undefined;
       user.auth.otpExpires = undefined;
       await user.save();
+      await authThrottle.recordOtpVerifySuccess(throttleKey);
 
       logger.info("OTP verified", { userId: user._id?.toString(), phone: normalizedPhone });
       return user;
     } catch (error) {
       if (
         error instanceof UnauthorizedError ||
-        error instanceof BadRequestError
+        error instanceof BadRequestError ||
+        error instanceof TooManyRequestsError
       ) {
         throw error;
       }
@@ -164,3 +193,5 @@ class OtpService {
 }
 
 module.exports = new OtpService();
+module.exports.assertOtpTestModeAllowed = assertOtpTestModeAllowed;
+module.exports.generateOtp = generateOtp;

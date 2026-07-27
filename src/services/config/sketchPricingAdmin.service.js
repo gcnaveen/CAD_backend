@@ -13,6 +13,8 @@ const PRICING_FIELDS = [
   "sketchUploadDiscountRupees",
   "sketchRevisionPlanAmountRupees",
   "sketchRevisionDiscountRupees",
+  "sketchBalancePlanAmountRupees",
+  "sketchBalanceDiscountRupees",
 ];
 
 async function getPricingSettings() {
@@ -33,6 +35,8 @@ async function getPricingSettings() {
     sketchUploadDiscountRupees: doc?.sketchUploadDiscountRupees ?? null,
     sketchRevisionPlanAmountRupees: doc?.sketchRevisionPlanAmountRupees ?? null,
     sketchRevisionDiscountRupees: doc?.sketchRevisionDiscountRupees ?? null,
+    sketchBalancePlanAmountRupees: doc?.sketchBalancePlanAmountRupees ?? null,
+    sketchBalanceDiscountRupees: doc?.sketchBalanceDiscountRupees ?? null,
     pricing,
     updatedBy: doc?.updatedBy ?? null,
     updatedAt: doc?.updatedAt ?? null,

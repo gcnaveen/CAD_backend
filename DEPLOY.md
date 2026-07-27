@@ -27,23 +27,26 @@ Your Lambda needs `MONGODB_URI` and `JWT_SECRET` at runtime. They are read from 
 
 Create or edit `.env` in the project root. Lambda only receives the variables listed in `serverless.yml`; `MONGODB_DISCOVER_PRIMARY` is **not** sent to AWS (it is for local use only).
 
+JWT_SECRET must be a strong unique value (≥32 characters). There is **no** code/serverless default (`change-me` was removed — audit H-01). Generate with `openssl rand -base64 48`. Prefer AWS Secrets Manager / SSM over long-lived `.env` copies. See `docs/SECURITY_H01_SECRET_ROTATION.md`.
+
 ```env
 # Use one of these. MONGODB_URI_STANDARD is preferred if SRV fails in your environment.
 MONGODB_URI_STANDARD=mongodb://user:pass@host1:27017,host2:27017,host3:27017/cad_db?ssl=true&replicaSet=...&authSource=admin
 # OR (SRV works from Lambda in most regions):
 # MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/cad_db?retryWrites=true&w=majority
 
-JWT_SECRET=your-strong-secret-for-production
+JWT_SECRET=   # required — openssl rand -base64 48 (no fallback)
 JWT_EXPIRES_IN=24h
+S3_BUCKET=    # required — no hardcoded bucket in serverless (audit H-06)
 ```
 
-With `useDotenv: true` in `serverless.yml`, these values are used when you run `serverless deploy`.
+With `useDotenv: true` in `serverless.yml`, these values are used when you run `serverless deploy`. **Deploy fails** if `S3_BUCKET`, `JWT_SECRET`, or Mongo URI are missing.
 
 **Option B – Export in the shell (for CI or one-off deploy)**
 
 ```bash
 export MONGODB_URI=mongodb+srv://...
-export JWT_SECRET=your-strong-secret
+export JWT_SECRET="$(openssl rand -base64 48)"
 npm run deploy:dev
 ```
 
@@ -61,21 +64,26 @@ From the project root:
 # Install dependencies (if not already)
 npm install
 
-# Deploy to dev stage (ap-south-1 by default)
+# Writes build-identity.json (git SHA + lock hash), deploys, records deployments/
 npm run deploy:dev
 
-# Or deploy to production
+# Or deploy to production (prefer an annotated git tag first — see docs/SECURITY_H05_RELEASE_PROVENANCE.md)
 npm run deploy:prod
 
-# Deploy to a specific region
+# Deploy to a specific region (still regenerate identity first)
+npm run build:identity -- --stage dev
 npx serverless deploy --stage dev --region us-east-1
+node scripts/record-deployment.js --stage dev
 ```
 
 Deployment will:
 
+- Bake **BUILD_GIT_SHA** / lock hash into Lambda env (prove live ≡ git)
 - Create or update the **HTTP API** in API Gateway
-- Create or update **Lambda functions**: `authApi`, `testApi`, `swaggerApi`
+- Create or update **Lambda functions**: `authApi`, `testApi`, `versionApi`, `swaggerApi`, …
 - Set environment variables on each function
+
+**Prove the live build:** `GET /api/version` → compare `gitSha` to `git rev-parse HEAD` / release tag.
 
 At the end you’ll see output similar to:
 

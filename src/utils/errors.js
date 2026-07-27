@@ -54,6 +54,12 @@ class DatabaseError extends AppError {
   }
 }
 
+class TooManyRequestsError extends AppError {
+  constructor(message = "Too Many Requests", opts = {}) {
+    super(message, { statusCode: HTTP_STATUS.TOO_MANY_REQUESTS, ...opts });
+  }
+}
+
 module.exports = {
   AppError,
   BadRequestError,
@@ -62,5 +68,6 @@ module.exports = {
   NotFoundError,
   ConflictError,
   DatabaseError,
+  TooManyRequestsError,
 };
 

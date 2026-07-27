@@ -22,8 +22,18 @@ const {
   SURVEY_SKETCH_STATUS,
   CAD_WALLET_ENTRY_KIND,
 } = require("../../config/constants");
+const {
+  applySketchStatus,
+  applyAssignmentStatus,
+  assertSketchStatusTransition,
+  assertAssignmentStatusTransition,
+  assertQcRequiredForRelease,
+  ORDER_TYPES,
+} = require("../../config/lifecycleQcSpec");
+const slaDue = require("../slaDue.service");
 const sketchPaymentPricing = require("../sketchPaymentPricing.service");
 const phonePeSketchPayment = require("../phonePeSketchPayment.service");
+const paymentAttempt = require("../paymentAttempt.service");
 const cadWalletService = require("../cadWallet.service");
 const { normalizeStoredDocumentList } = require("../../utils/surveyDocuments");
 
@@ -60,6 +70,7 @@ async function syncUploadStatusWithActiveAssignment(uploadId) {
     upload.status === SURVEY_SKETCH_STATUS.PENDING ||
     upload.status === SURVEY_SKETCH_STATUS.UNDER_REVISION
   ) {
+    assertSketchStatusTransition(upload.status, SURVEY_SKETCH_STATUS.ASSIGNED);
     await SurveyorSketchUpload.findByIdAndUpdate(uploadId, {
       status: SURVEY_SKETCH_STATUS.ASSIGNED,
     });
@@ -72,6 +83,8 @@ async function repairUploadStatusesForSurveyor(surveyorId) {
     status: { $in: ACTIVE_ASSIGNMENT_STATUSES },
   });
   if (!uploadIds.length) return;
+  assertSketchStatusTransition(SURVEY_SKETCH_STATUS.PENDING, SURVEY_SKETCH_STATUS.ASSIGNED);
+  assertSketchStatusTransition(SURVEY_SKETCH_STATUS.UNDER_REVISION, SURVEY_SKETCH_STATUS.ASSIGNED);
   await SurveyorSketchUpload.updateMany(
     {
       _id: { $in: uploadIds },
@@ -154,7 +167,7 @@ async function create(payload, assignedBy) {
     });
   }
 
-  const sketch = await SurveyorSketchUpload.findById(surveyorSketchUploadId).lean();
+  const sketch = await SurveyorSketchUpload.findById(surveyorSketchUploadId);
   if (!sketch) {
     throw new NotFoundError("Survey sketch upload not found", {
       code: "SURVEY_SKETCH_NOT_FOUND",
@@ -164,6 +177,13 @@ async function create(payload, assignedBy) {
     throw new BadRequestError("Survey sketch payment is not completed yet.", {
       code: "SKETCH_PAYMENT_PENDING",
     });
+  }
+
+  const autoAssign = require("../autoAssign.service");
+  // Manual assign gate when auto-assign is on (M-09): allow after timeout / exception.
+  // Revisions always allowed through existing UNDER_REVISION path below.
+  if (sketch.status !== SURVEY_SKETCH_STATUS.UNDER_REVISION) {
+    await autoAssign.assertManualAssignAllowed(sketch);
   }
 
   let cadCenterToStore = null;
@@ -221,9 +241,8 @@ async function create(payload, assignedBy) {
         existing.assignedTo = initialAssignedTo || null;
         existing.cadCenter = cadCenterToStore || null;
         existing.assignedBy = assignedBy._id;
-        existing.assignedAt = new Date();
-        existing.dueDate = dueDate ? new Date(dueDate) : existing.dueDate || null;
         existing.notes = notes ? String(notes).trim().slice(0, 1000) : existing.notes || null;
+        slaDue.applySlaOnAssign(existing);
         await existing.save();
         await syncUploadStatusWithActiveAssignment(surveyorSketchUploadId);
 
@@ -244,12 +263,12 @@ async function create(payload, assignedBy) {
           createdBy: assignedBy?._id,
         });
 
-        return reassigned;
+        return slaDue.decorateAssignment(reassigned);
       }
 
       // If current active assignment already moved forward (IN_PROGRESS/ON_HOLD),
       // close it and create a fresh reassignment.
-      existing.status = SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED;
+      applyAssignmentStatus(existing, SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED);
       await existing.save();
     }
 
@@ -267,15 +286,20 @@ async function create(payload, assignedBy) {
     assignedTo: initialAssignedTo,
     status: SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED,
     assignedBy: assignedBy._id,
-    dueDate: dueDate ? new Date(dueDate) : null,
     notes: notes ? String(notes).trim().slice(0, 1000) : null,
   });
-
+  // M-10: server-owned dueAt — ignore client dueDate
+  slaDue.applySlaOnAssign(doc);
   await doc.save();
 
-  await SurveyorSketchUpload.findByIdAndUpdate(surveyorSketchUploadId, {
-    status: SURVEY_SKETCH_STATUS.ASSIGNED,
-  });
+  const sketchForAssign = await SurveyorSketchUpload.findById(surveyorSketchUploadId).select("status");
+  if (sketchForAssign) {
+    assertSketchStatusTransition(sketchForAssign.status, SURVEY_SKETCH_STATUS.ASSIGNED);
+    sketchForAssign.status = SURVEY_SKETCH_STATUS.ASSIGNED;
+    await sketchForAssign.save();
+  }
+
+  await autoAssign.markManualAssignSucceeded(surveyorSketchUploadId, doc._id, assignedBy._id);
 
   const populated = await SurveySketchAssignment.findById(doc._id)
     .populate("surveyorSketchUpload", "applicationId surveyNo status")
@@ -294,7 +318,7 @@ async function create(payload, assignedBy) {
     createdBy: assignedBy?._id,
   });
 
-  return populated;
+  return slaDue.decorateAssignment(populated);
 }
 
 /**
@@ -323,12 +347,12 @@ async function listByCadCenter(cadCenterId, options = {}) {
     SurveySketchAssignment.countDocuments(filter),
   ]);
 
-  return { data, total };
+  return {
+    data: slaDue.sortBySlaRisk(slaDue.decorateAssignmentList(data)),
+    total,
+    slaPolicy: slaDue.getPolicy(),
+  };
 }
-
-/**
- * Get assignment counts by CAD center (for list view).
- */
 async function getAssignmentCountsByCenter(cadCenterId) {
   const byStatus = await SurveySketchAssignment.aggregate([
     { $match: { cadCenter: cadCenterId, status: { $ne: SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED } } },
@@ -355,7 +379,7 @@ async function getById(assignmentId) {
   if (!doc) {
     throw new NotFoundError("Assignment not found", { code: "ASSIGNMENT_NOT_FOUND" });
   }
-  return doc;
+  return slaDue.decorateAssignment(doc);
 }
 
 /**
@@ -399,15 +423,33 @@ async function update(assignmentId, updates, actor) {
 
   const allowed = {};
   if (updates.status && Object.values(SURVEY_SKETCH_ASSIGNMENT_STATUS).includes(updates.status)) {
+    assertAssignmentStatusTransition(doc.status, updates.status);
     allowed.status = updates.status;
     if (updates.status === SURVEY_SKETCH_ASSIGNMENT_STATUS.COMPLETED) {
       allowed.completedAt = new Date();
     }
   }
-  if (updates.dueDate !== undefined) allowed.dueDate = updates.dueDate ? new Date(updates.dueDate) : null;
+  // M-10: client cannot set dueDate/dueAt — use sla-extend API
   if (updates.notes !== undefined) allowed.notes = updates.notes ? String(updates.notes).trim().slice(0, 1000) : null;
 
   Object.assign(doc, allowed);
+
+  if (allowed.status === SURVEY_SKETCH_ASSIGNMENT_STATUS.ON_HOLD) {
+    slaDue.pauseSla(doc);
+  } else if (
+    allowed.status &&
+    doc.slaPausedAt &&
+    allowed.status !== SURVEY_SKETCH_ASSIGNMENT_STATUS.ON_HOLD &&
+    allowed.status !== SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED
+  ) {
+    slaDue.resumeSla(doc);
+  } else if (allowed.status === SURVEY_SKETCH_ASSIGNMENT_STATUS.COMPLETED) {
+    const snap = slaDue.resolveSlaState(doc);
+    doc.slaState = snap.state;
+  } else if (allowed.status === SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED) {
+    doc.slaState = slaDue.SLA_STATE.CANCELLED;
+  }
+
   await doc.save();
 
   if (reassignedCad && doc.surveyorSketchUpload) {
@@ -416,9 +458,12 @@ async function update(assignmentId, updates, actor) {
 
   // When assignment is cancelled, revert survey sketch status to PENDING so admin can reassign
   if (allowed.status === SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED && doc.surveyorSketchUpload) {
-    await SurveyorSketchUpload.findByIdAndUpdate(doc.surveyorSketchUpload, {
-      status: SURVEY_SKETCH_STATUS.PENDING,
-    });
+    const upload = await SurveyorSketchUpload.findById(doc.surveyorSketchUpload).select("status");
+    if (upload) {
+      assertSketchStatusTransition(upload.status, SURVEY_SKETCH_STATUS.PENDING);
+      upload.status = SURVEY_SKETCH_STATUS.PENDING;
+      await upload.save();
+    }
   }
   const populated = await SurveySketchAssignment.findById(doc._id)
     .populate("surveyorSketchUpload", "applicationId surveyNo status")
@@ -445,7 +490,7 @@ async function update(assignmentId, updates, actor) {
       createdBy: actor?._id,
     });
   }
-  return populated;
+  return slaDue.decorateAssignment(populated);
 }
 
 /**
@@ -485,10 +530,10 @@ async function pullbackAndReassign(assignmentId, { assignedCadUserId, reason }, 
 
   doc.assignedTo = nextCadUser._id;
   doc.cadCenter = null;
-  doc.status = SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED;
-  doc.assignedAt = new Date();
+  applyAssignmentStatus(doc, SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED);
   doc.completedAt = null;
   doc.rejectedByCad = null;
+  slaDue.applySlaOnAssign(doc); // restart SLA clock on pullback
   await doc.save();
   if (doc.surveyorSketchUpload) {
     await syncUploadStatusWithActiveAssignment(doc.surveyorSketchUpload);
@@ -511,7 +556,7 @@ async function pullbackAndReassign(assignmentId, { assignedCadUserId, reason }, 
     createdBy: actor?._id,
   });
 
-  return populated;
+  return slaDue.decorateAssignment(populated);
 }
 
 const CAD_ASSIGNMENT_RESPONSE_ACTION = Object.freeze({ ACCEPT: "accept", REJECT: "reject" });
@@ -584,19 +629,22 @@ async function respondToAssignment(assignmentId, cadUser, action) {
   const isAccept = effectiveAction === CAD_ASSIGNMENT_RESPONSE_ACTION.ACCEPT;
 
   if (isAccept) {
-    doc.status = SURVEY_SKETCH_ASSIGNMENT_STATUS.IN_PROGRESS;
+    applyAssignmentStatus(doc, SURVEY_SKETCH_ASSIGNMENT_STATUS.IN_PROGRESS);
     if (!doc.assignedTo) {
       doc.assignedTo = cadUser._id;
     }
     await doc.save();
   } else {
-    doc.status = SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED;
+    applyAssignmentStatus(doc, SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED);
     doc.rejectedByCad = cadUser._id;
     await doc.save();
     if (doc.surveyorSketchUpload) {
-      await SurveyorSketchUpload.findByIdAndUpdate(doc.surveyorSketchUpload, {
-        status: SURVEY_SKETCH_STATUS.PENDING,
-      });
+      const upload = await SurveyorSketchUpload.findById(doc.surveyorSketchUpload).select("status");
+      if (upload) {
+        assertSketchStatusTransition(upload.status, SURVEY_SKETCH_STATUS.PENDING);
+        upload.status = SURVEY_SKETCH_STATUS.PENDING;
+        await upload.save();
+      }
     }
   }
   const populated = await SurveySketchAssignment.findById(doc._id)
@@ -643,7 +691,11 @@ async function listAll(filters = {}, pagination = null) {
       .lean(),
     SurveySketchAssignment.countDocuments(query),
   ]);
-  return { data, total };
+  return {
+    data: slaDue.sortBySlaRisk(slaDue.decorateAssignmentList(data)),
+    total,
+    slaPolicy: slaDue.getPolicy(),
+  };
 }
 
 async function pickCadCenterForAutoAssign() {
@@ -694,52 +746,15 @@ async function pickCadCenterForAutoAssign() {
 }
 
 /**
- * Auto-assign newly created survey sketch to best CAD center.
- * Used only when admin toggle is enabled.
+ * Auto-assign newly created survey sketch to best CAD center (M-09).
+ * Delegates to autoAssign.service (persisted attempts, lock, retry, exception queue).
  */
 async function autoAssignFromFlow(surveyorSketchUploadId, assignedByUserId) {
-  if (!assignedByUserId) return null;
-
-  const [sketch, assignedBy] = await Promise.all([
-    SurveyorSketchUpload.findById(surveyorSketchUploadId).select("_id status").lean(),
-    User.findById(assignedByUserId).select("_id role").lean(),
-  ]);
-  if (!sketch || !assignedBy) return null;
-
-  const existing = await SurveySketchAssignment.findOne({
-    surveyorSketchUpload: surveyorSketchUploadId,
-    status: { $in: ACTIVE_ASSIGNMENT_STATUSES },
-  }).lean();
-  if (existing) return existing;
-
-  const cadCenterId = await pickCadCenterForAutoAssign();
-  if (!cadCenterId) return null;
-
-  const doc = new SurveySketchAssignment({
-    surveyorSketchUpload: surveyorSketchUploadId,
-    cadCenter: cadCenterId,
-    assignedTo: null,
-    status: SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED,
-    assignedBy: assignedBy._id,
+  const autoAssign = require("../autoAssign.service");
+  return autoAssign.tryAutoAssign(surveyorSketchUploadId, {
+    source: "SUBMIT",
+    actorUserId: assignedByUserId,
   });
-  await doc.save();
-
-  await SurveyorSketchUpload.findByIdAndUpdate(surveyorSketchUploadId, {
-    status: SURVEY_SKETCH_STATUS.ASSIGNED,
-  });
-  const populated = await SurveySketchAssignment.findById(doc._id)
-    .populate("surveyorSketchUpload", "applicationId surveyNo status")
-    .populate("cadCenter", "name code availabilityStatus")
-    .populate("assignedBy", "name")
-    .lean();
-  await notifyAssignmentEvent({
-    type: "SURVEY_SKETCH_AUTO_ASSIGNED",
-    title: "Survey sketch auto-assigned",
-    message: "A new survey sketch was automatically assigned to a CAD center.",
-    assignmentDoc: populated || doc,
-    createdBy: assignedBy?._id,
-  });
-  return populated;
 }
 
 /**
@@ -784,7 +799,11 @@ async function listForCadUser(cadUser, options = {}) {
 
   const [data, total] = await Promise.all([
     SurveySketchAssignment.find(filter)
-      .sort({ assignedAt: -1 })
+      .sort(
+        String(options.sortBy || "").toLowerCase() === "assignedat"
+          ? { assignedAt: -1 }
+          : { dueAt: 1, assignedAt: -1 }
+      )
       .skip(skip)
       .limit(limit)
       .populate("surveyorSketchUpload", "applicationId surveyNo status district taluka village createdAt cadDeliverable")
@@ -795,7 +814,12 @@ async function listForCadUser(cadUser, options = {}) {
     SurveySketchAssignment.countDocuments(filter),
   ]);
 
-  return { data, total };
+  const decorated = slaDue.decorateAssignmentList(data);
+  return {
+    data: String(options.sortBy || "").toLowerCase() === "assignedat" ? decorated : slaDue.sortBySlaRisk(decorated),
+    total,
+    slaPolicy: slaDue.getPolicy(),
+  };
 }
 
 /**
@@ -821,6 +845,12 @@ async function autoRejectExpiredAssignments({ now = new Date(), limit = 250 } = 
   const ids = expired.map((e) => e._id);
   const uploadIds = expired.map((e) => e.surveyorSketchUpload).filter(Boolean);
 
+  assertAssignmentStatusTransition(
+    SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED,
+    SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED
+  );
+  assertSketchStatusTransition(SURVEY_SKETCH_STATUS.ASSIGNED, SURVEY_SKETCH_STATUS.PENDING);
+
   await Promise.all([
     SurveySketchAssignment.updateMany(
       { _id: { $in: ids }, status: SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED },
@@ -828,7 +858,10 @@ async function autoRejectExpiredAssignments({ now = new Date(), limit = 250 } = 
     ),
     uploadIds.length
       ? SurveyorSketchUpload.updateMany(
-          { _id: { $in: uploadIds } },
+          {
+            _id: { $in: uploadIds },
+            status: SURVEY_SKETCH_STATUS.ASSIGNED,
+          },
           { $set: { status: SURVEY_SKETCH_STATUS.PENDING } }
         )
       : Promise.resolve(),
@@ -877,11 +910,18 @@ async function deliverCadSketch(assignmentId, cadUser, fileMeta) {
   }
 
   const uploadId = doc.surveyorSketchUpload;
-  const cadDeliverables = normalizeStoredDocumentList(fileMeta.files).map((file) => ({
-    url: String(file.url).trim(),
-    fileName: file.fileName != null ? String(file.fileName).trim() : null,
-    mimeType: file.mimeType != null ? String(file.mimeType).trim() : null,
-    size: file.size != null && file.size !== "" ? Number(file.size) : null,
+  const cadDeliverableContract = require("../cadDeliverableContract.service");
+  const bundle = cadDeliverableContract.assertCadDeliverableBundle(fileMeta.files);
+  const cadDeliverables = bundle.files.map((file) => ({
+    url: file.url,
+    fileName: file.fileName,
+    mimeType: file.mimeType,
+    size: file.size,
+    role: file.role,
+    s3Key: file.s3Key,
+    sha256: file.sha256,
+    confirmed: file.confirmed,
+    contractVersion: file.contractVersion,
     uploadedAt: file.uploadedAt || new Date(),
   }));
   if (!cadDeliverables.length) {
@@ -919,11 +959,16 @@ async function deliverCadSketch(assignmentId, cadUser, fileMeta) {
     })
   );
   uploadDoc.cadDeliverable = cadDeliverables;
-  uploadDoc.status = SURVEY_SKETCH_STATUS.CAD_DELIVERED;
+  assertQcRequiredForRelease(ORDER_TYPES.STANDARD_11E);
+  applySketchStatus(uploadDoc, SURVEY_SKETCH_STATUS.CAD_DELIVERED);
+  const cadDownloadEntitlement = require("../cadDownloadEntitlement.service");
+  await cadDownloadEntitlement.applyBalanceRequirementOnDelivery(uploadDoc);
   await uploadDoc.save();
 
-  doc.status = SURVEY_SKETCH_ASSIGNMENT_STATUS.COMPLETED;
+  applyAssignmentStatus(doc, SURVEY_SKETCH_ASSIGNMENT_STATUS.COMPLETED);
   doc.completedAt = new Date();
+  const snapComplete = slaDue.resolveSlaState(doc);
+  doc.slaState = snapComplete.state;
   await doc.save();
 
   try {
@@ -943,7 +988,7 @@ async function deliverCadSketch(assignmentId, cadUser, fileMeta) {
     await notificationService.create({
       type: "CAD_SKETCH_DELIVERED",
       title: "CAD sketch ready",
-      message: `Your sketch ${sketch?.applicationId || ""} is ready to download.`,
+      message: `Your sketch ${sketch?.applicationId || ""} is ready. Pay the balance (if required) then download from the app.`,
       entityType: "SurveyorSketchUpload",
       entityId: uploadId,
       targetRoles: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN],
@@ -972,7 +1017,7 @@ async function deliverCadSketch(assignmentId, cadUser, fileMeta) {
     createdBy: cadUser?._id,
   });
 
-  return populated;
+  return slaDue.decorateAssignment(populated);
 }
 
 async function commitRevisionToUploadAndAssign(uploadDoc, surveyor, payload, nextRevisionNo, latestCompleted) {
@@ -989,7 +1034,7 @@ async function commitRevisionToUploadAndAssign(uploadDoc, surveyor, payload, nex
     uploadDoc.revisionRequests = [];
   }
   uploadDoc.revisionRequests.push(revisionRequest);
-  uploadDoc.status = SURVEY_SKETCH_STATUS.UNDER_REVISION;
+  applySketchStatus(uploadDoc, SURVEY_SKETCH_STATUS.UNDER_REVISION);
   await uploadDoc.save();
 
   const reassignment = new SurveySketchAssignment({
@@ -1000,6 +1045,7 @@ async function commitRevisionToUploadAndAssign(uploadDoc, surveyor, payload, nex
     assignedBy: latestCompleted.assignedBy || surveyor._id,
     notes: `Auto-assigned for revision request #${nextRevisionNo}`,
   });
+  slaDue.applySlaOnAssign(reassignment);
   await reassignment.save();
   await syncUploadStatusWithActiveAssignment(uploadDoc._id);
 
@@ -1026,6 +1072,8 @@ async function markRevisionPaymentFailed(merchantOrderId, phonepeResponse) {
 
 /**
  * PhonePe callback: apply pending revision #2+ after payment success.
+ * Rejects when paid amount ≠ immutable expected pending.amountPaise (C-01).
+ * Idempotent if revision already committed.
  */
 async function completeRevisionAfterPayment(merchantOrderId, phonepeResponse = {}) {
   const m = String(merchantOrderId).match(/^rev_([a-f0-9]{24})_(\d+)$/i);
@@ -1038,18 +1086,53 @@ async function completeRevisionAfterPayment(merchantOrderId, phonepeResponse = {
 
   const already = uploadDoc.revisionRequests?.some((r) => r.revisionNo === revisionNo);
   if (already) {
-    return SurveyorSketchUpload.findById(uploadId)
+    const lean = await SurveyorSketchUpload.findById(uploadId)
       .populate("surveyor", "name role")
       .populate("district", "code name")
       .populate("taluka", "code name")
       .populate("hobli", "code name")
       .populate("village", "code name")
       .lean();
+    return { ...lean, paymentRejected: false };
   }
 
   const pending = uploadDoc.pendingRevisionPayment;
   if (!pending || pending.status !== "PENDING" || pending.revisionNo !== revisionNo) {
     return null;
+  }
+
+  if (pending.merchantOrderId && String(pending.merchantOrderId) !== String(merchantOrderId)) {
+    logger.error("PhonePe revision merchantOrderId mismatch", {
+      uploadId,
+      stored: pending.merchantOrderId,
+      callback: merchantOrderId,
+    });
+    await SurveyorSketchUpload.findByIdAndUpdate(uploadId, {
+      $set: {
+        "pendingRevisionPayment.status": "AMOUNT_MISMATCH",
+        "pendingRevisionPayment.paymentFailureReason": "MERCHANT_ORDER_ID_MISMATCH",
+        "pendingRevisionPayment.phonepeResponse": phonepeResponse,
+      },
+    });
+    return { paymentRejected: true, reason: "MERCHANT_ORDER_ID_MISMATCH" };
+  }
+
+  const match = phonePeSketchPayment.assertPaidMatchesExpected(pending.amountPaise, phonepeResponse);
+  if (!match.ok) {
+    logger.error("PhonePe revision payment amount rejected", {
+      uploadId,
+      reason: match.reason,
+      expectedPaise: match.expectedPaise,
+      paidPaise: match.paidPaise,
+    });
+    await SurveyorSketchUpload.findByIdAndUpdate(uploadId, {
+      $set: {
+        "pendingRevisionPayment.status": "AMOUNT_MISMATCH",
+        "pendingRevisionPayment.paymentFailureReason": match.reason,
+        "pendingRevisionPayment.phonepeResponse": phonepeResponse,
+      },
+    });
+    return { paymentRejected: true, reason: match.reason };
   }
 
   const latestCompleted = await SurveySketchAssignment.findOne({
@@ -1068,15 +1151,12 @@ async function completeRevisionAfterPayment(merchantOrderId, phonepeResponse = {
   const payload = { remarks: pending.remarks, audio: pending.audio || null };
 
   const chargedPaise = pending.amountPaise != null ? Math.round(Number(pending.amountPaise)) : null;
-  const paidAmountPaise =
-    phonePeSketchPayment.extractPaidAmountPaise(phonepeResponse) ??
-    (chargedPaise != null && Number.isFinite(chargedPaise) ? chargedPaise : null);
 
   const feePaymentEntry = {
     revisionNo,
     merchantOrderId: pending.merchantOrderId || merchantOrderId,
     chargedAmountPaise: chargedPaise,
-    paidAmountPaise,
+    paidAmountPaise: match.paidPaise,
     planAmountRupees: pending.planAmountRupees != null ? Number(pending.planAmountRupees) : null,
     discountRupees: pending.discountRupees != null ? Number(pending.discountRupees) : null,
     paidAt: new Date(),
@@ -1091,7 +1171,7 @@ async function completeRevisionAfterPayment(merchantOrderId, phonepeResponse = {
 
   await SurveyorSketchUpload.findByIdAndUpdate(uploadId, { $push: { revisionFeePayments: feePaymentEntry } });
 
-  return result;
+  return result ? { ...result, paymentRejected: false } : { paymentRejected: false };
 }
 
 async function requestSketchRevision(uploadId, surveyor, payload) {
@@ -1140,13 +1220,7 @@ async function requestSketchRevision(uploadId, surveyor, payload) {
           code: "PHONEPE_NOT_CONFIGURED",
         });
       }
-      // Prefer amount from frontend when retrying/resuming checkout; else keep stored pending amount.
-      if (payload.amountPaise != null && Number(payload.amountPaise) > 0) {
-        uploadDoc.pendingRevisionPayment.amountPaise = Math.round(Number(payload.amountPaise));
-        uploadDoc.pendingRevisionPayment.planAmountRupees = null;
-        uploadDoc.pendingRevisionPayment.discountRupees = null;
-        await uploadDoc.save();
-      }
+      // Keep immutable expected amount from first initiation; do not accept client overrides.
       const merchantOrderId = uploadDoc.pendingRevisionPayment.merchantOrderId || pendingPay.merchantOrderId;
       const revisionFeePaise = Number(uploadDoc.pendingRevisionPayment.amountPaise);
       if (!merchantOrderId || !Number.isFinite(revisionFeePaise) || revisionFeePaise <= 0) {
@@ -1165,6 +1239,21 @@ async function requestSketchRevision(uploadId, surveyor, payload) {
         });
         const pr = await phonePe.initiatePay(merchantOrderId, revisionFeePaise);
         checkoutPageUrl = pr.redirectUrl;
+        try {
+          await paymentAttempt.recordInitiated({
+            purpose: paymentAttempt.PAYMENT_PURPOSE.REVISION,
+            surveyorSketchUploadId: uploadId,
+            surveyorId: surveyor._id,
+            merchantOrderId,
+            expectedAmountPaise: revisionFeePaise,
+            revisionNo: uploadDoc.pendingRevisionPayment.revisionNo,
+          });
+        } catch (ledgerErr) {
+          logger.error("Failed to record revision payment attempt (resume)", ledgerErr, {
+            uploadId: String(uploadId),
+            merchantOrderId,
+          });
+        }
       } catch (pe) {
         logger.error("PhonePe initiatePay failed for pending revision (resume checkout)", pe, { uploadId: String(uploadId) });
         if (pe instanceof BadRequestError) throw pe;
@@ -1234,7 +1323,7 @@ async function requestSketchRevision(uploadId, surveyor, payload) {
 
   const nextRevisionNo = (uploadDoc.revisionRequests?.length || 0) + 1;
   const phonePe = phonePeSketchPayment;
-  const resolvedRevision = await sketchPaymentPricing.resolveSketchRevisionFee(payload.amountPaise);
+  const resolvedRevision = await sketchPaymentPricing.resolveSketchRevisionFee();
   const revisionFeePaise = resolvedRevision.feePaise;
   const mustPay = nextRevisionNo >= 2 && revisionFeePaise > 0;
 
@@ -1254,6 +1343,7 @@ async function requestSketchRevision(uploadId, surveyor, payload) {
       amountPaise: revisionFeePaise,
       planAmountRupees: resolvedRevision.planAmountRupees,
       discountRupees: resolvedRevision.discountRupees,
+      pricingSource: resolvedRevision.source,
       requestedAt: new Date(),
     };
     await uploadDoc.save();
@@ -1269,6 +1359,21 @@ async function requestSketchRevision(uploadId, surveyor, payload) {
       });
       const pr = await phonePe.initiatePay(merchantOrderId, revisionFeePaise);
       checkoutPageUrl = pr.redirectUrl;
+      try {
+        await paymentAttempt.recordInitiated({
+          purpose: paymentAttempt.PAYMENT_PURPOSE.REVISION,
+          surveyorSketchUploadId: uploadId,
+          surveyorId: surveyor._id,
+          merchantOrderId,
+          expectedAmountPaise: revisionFeePaise,
+          revisionNo: nextRevisionNo,
+        });
+      } catch (ledgerErr) {
+        logger.error("Failed to record revision payment attempt", ledgerErr, {
+          uploadId: String(uploadId),
+          merchantOrderId,
+        });
+      }
     } catch (pe) {
       logger.error("PhonePe initiatePay failed for sketch revision", pe, { uploadId: String(uploadId) });
       await SurveyorSketchUpload.findByIdAndUpdate(uploadId, { $unset: { pendingRevisionPayment: 1 } });
@@ -1348,11 +1453,18 @@ async function deliverCadSketchRevision(assignmentId, cadUser, fileMeta) {
     );
   }
 
-  const revisedDeliverables = normalizeStoredDocumentList(fileMeta.files).map((file) => ({
-    url: String(file.url).trim(),
-    fileName: file.fileName != null ? String(file.fileName).trim() : null,
-    mimeType: file.mimeType != null ? String(file.mimeType).trim() : null,
-    size: file.size != null && file.size !== "" ? Number(file.size) : null,
+  const cadDeliverableContract = require("../cadDeliverableContract.service");
+  const bundle = cadDeliverableContract.assertCadDeliverableBundle(fileMeta.files);
+  const revisedDeliverables = bundle.files.map((file) => ({
+    url: file.url,
+    fileName: file.fileName,
+    mimeType: file.mimeType,
+    size: file.size,
+    role: file.role,
+    s3Key: file.s3Key,
+    sha256: file.sha256,
+    confirmed: file.confirmed,
+    contractVersion: file.contractVersion,
     uploadedAt: file.uploadedAt || new Date(),
   }));
   if (!revisedDeliverables.length) {
@@ -1386,7 +1498,8 @@ async function deliverCadSketchRevision(assignmentId, cadUser, fileMeta) {
     })
   );
   uploadDoc.cadDeliverable = revisedDeliverables;
-  uploadDoc.status = SURVEY_SKETCH_STATUS.CAD_DELIVERED;
+  assertQcRequiredForRelease(ORDER_TYPES.STANDARD_11E);
+  applySketchStatus(uploadDoc, SURVEY_SKETCH_STATUS.CAD_DELIVERED);
 
   if (Array.isArray(uploadDoc.revisionRequests)) {
     const lastOpen = [...uploadDoc.revisionRequests].reverse().find((r) => r.status === "REQUESTED");
@@ -1396,10 +1509,14 @@ async function deliverCadSketchRevision(assignmentId, cadUser, fileMeta) {
     }
   }
 
+  const cadDownloadEntitlement = require("../cadDownloadEntitlement.service");
+  await cadDownloadEntitlement.applyBalanceRequirementOnDelivery(uploadDoc);
   await uploadDoc.save();
 
-  doc.status = SURVEY_SKETCH_ASSIGNMENT_STATUS.COMPLETED;
+  applyAssignmentStatus(doc, SURVEY_SKETCH_ASSIGNMENT_STATUS.COMPLETED);
   doc.completedAt = new Date();
+  const snapComplete = slaDue.resolveSlaState(doc);
+  doc.slaState = snapComplete.state;
   await doc.save();
 
   try {
@@ -1414,17 +1531,15 @@ async function deliverCadSketchRevision(assignmentId, cadUser, fileMeta) {
     logger.error("cadWallet revision delivery record failed", wErr, { assignmentId: String(doc._id) });
   }
 
-  return SurveySketchAssignment.findById(doc._id)
-    .populate("surveyorSketchUpload", "applicationId surveyNo status cadDeliverable cadDeliverableHistory revisionRequests")
-    .populate("cadCenter", "name code")
-    .populate("assignedTo", "name auth")
-    .populate("assignedBy", "name")
-    .lean();
+  return slaDue.decorateAssignment(
+    await SurveySketchAssignment.findById(doc._id)
+      .populate("surveyorSketchUpload", "applicationId surveyNo status cadDeliverable cadDeliverableHistory revisionRequests")
+      .populate("cadCenter", "name code")
+      .populate("assignedTo", "name auth")
+      .populate("assignedBy", "name")
+      .lean()
+  );
 }
-
-/**
- * CAD dashboard: assignment counts scoped to this user (see JSDoc on return fields).
- */
 async function getCadDashboardStats(cadUser) {
   const uid = cadUser._id;
   const touched = { $or: [{ assignedTo: uid }, { rejectedByCad: uid }] };
@@ -1469,6 +1584,151 @@ async function getCadDashboardStats(cadUser) {
   };
 }
 
+/**
+ * Admin: immutable SLA extension (hours or ms).
+ */
+async function extendAssignmentSla(assignmentId, { hours, ms, reason }, actor) {
+  const doc = await SurveySketchAssignment.findById(assignmentId);
+  if (!doc) {
+    throw new NotFoundError("Assignment not found", { code: "ASSIGNMENT_NOT_FOUND" });
+  }
+  if (
+    ![
+      SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED,
+      SURVEY_SKETCH_ASSIGNMENT_STATUS.IN_PROGRESS,
+      SURVEY_SKETCH_ASSIGNMENT_STATUS.ON_HOLD,
+    ].includes(doc.status)
+  ) {
+    throw new BadRequestError("SLA can only be extended on open assignments", {
+      code: "SLA_EXTEND_NOT_ALLOWED",
+      currentStatus: doc.status,
+    });
+  }
+  if (!doc.dueAt && !doc.slaDurationMs) {
+    slaDue.applySlaOnAssign(doc);
+  }
+  let extendMs = ms != null ? Number(ms) : null;
+  if (extendMs == null && hours != null) {
+    extendMs = Math.round(Number(hours) * 3600 * 1000);
+  }
+  const entry = slaDue.extendSla(doc, {
+    ms: extendMs,
+    reason,
+    by: actor?._id || null,
+  });
+  await doc.save();
+
+  try {
+    await notificationService.create({
+      type: "SLA_EXTENDED",
+      title: "Delivery deadline extended",
+      message: reason || `SLA extended by ${Math.round(entry.ms / 3600000)}h`,
+      entityType: "SurveySketchAssignment",
+      entityId: doc._id,
+      targetRoles: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.CAD, USER_ROLES.SURVEYOR],
+      createdBy: actor?._id,
+      data: { dueAt: doc.dueAt, extensionMs: entry.ms },
+    });
+  } catch (err) {
+    logger.error("SLA extend notification failed", err, { assignmentId: String(assignmentId) });
+  }
+
+  const populated = await SurveySketchAssignment.findById(doc._id)
+    .populate("surveyorSketchUpload", "applicationId surveyNo status")
+    .populate("cadCenter", "name code")
+    .populate("assignedTo", "name auth")
+    .populate("assignedBy", "name")
+    .lean();
+  return slaDue.decorateAssignment(populated);
+}
+
+/**
+ * Recompute slaState + emit warning/escalate/breach alerts (scheduled).
+ */
+async function processSlaAlerts({ limit = 100 } = {}) {
+  const openStatuses = [
+    SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED,
+    SURVEY_SKETCH_ASSIGNMENT_STATUS.IN_PROGRESS,
+    SURVEY_SKETCH_ASSIGNMENT_STATUS.ON_HOLD,
+  ];
+  const open = await SurveySketchAssignment.find({ status: { $in: openStatuses } })
+    .select("status assignedAt dueAt slaDurationMs slaPausedTotalMs slaPausedAt slaExtensions slaState assignedTo surveyorSketchUpload")
+    .limit(limit)
+    .lean();
+
+  let warned = 0;
+  let escalated = 0;
+  let breached = 0;
+  const updates = [];
+
+  for (const a of open) {
+    // Backfill dueAt for legacy rows
+    if (!a.dueAt && a.assignedAt) {
+      const tmp = {
+        ...a,
+        slaDurationMs: a.slaDurationMs || slaDue.getStandardSlaMs(),
+        slaExtensions: a.slaExtensions || [],
+      };
+      const dueAt = slaDue.computeDueAt({
+        assignedAt: tmp.assignedAt,
+        slaDurationMs: tmp.slaDurationMs,
+        pausedTotalMs: tmp.slaPausedTotalMs || 0,
+        slaPausedAt: tmp.slaPausedAt,
+        extensions: tmp.slaExtensions,
+      });
+      a.dueAt = dueAt;
+      updates.push(
+        SurveySketchAssignment.updateOne(
+          { _id: a._id },
+          { $set: { dueAt, dueDate: dueAt, slaDurationMs: tmp.slaDurationMs } }
+        )
+      );
+    }
+
+    const snap = slaDue.resolveSlaState(a);
+    if (snap.state !== a.slaState) {
+      updates.push(
+        SurveySketchAssignment.updateOne({ _id: a._id }, { $set: { slaState: snap.state, dueAt: snap.dueAt } })
+      );
+    }
+
+    if (snap.state === slaDue.SLA_STATE.WARNING && a.slaState !== slaDue.SLA_STATE.WARNING) {
+      warned += 1;
+      logger.warn("ALERT_SLA_WARNING", {
+        alertType: "SLA_WARNING",
+        severity: "medium",
+        assignmentId: String(a._id),
+        dueAt: snap.dueAt,
+        remainingMs: snap.remainingMs,
+        escalateTo: "operations",
+      });
+    } else if (snap.state === slaDue.SLA_STATE.ESCALATED && a.slaState !== slaDue.SLA_STATE.ESCALATED) {
+      escalated += 1;
+      logger.warn("ALERT_SLA_ESCALATED", {
+        alertType: "SLA_ESCALATED",
+        severity: "high",
+        assignmentId: String(a._id),
+        dueAt: snap.dueAt,
+        remainingMs: snap.remainingMs,
+        escalateTo: "operations",
+      });
+    } else if (snap.state === slaDue.SLA_STATE.BREACHED && a.slaState !== slaDue.SLA_STATE.BREACHED) {
+      breached += 1;
+      logger.warn("ALERT_SLA_BREACH", {
+        alertType: "SLA_BREACH",
+        severity: "high",
+        assignmentId: String(a._id),
+        dueAt: snap.dueAt,
+        remainingMs: snap.remainingMs,
+        escalateTo: "operations",
+      });
+    }
+  }
+
+  if (updates.length) await Promise.all(updates);
+  return { scanned: open.length, warned, escalated, breached };
+}
+
 module.exports = {
   create,
   listByCadCenter,
@@ -1489,4 +1749,6 @@ module.exports = {
   pullbackAndReassign,
   syncUploadStatusWithActiveAssignment,
   repairUploadStatusesForSurveyor,
+  extendAssignmentSla,
+  processSlaAlerts,
 };

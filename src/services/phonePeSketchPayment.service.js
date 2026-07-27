@@ -58,6 +58,16 @@ function getSketchRevisionFeePaise() {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+/** Balance fee (paise) after CAD delivery before download. Default ₹400 (40000). Set 0 to waive. */
+function getSketchBalanceFeePaise() {
+  const raw = process.env.SKETCH_BALANCE_FEE_PAISE;
+  if (raw === undefined || raw === null || String(raw).trim() === "") {
+    return 40000;
+  }
+  const n = parseInt(String(raw), 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 function getSuccessRedirectUrl() {
   return process.env.PHONEPE_SUCCESS_REDIRECT_URL || "http://localhost:5173/payment-success";
 }
@@ -80,6 +90,13 @@ function sketchUploadRetryMerchantOrderId(uploadId) {
   return `sk${id}r${suffix}`;
 }
 
+/** Balance payment checkout id. Format: bal<24hex> or bal<24hex>r<base36> (≤35 chars). */
+function balancePaymentMerchantOrderId(uploadId) {
+  const id = String(uploadId);
+  const suffix = Date.now().toString(36).slice(-6);
+  return `bal${id}r${suffix}`;
+}
+
 /**
  * @param {string} merchantOrderId
  * @returns {string|null} Mongo upload ObjectId string
@@ -91,6 +108,16 @@ function parseSketchUploadIdFromMerchantOrder(merchantOrderId) {
   m = s.match(/^sk([a-f0-9]{24})r[a-z0-9]+$/i);
   if (m) return m[1];
   return null;
+}
+
+/**
+ * @param {string} merchantOrderId
+ * @returns {string|null} Mongo upload ObjectId string
+ */
+function parseBalanceUploadIdFromMerchantOrder(merchantOrderId) {
+  const s = String(merchantOrderId || "");
+  const m = s.match(/^bal([a-f0-9]{24})(?:r[a-z0-9]+)?$/i);
+  return m ? m[1] : null;
 }
 
 function buildCallbackUrl(merchantOrderId) {
@@ -194,12 +221,39 @@ function extractPaidAmountPaise(phonepeResponse) {
     o.payableAmount,
     typeof o.data === "object" && o.data != null ? /** @type {Record<string, unknown>} */ (o.data).amount : null,
     typeof o.data === "object" && o.data != null ? /** @type {Record<string, unknown>} */ (o.data).totalAmount : null,
+    typeof o.paymentDetails === "object" && o.paymentDetails != null
+      ? /** @type {Record<string, unknown>} */ (o.paymentDetails).amount
+      : null,
   ];
   for (const c of candidates) {
     const n = Number(c);
     if (Number.isFinite(n) && n > 0) return Math.round(n);
   }
   return null;
+}
+
+/**
+ * Verify PhonePe paid amount matches the immutable expected amount stored on the order.
+ * Fail closed: missing expected, missing paid, or mismatch → reject.
+ * @param {number|null|undefined} expectedPaise
+ * @param {unknown} phonepeResponse
+ * @returns {{ ok: true, paidPaise: number } | { ok: false, reason: string, paidPaise: number|null, expectedPaise: number|null }}
+ */
+function assertPaidMatchesExpected(expectedPaise, phonepeResponse) {
+  const expected =
+    expectedPaise != null && Number.isFinite(Number(expectedPaise)) ? Math.round(Number(expectedPaise)) : null;
+  const paid = extractPaidAmountPaise(phonepeResponse);
+
+  if (expected == null || expected <= 0) {
+    return { ok: false, reason: "MISSING_EXPECTED_AMOUNT", paidPaise: paid, expectedPaise: expected };
+  }
+  if (paid == null) {
+    return { ok: false, reason: "MISSING_PAID_AMOUNT", paidPaise: null, expectedPaise: expected };
+  }
+  if (paid !== expected) {
+    return { ok: false, reason: "AMOUNT_MISMATCH", paidPaise: paid, expectedPaise: expected };
+  }
+  return { ok: true, paidPaise: paid };
 }
 
 /**
@@ -219,6 +273,7 @@ async function handlePhonePeCallback(merchantOrderId) {
   let phonepeResponse = {};
   if (client) {
     try {
+      // Server-to-server confirmation only (audit §4.1 point 28) — browser redirect never marks paid alone.
       const response = await client.getOrderStatus(merchantOrderId);
       orderState = normalizeOrderState(response);
       phonepeResponse = response && typeof response === "object" ? response : {};
@@ -230,6 +285,99 @@ async function handlePhonePeCallback(merchantOrderId) {
   const completed = String(orderState).toUpperCase() === "COMPLETED";
   const surveyorSketchUploadService = require("./surveyorSketchUpload.service");
   const surveySketchAssignmentService = require("./assignment/surveySketchAssignment.service");
+  const cadDownloadEntitlement = require("./cadDownloadEntitlement.service");
+  const paymentAttempt = require("./paymentAttempt.service");
+
+  // Immutable attempt ledger transition (points 26–27). No-op path if legacy order has no attempt row yet.
+  const attemptResult = await paymentAttempt.applyProviderCallback({
+    merchantOrderId,
+    phonepeResponse,
+    completed,
+    assertPaidMatchesExpected,
+  });
+
+  if (attemptResult.reason === "UNKNOWN_PAYMENT_ATTEMPT") {
+    // Fall through to legacy routing for pre-ledger payments.
+  } else if (attemptResult.attempt) {
+    const lockedUploadId = String(attemptResult.uploadId);
+    const purpose = attemptResult.attempt.purpose;
+
+    // Callback cannot override order identity: parsed id must match locked attempt identity.
+    let parsedUploadId = null;
+    if (merchantOrderId.startsWith("bal")) {
+      parsedUploadId = parseBalanceUploadIdFromMerchantOrder(merchantOrderId);
+    } else if (merchantOrderId.startsWith("sketch_") || merchantOrderId.startsWith("sk")) {
+      parsedUploadId = parseSketchUploadIdFromMerchantOrder(merchantOrderId);
+    } else if (merchantOrderId.startsWith("rev_")) {
+      const m = String(merchantOrderId).match(/^rev_([a-f0-9]{24})_(\d+)$/i);
+      parsedUploadId = m ? m[1] : null;
+    }
+    if (parsedUploadId && parsedUploadId !== lockedUploadId) {
+      logger.error("PhonePe callback order identity mismatch", {
+        merchantOrderId,
+        parsedUploadId,
+        lockedUploadId,
+      });
+      return { redirectUrl: failUrl };
+    }
+
+    if (!attemptResult.ok) {
+      if (purpose === paymentAttempt.PAYMENT_PURPOSE.BALANCE) {
+        await cadDownloadEntitlement.markBalancePaymentFailed(lockedUploadId, phonepeResponse);
+      } else if (purpose === paymentAttempt.PAYMENT_PURPOSE.BOOKING) {
+        await surveyorSketchUploadService.markSketchPaymentFailed(lockedUploadId, phonepeResponse);
+      } else if (purpose === paymentAttempt.PAYMENT_PURPOSE.REVISION) {
+        await surveySketchAssignmentService.markRevisionPaymentFailed(merchantOrderId, phonepeResponse);
+      }
+      return { redirectUrl: failUrl };
+    }
+
+    if (purpose === paymentAttempt.PAYMENT_PURPOSE.BALANCE) {
+      const result = await cadDownloadEntitlement.completeBalancePaymentAfterPhonePe(
+        lockedUploadId,
+        phonepeResponse,
+        { merchantOrderId, expectedAmountPaise: attemptResult.expectedPaise }
+      );
+      return { redirectUrl: result?.paymentRejected ? failUrl : successUrl };
+    }
+    if (purpose === paymentAttempt.PAYMENT_PURPOSE.BOOKING) {
+      const result = await surveyorSketchUploadService.completeSketchUploadAfterPayment(
+        lockedUploadId,
+        phonepeResponse,
+        { merchantOrderId, expectedAmountPaise: attemptResult.expectedPaise }
+      );
+      return { redirectUrl: result?.paymentRejected ? failUrl : successUrl };
+    }
+    if (purpose === paymentAttempt.PAYMENT_PURPOSE.REVISION) {
+      const result = await surveySketchAssignmentService.completeRevisionAfterPayment(
+        merchantOrderId,
+        phonepeResponse
+      );
+      return { redirectUrl: result?.paymentRejected ? failUrl : successUrl };
+    }
+  }
+
+  // Legacy routing (orders initiated before payment_attempts existed)
+  if (merchantOrderId.startsWith("bal")) {
+    const uploadId = parseBalanceUploadIdFromMerchantOrder(merchantOrderId);
+    if (!uploadId) {
+      logger.error("PhonePe callback: could not parse balance upload id", { merchantOrderId });
+      return { redirectUrl: failUrl };
+    }
+    if (!completed) {
+      await cadDownloadEntitlement.markBalancePaymentFailed(uploadId, phonepeResponse);
+      return { redirectUrl: failUrl };
+    }
+    const result = await cadDownloadEntitlement.completeBalancePaymentAfterPhonePe(
+      uploadId,
+      phonepeResponse,
+      { merchantOrderId }
+    );
+    if (result?.paymentRejected) {
+      return { redirectUrl: failUrl };
+    }
+    return { redirectUrl: successUrl };
+  }
 
   if (merchantOrderId.startsWith("sketch_") || merchantOrderId.startsWith("sk")) {
     const uploadId = parseSketchUploadIdFromMerchantOrder(merchantOrderId);
@@ -241,7 +389,14 @@ async function handlePhonePeCallback(merchantOrderId) {
       await surveyorSketchUploadService.markSketchPaymentFailed(uploadId, phonepeResponse);
       return { redirectUrl: failUrl };
     }
-    await surveyorSketchUploadService.completeSketchUploadAfterPayment(uploadId, phonepeResponse);
+    const result = await surveyorSketchUploadService.completeSketchUploadAfterPayment(
+      uploadId,
+      phonepeResponse,
+      { merchantOrderId }
+    );
+    if (result?.paymentRejected) {
+      return { redirectUrl: failUrl };
+    }
     return { redirectUrl: successUrl };
   }
 
@@ -250,7 +405,13 @@ async function handlePhonePeCallback(merchantOrderId) {
       await surveySketchAssignmentService.markRevisionPaymentFailed(merchantOrderId, phonepeResponse);
       return { redirectUrl: failUrl };
     }
-    await surveySketchAssignmentService.completeRevisionAfterPayment(merchantOrderId, phonepeResponse);
+    const result = await surveySketchAssignmentService.completeRevisionAfterPayment(
+      merchantOrderId,
+      phonepeResponse
+    );
+    if (result?.paymentRejected) {
+      return { redirectUrl: failUrl };
+    }
     return { redirectUrl: successUrl };
   }
 
@@ -263,14 +424,18 @@ module.exports = {
   getPublicApiBaseUrl,
   getSketchUploadFeePaise,
   getSketchRevisionFeePaise,
+  getSketchBalanceFeePaise,
   getSuccessRedirectUrl,
   getFailureRedirectUrl,
   buildCallbackUrl,
   extractPayRedirectUrl,
   extractPaidAmountPaise,
+  assertPaidMatchesExpected,
   initiatePay,
   handlePhonePeCallback,
   sketchUploadMerchantOrderId,
   sketchUploadRetryMerchantOrderId,
+  balancePaymentMerchantOrderId,
   parseSketchUploadIdFromMerchantOrder,
+  parseBalanceUploadIdFromMerchantOrder,
 };

@@ -44,16 +44,62 @@ const SurveySketchAssignmentSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    /** When the assignment was created. */
+    /** When the assignment was created / SLA clock start. */
     assignedAt: {
       type: Date,
       default: () => new Date(),
       index: true,
     },
-    /** Optional due date for completion. */
+    /**
+     * Server-owned delivery deadline (M-10). UTC.
+     * Clients must not set this — use admin SLA extend API for changes.
+     */
+    dueAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    /** @deprecated Legacy mirror of dueAt for older FE — always synced from dueAt. */
     dueDate: {
       type: Date,
       default: null,
+    },
+    /** Frozen SLA budget at assign time (ms). */
+    slaDurationMs: {
+      type: Number,
+      default: null,
+    },
+    /** Accumulated pause duration (ON_HOLD). */
+    slaPausedTotalMs: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    /** When non-null, clock is paused. */
+    slaPausedAt: {
+      type: Date,
+      default: null,
+    },
+    /**
+     * Cached SLA state for indexing/sort (recomputed on transitions + jobs).
+     * ON_TRACK | WARNING | ESCALATED | BREACHED | PAUSED | MET | CANCELLED
+     */
+    slaState: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    /** Immutable SLA extensions (admin). */
+    slaExtensions: {
+      type: [
+        {
+          at: { type: Date, required: true },
+          ms: { type: Number, required: true, min: 1 },
+          reason: { type: String, maxlength: 500, default: null },
+          by: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+        },
+      ],
+      default: () => [],
     },
     /** When status was set to COMPLETED (audit). */
     completedAt: {
@@ -86,6 +132,8 @@ SurveySketchAssignmentSchema.index(
 SurveySketchAssignmentSchema.index({ cadCenter: 1, status: 1, assignedAt: -1 });
 SurveySketchAssignmentSchema.index({ assignedTo: 1, status: 1 });
 SurveySketchAssignmentSchema.index({ assignedAt: -1 });
+SurveySketchAssignmentSchema.index({ dueAt: 1, status: 1 });
+SurveySketchAssignmentSchema.index({ slaState: 1, dueAt: 1 });
 
 module.exports =
   mongoose.models.SurveySketchAssignment ||

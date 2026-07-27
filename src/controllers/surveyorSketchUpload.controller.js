@@ -34,13 +34,28 @@ async function listSurveyorOrders(actor, options) {
   });
 }
 
-async function retrySketchPayment(actor, uploadId, options = {}) {
-  const result = await surveyorSketchUploadService.reinitiateSketchPayment(actor, uploadId, options);
+async function retrySketchPayment(actor, uploadId) {
+  const result = await surveyorSketchUploadService.reinitiateSketchPayment(actor, uploadId);
   return ok(result.data, result.meta);
 }
 
 async function clearUpload(actor, uploadId) {
   const result = await surveyorSketchUploadService.clearSketchUpload(actor, uploadId);
+  return ok(result);
+}
+
+async function initiateBalancePayment(actor, uploadId) {
+  const result = await surveyorSketchUploadService.initiateBalancePayment(actor, uploadId);
+  return ok(result.data, result.meta);
+}
+
+async function getCadDownload(actor, uploadId, options) {
+  const result = await surveyorSketchUploadService.getCadDownload(actor, uploadId, options);
+  return ok(result);
+}
+
+async function markBalanceRefunded(actor, uploadId, body) {
+  const result = await surveyorSketchUploadService.markBalanceRefunded(actor, uploadId, body || {});
   return ok(result);
 }
 
@@ -59,5 +74,8 @@ module.exports = {
   listSurveyorOrders,
   retrySketchPayment,
   clearUpload,
+  initiateBalancePayment,
+  getCadDownload,
+  markBalanceRefunded,
   listAllWithAssignment,
 };

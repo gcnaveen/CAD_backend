@@ -81,6 +81,11 @@ async function deliverCadSketchRevision(assignmentId, cadUser, payload) {
   return ok(data);
 }
 
+async function extendAssignmentSla(assignmentId, payload, actor) {
+  const data = await surveySketchAssignmentService.extendAssignmentSla(assignmentId, payload, actor);
+  return ok(data);
+}
+
 module.exports = {
   createAssignment,
   getAssignment,
@@ -94,4 +99,5 @@ module.exports = {
   deliverCadSketch,
   requestSketchRevision,
   deliverCadSketchRevision,
+  extendAssignmentSla,
 };

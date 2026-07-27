@@ -63,7 +63,7 @@ const SURVEY_SKETCH_STATUS = Object.freeze({
   PENDING: "PENDING",
   /** Admin has assigned this sketch to a CAD center. */
   ASSIGNED: "ASSIGNED",
-  /** CAD has uploaded the finished sketch; surveyor can download from cadDeliverable on the upload. */
+  /** CAD has uploaded the finished sketch; surveyor download requires balance entitlement (C-02). */
   CAD_DELIVERED: "CAD_DELIVERED",
   /** Surveyor asked for changes/revision on delivered sketch. */
   UNDER_REVISION: "UNDER_REVISION",
@@ -110,6 +110,7 @@ const HTTP_STATUS = Object.freeze({
   FORBIDDEN: 403,
   NOT_FOUND: 404,
   CONFLICT: 409,
+  TOO_MANY_REQUESTS: 429,
   INTERNAL_SERVER_ERROR: 500,
 });
 
@@ -127,6 +128,9 @@ const UPLOAD_IMAGE_MIME_TYPES = Object.freeze([
   "image/gif",
   "image/webp",
   "application/pdf",
+  // CAD / DWG — validated via AC10xx header on POST /api/upload/confirm (H-07)
+  "application/acad",
+  "image/vnd.dwg",
 ]);
 
 /** Allowed MIME types for audio uploads (remarks, voice notes). */

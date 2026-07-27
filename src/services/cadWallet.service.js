@@ -47,7 +47,16 @@ function formatLedgerEntryRow(row) {
     revisionNo: row.revisionNo,
     sourcePaidAmountPaise: sourcePaid,
     sourcePaidRupees: paiseToRupees(sourcePaid),
-    payoutPercent: row.payoutPercent != null ? Number(row.payoutPercent) : cadPayoutPricing.getCadPayoutPercent(),
+    pricingRuleVersion: row.pricingRuleVersion || null,
+    payoutModel: row.payoutModel || (row.payoutPercent != null ? "PERCENT" : "FIXED"),
+    payoutPercent: row.payoutPercent != null ? Number(row.payoutPercent) : null,
+    grossPricePaise: row.grossPricePaise != null ? Number(row.grossPricePaise) : null,
+    bookingPaise: row.bookingPaise != null ? Number(row.bookingPaise) : null,
+    balancePaise: row.balancePaise != null ? Number(row.balancePaise) : null,
+    payoutPaise: row.payoutPaise != null ? Number(row.payoutPaise) : total,
+    platformFeePaise: row.platformFeePaise != null ? Number(row.platformFeePaise) : null,
+    taxPaise: row.taxPaise != null ? Number(row.taxPaise) : null,
+    adjustmentPaise: row.adjustmentPaise != null ? Number(row.adjustmentPaise) : null,
     amountPaise: total,
     amountRupees: paiseToRupees(total),
     paidAmountPaise: paid,
@@ -106,7 +115,8 @@ function paidPercentForDoc(doc) {
 }
 
 /**
- * Record a pending earning from surveyor payment × CAD_PAYOUT_PERCENT. Idempotent per (assignment, kind, revisionNo).
+ * Record a pending earning from the versioned FIXED payout rule (H-11).
+ * Idempotent per (assignment, kind, revisionNo).
  */
 async function recordPendingEarningIfConfigured({
   cadUserId,
@@ -126,8 +136,10 @@ async function recordPendingEarningIfConfigured({
     kind,
     revisionNo
   );
-  const payoutPercent = cadPayoutPricing.getCadPayoutPercent();
-  const amountPaise = cadPayoutPricing.computeCadPayoutPaiseFromSourcePaid(sourcePaidAmountPaise);
+  const { amountPaise, breakdown } = cadPayoutPricing.computeCadPayoutSettlement({
+    kind,
+    sourcePaidAmountPaise,
+  });
   if (!amountPaise || amountPaise <= 0) return null;
 
   const rev =
@@ -149,7 +161,16 @@ async function recordPendingEarningIfConfigured({
           revisionNo: rev,
           amountPaise,
           sourcePaidAmountPaise,
-          payoutPercent,
+          payoutPercent: null,
+          pricingRuleVersion: breakdown.pricingRuleVersion,
+          payoutModel: breakdown.payoutModel,
+          grossPricePaise: breakdown.grossPricePaise,
+          bookingPaise: breakdown.bookingPaise,
+          balancePaise: breakdown.balancePaise,
+          payoutPaise: breakdown.payoutPaise,
+          platformFeePaise: breakdown.platformFeePaise,
+          taxPaise: breakdown.taxPaise,
+          adjustmentPaise: breakdown.adjustmentPaise,
           paidAmountPaise: 0,
           paymentLog: [],
           status: CAD_WALLET_ENTRY_STATUS.PENDING,
@@ -539,7 +560,12 @@ async function syncCadWalletFromCompletedAssignments(cadUserId) {
 }
 
 function buildStatisticsFromSummary(summary, entries) {
-  const payoutPercent = cadPayoutPricing.getCadPayoutPercent();
+  let rule = null;
+  try {
+    rule = cadPayoutPricing.getApprovedCadPayoutRule();
+  } catch (_) {
+    /* fail-closed surfaces elsewhere */
+  }
   const totalSourcePaidPaise = entries.reduce(
     (sum, row) => sum + Math.max(0, Number(row.sourcePaidAmountPaise) || 0),
     0
@@ -549,7 +575,11 @@ function buildStatisticsFromSummary(summary, entries) {
   );
 
   return {
-    payoutPercent,
+    payoutModel: rule?.model || "FIXED",
+    pricingRuleVersion: rule?.version || null,
+    payoutPercent: null,
+    standardOperatorPayoutPaise: rule?.operatorPayoutPaise ?? null,
+    standardOperatorPayoutRupees: rule ? rule.operatorPayoutPaise / 100 : null,
     assignmentCount: assignmentIds.size,
     completedDeliveryCount: entries.length,
     totalSourcePaidPaise,
@@ -686,12 +716,17 @@ async function getPendingPayoutSummaryForAdmin(cadUserId) {
   );
 
   return {
-    payoutPercent: cadPayoutPricing.getCadPayoutPercent(),
+    pricingRuleVersion: cadPayoutPricing.getApprovedCadPayoutRule().version,
+    payoutModel: "FIXED",
+    payoutPercent: null,
+    standardOperatorPayoutPaise: cadPayoutPricing.getApprovedCadPayoutRule().operatorPayoutPaise,
     totalPendingPaise,
     totalPendingRupees: paiseToRupees(totalPendingPaise),
     totalPending: paiseToRupees(totalPendingPaise),
     statistics: {
-      payoutPercent: cadPayoutPricing.getCadPayoutPercent(),
+      payoutModel: "FIXED",
+      pricingRuleVersion: cadPayoutPricing.getApprovedCadPayoutRule().version,
+      payoutPercent: null,
       cadUserCount: cadUsers.length,
       assignmentCount: cadUsers.reduce((s, u) => s + (u.statistics?.assignmentCount || 0), 0),
       completedDeliveryCount: cadUsers.reduce((s, u) => s + (u.statistics?.completedDeliveryCount || 0), 0),

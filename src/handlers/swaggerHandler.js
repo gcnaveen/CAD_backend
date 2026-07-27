@@ -2,6 +2,8 @@
  * Swagger Documentation Handler
  * Serves Swagger UI HTML and OpenAPI spec with runtime base URL injection
  * for correct spec loading behind API Gateway / custom domains.
+ *
+ * CORS is applied by asyncHandler (M-01) — do not set Access-Control-Allow-Origin: *.
  */
 
 const fs = require("node:fs/promises");
@@ -20,9 +22,6 @@ function getBaseUrl(event) {
   const hostHeader = event?.headers?.host || event?.headers?.Host || "";
   const ctxDomain = requestContext?.domainName || "";
 
-  // Prefer Host header so Swagger UI fetches the spec from the same origin as the page.
-  // Serverless-offline often sets domainName to a placeholder (e.g. offlineContext_domainName);
-  // treat that as invalid and use Host or localhost.
   const isInvalidDomain =
     !ctxDomain || /offline|domainname|\$default/i.test(String(ctxDomain));
   const host = hostHeader || (isInvalidDomain ? "localhost:3000" : ctxDomain);
@@ -43,6 +42,15 @@ function getBaseUrl(event) {
   return baseUrl;
 }
 
+function baseDocHeaders(contentType) {
+  return {
+    "Content-Type": contentType,
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+  };
+}
+
 /**
  * GET /api/docs/swagger.yaml — serve OpenAPI spec.
  */
@@ -52,11 +60,7 @@ async function getSwaggerYaml() {
   return {
     statusCode: 200,
     headers: {
-      "Content-Type": "application/x-yaml; charset=utf-8",
-      "Access-Control-Allow-Origin": process.env.CORS_ALLOW_ORIGIN || "*",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
-      "X-Content-Type-Options": "nosniff",
+      ...baseDocHeaders("application/x-yaml; charset=utf-8"),
       "Cache-Control":
         process.env.NODE_ENV === "production"
           ? "public, max-age=300"
@@ -81,11 +85,7 @@ async function getSwaggerJson() {
   return {
     statusCode: 200,
     headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "Access-Control-Allow-Origin": process.env.CORS_ALLOW_ORIGIN || "*",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
-      "X-Content-Type-Options": "nosniff",
+      ...baseDocHeaders("application/json; charset=utf-8"),
       "Cache-Control":
         process.env.NODE_ENV === "production"
           ? "public, max-age=300"
@@ -110,11 +110,7 @@ async function getSwaggerUI(event) {
   return {
     statusCode: 200,
     headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Access-Control-Allow-Origin": process.env.CORS_ALLOW_ORIGIN || "*",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
-      "X-Content-Type-Options": "nosniff",
+      ...baseDocHeaders("text/html; charset=utf-8"),
       "Cache-Control": "public, max-age=60",
     },
     body: htmlContent,

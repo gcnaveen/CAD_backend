@@ -26,6 +26,16 @@ const SurveyDocumentSchema = new mongoose.Schema(
     size: { type: Number, default: null },
     /** When the file was uploaded (server or client timestamp). */
     uploadedAt: { type: Date, default: () => new Date() },
+    /** H-12: source (DWG/DXF) vs preview (PDF/image). */
+    role: { type: String, enum: ["source", "preview"], default: null },
+    /** S3 object key when known. */
+    s3Key: { type: String, trim: true, default: null },
+    /** Header-prefix SHA-256 from confirm gate. */
+    sha256: { type: String, trim: true, default: null },
+    /** True after POST /api/upload/confirm passed. */
+    confirmed: { type: Boolean, default: false },
+    /** Deliverable contract version frozen at submit. */
+    contractVersion: { type: String, trim: true, default: null },
   },
   { _id: false }
 );
@@ -194,16 +204,20 @@ const SurveyorSketchUploadSchema = new mongoose.Schema(
     sketchPayment: {
       status: {
         type: String,
-        enum: ["NONE", "PENDING", "COMPLETED", "FAILED"],
+        enum: ["NONE", "PENDING", "COMPLETED", "FAILED", "AMOUNT_MISMATCH"],
         default: "NONE",
       },
       merchantOrderId: { type: String, default: null, index: true },
+      /** Immutable expected amount (paise) set at checkout initiation — server pricing only. */
       amountPaise: { type: Number, default: null },
       /** Snapshot at checkout: admin plan (₹) and discount (₹) if pricing source was admin. */
       planAmountRupees: { type: Number, default: null },
       discountRupees: { type: Number, default: null },
-      /** Amount actually charged (paise), from PhonePe when available, else equals amountPaise. */
+      pricingSource: { type: String, default: null },
+      /** Amount actually paid (paise), from PhonePe order status — must match amountPaise. */
       paidAmountPaise: { type: Number, default: null },
+      /** Set when callback paid amount does not match expected amountPaise. */
+      paymentFailureReason: { type: String, default: null },
       phonepeResponse: { type: mongoose.Schema.Types.Mixed, default: null },
       paidAt: { type: Date, default: null },
     },
@@ -215,12 +229,15 @@ const SurveyorSketchUploadSchema = new mongoose.Schema(
       audio: { type: SurveyDocumentSchema, default: null },
       status: {
         type: String,
-        enum: ["PENDING", "COMPLETED", "FAILED"],
+        enum: ["PENDING", "COMPLETED", "FAILED", "AMOUNT_MISMATCH"],
       },
       merchantOrderId: { type: String, default: null },
+      /** Immutable expected amount (paise) at initiation — server pricing only. */
       amountPaise: { type: Number, default: null },
       planAmountRupees: { type: Number, default: null },
       discountRupees: { type: Number, default: null },
+      pricingSource: { type: String, default: null },
+      paymentFailureReason: { type: String, default: null },
       requestedAt: { type: Date, default: null },
       phonepeResponse: { type: mongoose.Schema.Types.Mixed, default: null },
     },
@@ -240,6 +257,89 @@ const SurveyorSketchUploadSchema = new mongoose.Schema(
         },
       ],
       default: () => [],
+    },
+
+    /**
+     * Audit C-02: immutable ₹ balance payment ledger (post-delivery unlock).
+     * Booking fee is sketchPayment; this is the balance required before CAD download.
+     */
+    balancePayment: {
+      status: {
+        type: String,
+        enum: ["NONE", "REQUIRED", "PENDING", "COMPLETED", "FAILED", "AMOUNT_MISMATCH", "REFUNDED"],
+        default: "NONE",
+      },
+      merchantOrderId: { type: String, default: null, index: true },
+      /** Immutable expected amount (paise) locked at first CAD delivery — server pricing only. */
+      amountPaise: { type: Number, default: null },
+      planAmountRupees: { type: Number, default: null },
+      discountRupees: { type: Number, default: null },
+      pricingSource: { type: String, default: null },
+      paidAmountPaise: { type: Number, default: null },
+      paymentFailureReason: { type: String, default: null },
+      phonepeResponse: { type: mongoose.Schema.Types.Mixed, default: null },
+      paidAt: { type: Date, default: null },
+      refundedAt: { type: Date, default: null },
+      /** Append-only payment/download audit events. */
+      ledger: {
+        type: [
+          {
+            at: { type: Date, default: () => new Date() },
+            event: { type: String, required: true },
+            merchantOrderId: { type: String, default: null },
+            amountPaise: { type: Number, default: null },
+            paidAmountPaise: { type: Number, default: null },
+            note: { type: String, default: null, maxlength: 500 },
+          },
+        ],
+        default: () => [],
+      },
+    },
+
+    /** Server-side download entitlement (never trust browser/order status alone). */
+    downloadEntitlement: {
+      granted: { type: Boolean, default: false },
+      grantedAt: { type: Date, default: null },
+      reason: { type: String, default: null },
+      revokedAt: { type: Date, default: null },
+    },
+
+    /** Short-lived download grants for optional one-use / replay detection. */
+    downloadGrants: {
+      type: [
+        {
+          grantId: { type: String, required: true },
+          issuedAt: { type: Date, default: () => new Date() },
+          expiresAt: { type: Date, default: null },
+          usedAt: { type: Date, default: null },
+        },
+      ],
+      default: () => [],
+    },
+
+    /** Auto-assignment retry / exception queue (M-09). */
+    autoAssignMeta: {
+      state: {
+        type: String,
+        enum: ["IDLE", "PENDING_RETRY", "IN_PROGRESS", "SUCCEEDED", "EXCEPTION"],
+        default: "IDLE",
+        index: true,
+      },
+      attemptCount: { type: Number, default: 0, min: 0 },
+      nextRetryAt: { type: Date, default: null, index: true },
+      lastAttemptAt: { type: Date, default: null },
+      lastFailureCode: { type: String, default: null },
+      lastFailureReason: { type: String, default: null, maxlength: 500 },
+      manualOverrideAllowedAt: { type: Date, default: null },
+      exceptionQueuedAt: { type: Date, default: null, index: true },
+      lockUntil: { type: Date, default: null },
+      lockToken: { type: String, default: null },
+      succeededAt: { type: Date, default: null },
+      assignmentId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "SurveySketchAssignment",
+        default: null,
+      },
     },
 
     /** Optional rejection/approval note from reviewer. */

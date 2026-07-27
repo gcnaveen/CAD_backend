@@ -7,8 +7,9 @@ const surveySketchAssignmentController = require("../controllers/assignment/surv
 const cadWalletController = require("../controllers/cad/cadWallet.controller");
 const cadDashboardController = require("../controllers/cad/cadDashboard.controller");
 const cadUserFeedbackController = require("../controllers/cad/cadUserFeedback.controller");
-const surveySketchAssignmentFlowController = require("../controllers/config/surveySketchAssignmentFlow.controller");
+const autoAssignController = require("../controllers/autoAssign.controller");
 const sketchPricingAdminController = require("../controllers/config/sketchPricingAdmin.controller");
+const adminPaymentReconciliationController = require("../controllers/adminPaymentReconciliation.controller");
 const notificationController = require("../controllers/notification.controller");
 const cadInterestController = require("../controllers/cadInterest.controller");
 const { parsePagination } = require("../utils/pagination");
@@ -22,6 +23,23 @@ const logger = require("../utils/logger");
 const { BadRequestError } = require("../utils/errors");
 const sketchPaymentPricing = require("../services/sketchPaymentPricing.service");
 const adminDashboardController = require("../controllers/adminDashboard.controller");
+const opsObservabilityController = require("../controllers/opsObservability.controller");
+const authAudit = require("../services/authAudit.service");
+const { recordAdminAction } = require("../services/adminAudit.service");
+
+function getRequestMeta(event) {
+  return authAudit.extractRequestMeta(event);
+}
+
+async function auditAdmin(event, actor, fields) {
+  const meta = getRequestMeta(event);
+  await recordAdminAction({
+    ...fields,
+    actor,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+  });
+}
 
 function getPathParams(event) {
   const params = { ...(event.pathParameters || {}) };
@@ -50,6 +68,9 @@ let dbConnected = false;
 let dbConnectionPromise = null;
 
 async function ensureDb() {
+  const { assertCriticalSecretsConfigured } = require("../config/secrets");
+  assertCriticalSecretsConfigured();
+
   // If already connected, return immediately
   if (dbConnected && mongoose.connection.readyState === 1) {
     return;
@@ -91,42 +112,127 @@ exports.registerSuperAdmin = asyncHandler(async (event) => {
     await authorize(USER_ROLES.SUPER_ADMIN)(event);
   }
   const body = validate(schemas.superAdminRegister)(event);
-  return await authController.registerSuperAdmin(body);
+  return await authController.registerSuperAdmin(body, getRequestMeta(event));
 });
 
-// -------- Surveyor Step 1: Send OTP (phone + name) --------
+// -------- Surveyor Step 1: Start Registration (send OTP) --------
 exports.surveyorSendOtp = asyncHandler(async (event) => {
   await ensureDb();
   const body = validate(schemas.surveyorStart)(event);
-  return await authController.surveyorSendOtp(body);
+  return await authController.surveyorSendOtp(body, getRequestMeta(event));
 });
 
 // -------- Surveyor Step 2: Verify OTP --------
 exports.surveyorVerifyOtp = asyncHandler(async (event) => {
   await ensureDb();
   const body = validate(schemas.surveyorVerifyOtp)(event);
-  return await authController.surveyorVerifyOtp(body);
+  return await authController.surveyorVerifyOtp(body, getRequestMeta(event));
 });
 
 // -------- Surveyor Step 3: Complete Registration (password + profile) --------
 exports.surveyorCompleteRegistration = asyncHandler(async (event) => {
   await ensureDb();
   const body = validate(schemas.surveyorCompleteRegistration)(event);
-  return await authController.surveyorCompleteRegistration(body);
+  return await authController.surveyorCompleteRegistration(body, getRequestMeta(event));
 });
 
 // -------- Surveyor Forgot Password Step 1: send OTP --------
 exports.surveyorForgotPasswordStart = asyncHandler(async (event) => {
   await ensureDb();
   const body = validate(schemas.surveyorForgotPasswordStart)(event);
-  return await authController.surveyorForgotPasswordStart(body);
+  return await authController.surveyorForgotPasswordStart(body, getRequestMeta(event));
 });
 
 // -------- Surveyor Forgot Password Step 2: verify OTP + reset password --------
 exports.surveyorForgotPasswordReset = asyncHandler(async (event) => {
   await ensureDb();
   const body = validate(schemas.surveyorForgotPasswordReset)(event);
-  return await authController.surveyorForgotPasswordReset(body);
+  return await authController.surveyorForgotPasswordReset(body, getRequestMeta(event));
+});
+
+// -------- Login --------
+exports.login = asyncHandler(async (event) => {
+  await ensureDb();
+  const body = validate(schemas.login)(event);
+  return await authController.login(body, getRequestMeta(event));
+});
+
+exports.refreshSession = asyncHandler(async (event) => {
+  await ensureDb();
+  const body = parseJsonBody(event) || {};
+  const authCookies = require("../utils/authCookies");
+  authCookies.assertCsrfIfCookieAuth(event, body);
+  const refreshToken = authCookies.getRefreshTokenFromRequest(event, body);
+  if (!refreshToken) throw new BadRequestError("refreshToken is required (body or HttpOnly cookie)");
+  return await authController.refresh({ refreshToken }, getRequestMeta(event));
+});
+
+exports.listSessions = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(
+    USER_ROLES.SUPER_ADMIN,
+    USER_ROLES.ADMIN,
+    USER_ROLES.CAD,
+    USER_ROLES.SURVEYOR
+  )(event);
+  const body = parseJsonBody(event) || {};
+  const authCookies = require("../utils/authCookies");
+  const refreshToken = authCookies.getRefreshTokenFromRequest(event, body);
+  return await authController.listSessions(user, getRequestMeta(event), refreshToken);
+});
+
+exports.revokeSession = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(
+    USER_ROLES.SUPER_ADMIN,
+    USER_ROLES.ADMIN,
+    USER_ROLES.CAD,
+    USER_ROLES.SURVEYOR
+  )(event);
+  const { sessionId } = getPathParams(event);
+  if (!sessionId) throw new BadRequestError("sessionId is required");
+  return await authController.revokeSession(user, sessionId);
+});
+
+exports.logout = asyncHandler(async (event) => {
+  await ensureDb();
+  const body = parseJsonBody(event) || {};
+  const authCookies = require("../utils/authCookies");
+  authCookies.assertCsrfIfCookieAuth(event, body);
+  let actor = null;
+  try {
+    const auth = await authorize(
+      USER_ROLES.SUPER_ADMIN,
+      USER_ROLES.ADMIN,
+      USER_ROLES.CAD,
+      USER_ROLES.SURVEYOR
+    )(event);
+    actor = auth.user;
+  } catch (_) {
+    // Allow logout with refreshToken alone (revoke) even if access token expired.
+  }
+  const refreshToken = authCookies.getRefreshTokenFromRequest(event, body);
+  const allSessions = body.allSessions === true || body.logoutAll === true;
+  return await authController.logout({ refreshToken, allSessions }, actor);
+});
+
+exports.verifyMfa = asyncHandler(async (event) => {
+  await ensureDb();
+  const body = parseJsonBody(event) || {};
+  return await authController.verifyMfa(body, getRequestMeta(event));
+});
+
+exports.setupMfa = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  return await authController.setupMfa(user);
+});
+
+exports.enableMfa = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const body = parseJsonBody(event) || {};
+  return await authController.enableMfa(user, body);
 });
 
 // -------- Public CAD Interest Form --------
@@ -146,13 +252,6 @@ exports.listCadInterests = asyncHandler(async (event) => {
     limit: q.limit,
   };
   return await cadInterestController.listCadInterests(user, options);
-});
-
-// -------- Login --------
-exports.login = asyncHandler(async (event) => {
-  await ensureDb();
-  const body = validate(schemas.login)(event);
-  return await authController.login(body);
 });
 
 // -------- Create User (Admin / CAD / Surveyor) --------
@@ -219,7 +318,14 @@ exports.blockUser = asyncHandler(async (event) => {
   const { userId } = getPathParams(event);
   if (!userId) throw new BadRequestError("userId is required");
   validObjectId(userId, "userId");
-  return await userController.blockUser(user, userId);
+  const result = await userController.blockUser(user, userId);
+  await auditAdmin(event, user, {
+    action: "USER_BLOCK",
+    targetType: "User",
+    targetId: userId,
+    success: true,
+  });
+  return result;
 });
 
 // -------- Unblock User (same permissions as block) --------
@@ -229,7 +335,14 @@ exports.unblockUser = asyncHandler(async (event) => {
   const { userId } = getPathParams(event);
   if (!userId) throw new BadRequestError("userId is required");
   validObjectId(userId, "userId");
-  return await userController.unblockUser(user, userId);
+  const result = await userController.unblockUser(user, userId);
+  await auditAdmin(event, user, {
+    action: "USER_UNBLOCK",
+    targetType: "User",
+    targetId: userId,
+    success: true,
+  });
+  return result;
 });
 
 // -------- PhonePe return (public; no auth) --------
@@ -266,8 +379,8 @@ exports.retrySurveyorSketchPayment = asyncHandler(async (event) => {
   const { uploadId } = getPathParams(event);
   if (!uploadId) throw new BadRequestError("uploadId is required");
   validObjectId(uploadId, "uploadId");
-  const body = schemas.sketchPaymentRetry(parseJsonBody(event) || {});
-  return await surveyorSketchUploadController.retrySketchPayment(user, uploadId, body);
+  schemas.sketchPaymentRetry(parseJsonBody(event) || {});
+  return await surveyorSketchUploadController.retrySketchPayment(user, uploadId);
 });
 
 exports.clearSurveyorSketchUpload = asyncHandler(async (event) => {
@@ -277,6 +390,46 @@ exports.clearSurveyorSketchUpload = asyncHandler(async (event) => {
   if (!uploadId) throw new BadRequestError("uploadId is required");
   validObjectId(uploadId, "uploadId");
   return await surveyorSketchUploadController.clearUpload(user, uploadId);
+});
+
+exports.initiateSurveyorBalancePayment = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SURVEYOR)(event);
+  const { uploadId } = getPathParams(event);
+  if (!uploadId) throw new BadRequestError("uploadId is required");
+  validObjectId(uploadId, "uploadId");
+  schemas.sketchPaymentRetry(parseJsonBody(event) || {});
+  return await surveyorSketchUploadController.initiateBalancePayment(user, uploadId);
+});
+
+exports.getSurveyorCadDownload = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SURVEYOR)(event);
+  const { uploadId } = getPathParams(event);
+  if (!uploadId) throw new BadRequestError("uploadId is required");
+  validObjectId(uploadId, "uploadId");
+  const qs = event.queryStringParameters || {};
+  const grantId = qs.grantId != null && String(qs.grantId).trim() ? String(qs.grantId).trim() : undefined;
+  return await surveyorSketchUploadController.getCadDownload(user, uploadId, { grantId });
+});
+
+exports.adminMarkBalanceRefunded = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)(event);
+  const { uploadId } = getPathParams(event);
+  if (!uploadId) throw new BadRequestError("uploadId is required");
+  validObjectId(uploadId, "uploadId");
+  const body = parseJsonBody(event) || {};
+  const reason = body.reason != null ? String(body.reason).trim().slice(0, 500) : undefined;
+  const result = await surveyorSketchUploadController.markBalanceRefunded(user, uploadId, { reason });
+  await auditAdmin(event, user, {
+    action: "BALANCE_REFUND",
+    targetType: "SurveyorSketchUpload",
+    targetId: uploadId,
+    success: true,
+    meta: reason ? { hasReason: true } : null,
+  });
+  return result;
 });
 
 exports.getSurveyorSketchUpload = asyncHandler(async (event) => {
@@ -445,7 +598,18 @@ exports.markAllNotificationsRead = asyncHandler(async (event) => {
 exports.getSurveySketchStatuses = asyncHandler(async (event) => {
   await ensureDb();
   await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
-  return ok(Object.values(SURVEY_SKETCH_STATUS));
+  const { getLifecycleQcPublicSpec } = require("../config/lifecycleQcSpec");
+  const spec = getLifecycleQcPublicSpec();
+  return ok({
+    statuses: spec.sketchStatuses,
+    enums: spec.sketchStatuses.map((s) => s.code),
+    labels: spec.labels,
+    transitions: spec.sketchTransitions,
+    legacyMap: spec.legacySketchStatusMap,
+    qc: spec.qc,
+    specId: spec.specId,
+    version: spec.version,
+  });
 });
 
 exports.getAdminDashboardStats = asyncHandler(async (event) => {
@@ -454,12 +618,30 @@ exports.getAdminDashboardStats = asyncHandler(async (event) => {
   return await adminDashboardController.getStats();
 });
 
+exports.getHealth = asyncHandler(async (event) => {
+  await ensureDb();
+  return await opsObservabilityController.getHealth();
+});
+
+exports.getAdminOpsObservability = asyncHandler(async (event) => {
+  await ensureDb();
+  await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  return await opsObservabilityController.getObservability();
+});
+
 // -------- Survey Sketch Assignment (Admin: assign survey sketch to CAD center) --------
 exports.createSurveySketchAssignment = asyncHandler(async (event) => {
   await ensureDb();
   const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
   const body = validate(schemas.surveySketchAssignmentCreate)(event);
-  return await surveySketchAssignmentController.createAssignment(user, body);
+  const result = await surveySketchAssignmentController.createAssignment(user, body);
+  await auditAdmin(event, user, {
+    action: "SKETCH_ASSIGN",
+    targetType: "SurveySketchAssignment",
+    targetId: result?.data?._id || result?.data?.id || body?.surveyorSketchUpload || null,
+    success: true,
+  });
+  return result;
 });
 
 exports.getSurveySketchAssignment = asyncHandler(async (event) => {
@@ -517,7 +699,39 @@ exports.pullbackAndReassignSurveySketchAssignment = asyncHandler(async (event) =
   if (!assignmentId) throw new BadRequestError("assignmentId is required");
   validObjectId(assignmentId, "assignmentId");
   const body = validate(schemas.adminAssignmentPullbackReassign)(event);
-  return await surveySketchAssignmentController.pullbackAndReassignAssignment(assignmentId, body, user);
+  const result = await surveySketchAssignmentController.pullbackAndReassignAssignment(
+    assignmentId,
+    body,
+    user
+  );
+  await auditAdmin(event, user, {
+    action: "ASSIGNMENT_PULLBACK_REASSIGN",
+    targetType: "SurveySketchAssignment",
+    targetId: assignmentId,
+    success: true,
+    meta: {
+      newCadUserId: body.assignedCadUserId ? String(body.assignedCadUserId) : null,
+    },
+  });
+  return result;
+});
+
+exports.extendAssignmentSla = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const { assignmentId } = getPathParams(event);
+  if (!assignmentId) throw new BadRequestError("assignmentId is required");
+  validObjectId(assignmentId, "assignmentId");
+  const body = validate(schemas.adminSlaExtend)(event);
+  const result = await surveySketchAssignmentController.extendAssignmentSla(assignmentId, body, user);
+  await auditAdmin(event, user, {
+    action: "SLA_EXTEND",
+    targetType: "SurveySketchAssignment",
+    targetId: assignmentId,
+    success: true,
+    meta: { hours: body.hours, ms: body.ms },
+  });
+  return result;
 });
 
 // -------- CAD: Accept or reject assignment (ASSIGNED → IN_PROGRESS or CANCELLED) --------
@@ -588,7 +802,14 @@ exports.markCadWalletEntryPaid = asyncHandler(async (event) => {
   const { entryId } = getPathParams(event);
   if (!entryId) throw new BadRequestError("entryId is required");
   validObjectId(entryId, "entryId");
-  return await cadWalletController.markWalletEntryPaid(user, entryId);
+  const result = await cadWalletController.markWalletEntryPaid(user, entryId);
+  await auditAdmin(event, user, {
+    action: "CAD_WALLET_MARK_PAID",
+    targetType: "CadWalletEntry",
+    targetId: entryId,
+    success: true,
+  });
+  return result;
 });
 
 /** Admin: record partial or full payout against a ledger row (shows paid % for CAD). */
@@ -599,7 +820,14 @@ exports.recordCadWalletPayment = asyncHandler(async (event) => {
   if (!entryId) throw new BadRequestError("entryId is required");
   validObjectId(entryId, "entryId");
   const body = validate(schemas.adminCadWalletRecordPayment)(event);
-  return await cadWalletController.recordWalletPayment(user, entryId, body);
+  const result = await cadWalletController.recordWalletPayment(user, entryId, body);
+  await auditAdmin(event, user, {
+    action: "CAD_WALLET_RECORD_PAYMENT",
+    targetType: "CadWalletEntry",
+    targetId: entryId,
+    success: true,
+  });
+  return result;
 });
 
 // -------- Admin: Pay CAD user by amount (auto-allocates to pending wallet entries) --------
@@ -607,7 +835,14 @@ exports.recordCadWalletPaymentForUser = asyncHandler(async (event) => {
   await ensureDb();
   const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
   const body = validate(schemas.adminCadWalletPayCadUser)(event);
-  return await cadWalletController.recordWalletPaymentForCadUser(user, body);
+  const result = await cadWalletController.recordWalletPaymentForCadUser(user, body);
+  await auditAdmin(event, user, {
+    action: "CAD_WALLET_PAY_USER",
+    targetType: "User",
+    targetId: body.cadUserId ? String(body.cadUserId) : null,
+    success: true,
+  });
+  return result;
 });
 
 // -------- Admin: CAD pending payout summary (one user or all) --------
@@ -655,14 +890,42 @@ exports.deliverCadSketchRevision = asyncHandler(async (event) => {
 exports.getSurveySketchAssignmentFlow = asyncHandler(async (event) => {
   await ensureDb();
   await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
-  return await surveySketchAssignmentFlowController.getFlowSettings();
+  return await autoAssignController.getFlowSettings();
 });
 
 exports.updateSurveySketchAssignmentFlow = asyncHandler(async (event) => {
   await ensureDb();
   const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
   const body = validate(schemas.surveySketchAssignmentFlowUpdate)(event);
-  return await surveySketchAssignmentFlowController.updateFlowSettings(user, body);
+  return await autoAssignController.updateFlowSettings(user, body);
+});
+
+exports.listAutoAssignExceptions = asyncHandler(async (event) => {
+  await ensureDb();
+  await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const q = getQueryParams(event);
+  return await autoAssignController.listExceptions(q);
+});
+
+exports.retryAutoAssign = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const { uploadId } = getPathParams(event);
+  return await autoAssignController.retryAutoAssign(user, uploadId);
+});
+
+exports.getAutoAssignAttempts = asyncHandler(async (event) => {
+  await ensureDb();
+  await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const { uploadId } = getPathParams(event);
+  return await autoAssignController.getAttempts(uploadId);
+});
+
+exports.getAutoAssignManualGate = asyncHandler(async (event) => {
+  await ensureDb();
+  await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const { uploadId } = getPathParams(event);
+  return await autoAssignController.getManualGate(uploadId);
 });
 
 // -------- Admin: Standard sketch pricing (upload + paid revision #2+) --------
@@ -677,4 +940,11 @@ exports.updateAdminSurveySketchPricing = asyncHandler(async (event) => {
   const { user } = await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
   const body = validate(schemas.adminSketchPricingUpdate)(event);
   return await sketchPricingAdminController.updateSketchPricing(user, body);
+});
+
+exports.getAdminPaymentReconciliation = asyncHandler(async (event) => {
+  await ensureDb();
+  await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
+  const q = event.queryStringParameters || {};
+  return await adminPaymentReconciliationController.getDailyReconciliation(q);
 });

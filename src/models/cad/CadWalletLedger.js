@@ -47,12 +47,30 @@ const CadWalletLedgerSchema = new mongoose.Schema(
       default: null,
       min: 0,
     },
-    /** Payout percent used when crediting this row (e.g. 20 = 20%). */
+    /** @deprecated H-11 percent model removed; kept for legacy rows. */
     payoutPercent: {
       type: Number,
       default: null,
       min: 0,
     },
+    /** H-11: versioned payout rule id frozen on insert. */
+    pricingRuleVersion: {
+      type: String,
+      default: null,
+    },
+    payoutModel: {
+      type: String,
+      enum: ["FIXED", "PERCENT"],
+      default: null,
+    },
+    grossPricePaise: { type: Number, default: null, min: 0 },
+    bookingPaise: { type: Number, default: null, min: 0 },
+    balancePaise: { type: Number, default: null, min: 0 },
+    /** CAD operator payout credited (mirrors amountPaise for H-11 FIXED). */
+    payoutPaise: { type: Number, default: null, min: 0 },
+    platformFeePaise: { type: Number, default: null, min: 0 },
+    taxPaise: { type: Number, default: null, min: 0 },
+    adjustmentPaise: { type: Number, default: null, min: 0 },
     /** Cumulative amount marked paid by admin (paise). Remaining = amountPaise − paidAmountPaise until fully settled. */
     paidAmountPaise: {
       type: Number,

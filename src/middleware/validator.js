@@ -61,10 +61,44 @@ function validate(schemaFn) {
 }
 
 function validateExact4Password(password, field = "password") {
-  if (typeof password !== "string" || password.length !== 4) {
-    throw new BadRequestError(`${field} must be exactly 4 characters`, {
-      errors: [{ field, message: "Must be exactly 4 characters" }],
+  // Deprecated alias — H-02 requires strong passwords. Kept name only if referenced; use validatePasswordPolicy.
+  return validatePasswordPolicy(password, field);
+}
+
+/**
+ * Audit H-02 password policy. Default min length is 4 (compat with current FE).
+ * Set PASSWORD_MIN_LENGTH=10 when frontend ships stronger password UI.
+ */
+function validatePasswordPolicy(password, field = "password") {
+  const { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } = require("../config/authSecurity");
+  if (typeof password !== "string") {
+    throw new BadRequestError(`${field} must be a string`, {
+      code: "PASSWORD_POLICY",
+      errors: [{ field, message: "Invalid password" }],
     });
+  }
+  if (password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH) {
+    throw new BadRequestError(
+      `${field} must be between ${PASSWORD_MIN_LENGTH} and ${PASSWORD_MAX_LENGTH} characters`,
+      {
+        code: "PASSWORD_POLICY",
+        errors: [
+          {
+            field,
+            message: `Must be ${PASSWORD_MIN_LENGTH}–${PASSWORD_MAX_LENGTH} characters`,
+          },
+        ],
+      }
+    );
+  }
+  if (PASSWORD_MIN_LENGTH >= 10) {
+    // Only enforce “trivial pattern” checks when strong policy is enabled.
+    if (/^(\d)\1+$/.test(password) || password === "0123456789" || password === "1234567890") {
+      throw new BadRequestError(`${field} is too weak`, {
+        code: "PASSWORD_TOO_WEAK",
+        errors: [{ field, message: "Choose a stronger password" }],
+      });
+    }
   }
 }
 
@@ -86,6 +120,7 @@ function parseRupeesToPaise(raw, field = "amountRupees") {
 
 /**
  * Optional payment amount from frontend for PhonePe checkout.
+ * @deprecated C-01: client amounts are rejected for sketch payments. Kept only for admin CAD wallet payouts.
  * Accepts one of: amount / amountRupees (₹) or amountPaise.
  * @returns {number|undefined} paise, or undefined if none sent
  */
@@ -120,6 +155,23 @@ function parseOptionalClientPaymentAmountPaise(body = {}) {
     }
   }
   return amountPaise;
+}
+
+/** C-01: reject any client-supplied checkout amount on sketch payment APIs. */
+function rejectClientSketchPaymentAmount(body = {}) {
+  const hasAmount =
+    (body.amountPaise !== undefined && body.amountPaise !== null && body.amountPaise !== "") ||
+    (body.amountRupees !== undefined && body.amountRupees !== null && body.amountRupees !== "") ||
+    (body.amount !== undefined && body.amount !== null && body.amount !== "");
+  if (hasAmount) {
+    throw new BadRequestError(
+      "Payment amount cannot be set by the client. Amount is computed server-side from admin/env pricing.",
+      {
+        code: "CLIENT_AMOUNT_NOT_ALLOWED",
+        errors: [{ field: "amount", message: "Not accepted; use GET /api/surveyor/sketch-pricing" }],
+      }
+    );
+  }
 }
 
 const schemas = {
@@ -186,7 +238,7 @@ const schemas = {
 
   /**
    * Surveyor forgot password (step 2): verify OTP and reset password.
-   * Body: phone + otp + password (password must be exactly 4 chars)
+   * Body: phone + otp + password (length from PASSWORD_MIN_LENGTH; default 4 for FE compat)
    */
   surveyorForgotPasswordReset(body) {
     requireFields(body, ["phone", "otp", "password"]);
@@ -727,17 +779,14 @@ const schemas = {
     if (!payload.retryPayment && !hasContent) {
       throw new BadRequestError("At least one of remarks or audio is required");
     }
-    const clientAmountPaise = parseOptionalClientPaymentAmountPaise(body);
-    if (clientAmountPaise !== undefined) {
-      payload.amountPaise = clientAmountPaise;
-    }
+    rejectClientSketchPaymentAmount(body);
     return payload;
   },
 
-  /** Surveyor: retry upload payment — optional amount override from frontend. */
+  /** Surveyor: retry upload payment — no client amount (C-01). */
   sketchPaymentRetry(body = {}) {
-    const clientAmountPaise = parseOptionalClientPaymentAmountPaise(body || {});
-    return clientAmountPaise !== undefined ? { amountPaise: clientAmountPaise } : {};
+    rejectClientSketchPaymentAmount(body || {});
+    return {};
   },
 
   surveyorCadFeedbackCreate(body) {
@@ -823,6 +872,34 @@ const schemas = {
     const assignedCadUserId = validObjectId(String(body.assignedCadUserId).trim(), "assignedCadUserId");
     const reason = body.reason != null ? String(body.reason).trim().slice(0, 1000) : null;
     return { assignedCadUserId, reason };
+  },
+
+  /** M-10: immutable SLA extension (server adjusts dueAt). */
+  adminSlaExtend(body) {
+    const reason =
+      body.reason != null ? String(body.reason).trim().slice(0, 500) : "admin_extension";
+    let hours = null;
+    let ms = null;
+    if (body.ms != null && body.ms !== "") {
+      ms = typeof body.ms === "number" ? body.ms : parseInt(String(body.ms), 10);
+      if (!Number.isFinite(ms) || ms <= 0) {
+        throw new BadRequestError("ms must be a positive integer", {
+          code: "INVALID_SLA_EXTENSION",
+        });
+      }
+    } else if (body.hours != null && body.hours !== "") {
+      hours = typeof body.hours === "number" ? body.hours : parseFloat(String(body.hours));
+      if (!Number.isFinite(hours) || hours <= 0) {
+        throw new BadRequestError("hours must be a positive number", {
+          code: "INVALID_SLA_EXTENSION",
+        });
+      }
+    } else {
+      throw new BadRequestError("Provide hours or ms to extend SLA", {
+        code: "SLA_EXTENSION_REQUIRED",
+      });
+    }
+    return { hours, ms, reason };
   },
 
   /**
@@ -953,6 +1030,8 @@ const schemas = {
       "sketchUploadDiscountRupees",
       "sketchRevisionPlanAmountRupees",
       "sketchRevisionDiscountRupees",
+      "sketchBalancePlanAmountRupees",
+      "sketchBalanceDiscountRupees",
     ];
     for (const field of rupeeFields) {
       if (body[field] === undefined) continue;
@@ -1105,7 +1184,7 @@ const schemas = {
       }
     }
 
-    const clientAmountPaise = parseOptionalClientPaymentAmountPaise(body);
+    rejectClientSketchPaymentAmount(body);
 
     return {
       surveyType,
@@ -1122,7 +1201,6 @@ const schemas = {
       audio: audio.length ? audio : undefined,
       others: others || undefined,
       other_documents: other_documents.length ? other_documents : undefined,
-      ...(clientAmountPaise !== undefined ? { amountPaise: clientAmountPaise } : {}),
     };
   },
 
@@ -1265,7 +1343,7 @@ const schemas = {
   },
 
   // -------- Upload (image / audio only) --------
-  /** Request body for image upload URL. Required: fileName, contentType. Optional: entityId, fileSizeBytes, expiresIn. */
+  /** Request body for image upload URL. Required: fileName (+ fileSizeBytes enforced in service). Optional: contentType, entityId, expiresIn. */
   uploadImage(body) {
     const { UPLOAD_BATCH_MAX_FILES } = require("../config/constants");
     if (Array.isArray(body.files) && body.files.length > 0) {
@@ -1310,7 +1388,7 @@ const schemas = {
     };
   },
 
-  /** Request body for audio upload URL. Required: fileName, contentType. Optional: entityId, fileSizeBytes, expiresIn. */
+  /** Request body for audio upload URL. Required: fileName (+ fileSizeBytes enforced in service). Optional: contentType, entityId, expiresIn. */
   uploadAudio(body) {
     const { UPLOAD_BATCH_MAX_FILES } = require("../config/constants");
     if (Array.isArray(body.files) && body.files.length > 0) {
@@ -1365,6 +1443,76 @@ const schemas = {
       fileUrl: body.fileUrl != null ? String(body.fileUrl).trim() : undefined,
     };
   },
+
+  /** H-07: post-PUT confirm (magic bytes / DWG / DXF / AV). */
+  uploadConfirm(body) {
+    if (!body.key && !body.fileUrl) {
+      throw new BadRequestError("Either key or fileUrl is required", {
+        errors: [{ field: "key", message: "Required if fileUrl not provided" }],
+      });
+    }
+    return {
+      key: body.key != null ? String(body.key).trim() : undefined,
+      fileUrl: body.fileUrl != null ? String(body.fileUrl).trim() : undefined,
+      contentType: body.contentType != null ? String(body.contentType).trim() : undefined,
+      fileName: body.fileName != null ? String(body.fileName).trim() : undefined,
+      fileSizeBytes: body.fileSizeBytes != null ? Number(body.fileSizeBytes) : undefined,
+    };
+  },
+
+  /** H-12: CAD deliverable presign (DWG/DXF source or PDF/image preview). */
+  uploadCadDeliverable(body) {
+    requireFields(body, ["fileName"]);
+    const fileName = String(body.fileName || "").trim();
+    if (!fileName) {
+      throw new BadRequestError("fileName is required and must be non-empty", {
+        errors: [{ field: "fileName", message: "Required" }],
+      });
+    }
+    return {
+      fileName,
+      contentType: body.contentType,
+      role: body.role != null ? String(body.role).trim().toLowerCase() : undefined,
+      entityId: body.entityId != null ? String(body.entityId).trim() : undefined,
+      fileSizeBytes: body.fileSizeBytes != null ? Number(body.fileSizeBytes) : undefined,
+      expiresIn: body.expiresIn != null ? parseInt(body.expiresIn, 10) : undefined,
+    };
+  },
+
+  uploadCadDeliverablePart(body) {
+    requireFields(body, ["key", "uploadId", "partNumber"]);
+    return {
+      key: String(body.key).trim(),
+      uploadId: String(body.uploadId).trim(),
+      partNumber: Number(body.partNumber),
+      expiresIn: body.expiresIn != null ? parseInt(body.expiresIn, 10) : undefined,
+    };
+  },
+
+  uploadCadDeliverableComplete(body) {
+    requireFields(body, ["key", "uploadId"]);
+    if (!Array.isArray(body.parts) || !body.parts.length) {
+      throw new BadRequestError("parts array is required", {
+        errors: [{ field: "parts", message: "Required" }],
+      });
+    }
+    return {
+      key: String(body.key).trim(),
+      uploadId: String(body.uploadId).trim(),
+      parts: body.parts,
+      contentType: body.contentType != null ? String(body.contentType).trim() : undefined,
+      fileName: body.fileName != null ? String(body.fileName).trim() : undefined,
+      fileSizeBytes: body.fileSizeBytes != null ? Number(body.fileSizeBytes) : undefined,
+    };
+  },
+
+  uploadCadDeliverableAbort(body) {
+    requireFields(body, ["key", "uploadId"]);
+    return {
+      key: String(body.key).trim(),
+      uploadId: String(body.uploadId).trim(),
+    };
+  },
 };
 
 module.exports = {
@@ -1372,4 +1520,6 @@ module.exports = {
   schemas,
   validObjectId,
   parseJsonBody,
+  validatePasswordPolicy,
+  rejectClientSketchPaymentAmount,
 };

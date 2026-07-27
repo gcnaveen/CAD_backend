@@ -16,7 +16,7 @@ const AuthSchema = new mongoose.Schema(
     password: {
       type: String,
       select: false,
-      // Plain password at create is exactly 4 chars (see validator); after save hook this holds a bcrypt hash (long).
+      // Plain password min length enforced in validator (H-02); stored value is bcrypt hash.
       minlength: 4,
     },
     otpCode: {
@@ -30,6 +30,24 @@ const AuthSchema = new mongoose.Schema(
     otpVerified: {
       type: Boolean,
       default: false,
+    },
+    /** Admin MFA (TOTP). */
+    mfaEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    mfaSecret: {
+      type: String,
+      select: false,
+      default: null,
+    },
+    lastLoginAt: {
+      type: Date,
+      default: null,
+    },
+    lastLoginIp: {
+      type: String,
+      default: null,
     },
   },
   { _id: false, minimize: false }

@@ -1,0 +1,10 @@
+{
+  "service": "cad-backend-api",
+  "stage": "dev",
+  "gitSha": "cc147416a2b191a845595e30ef01b8e6c77870b7",
+  "lockHash": "f5212b89a6a346eac467fd1fda9527acb0b44e52494b1d59dfe61245307035f4",
+  "migrationVersion": "2026.07.25.schema",
+  "deployedAt": "2026-07-26T07:50:39.073Z",
+  "releaseTag": "",
+  "packageVersion": "1.0.0"
+}

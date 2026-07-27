@@ -8,12 +8,10 @@ const asyncHandler = require("../utils/asyncHandler");
 const swaggerHandler = require("./swaggerHandler");
 
 function optionsResponse() {
+  // Headers completed by asyncHandler / applySecurityHeaders (M-01).
   return {
     statusCode: 204,
     headers: {
-      "Access-Control-Allow-Origin": process.env.CORS_ALLOW_ORIGIN || "*",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
       "Access-Control-Max-Age": "86400",
     },
     body: "",

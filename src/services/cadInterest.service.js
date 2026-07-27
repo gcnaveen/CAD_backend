@@ -1,6 +1,12 @@
 const CadInterest = require("../models/cadInterest/CadInterest");
 const User = require("../models/user/User");
 const { USER_ROLES } = require("../config/constants");
+const { ForbiddenError } = require("../utils/errors");
+
+function isCadInterestEnabled() {
+  // Default true preserves current live form; set CAD_INTEREST_ENABLED=false for “Coming Soon” (H-08).
+  return String(process.env.CAD_INTEREST_ENABLED || "true").toLowerCase() !== "false";
+}
 
 async function openInterestFilter() {
   const cadEmails = await User.find({
@@ -34,6 +40,12 @@ async function list({ page = 1, limit = 20 } = {}) {
 }
 
 async function create(payload) {
+  if (!isCadInterestEnabled()) {
+    throw new ForbiddenError("CAD operator registration is Coming Soon", {
+      code: "CAD_INTEREST_COMING_SOON",
+    });
+  }
+
   const { email, phone } = payload;
 
   const existing = await CadInterest.findOne({ email, phone });
@@ -67,4 +79,5 @@ module.exports = {
   list,
   create,
   markConvertedByCadUserEmail,
+  isCadInterestEnabled,
 };

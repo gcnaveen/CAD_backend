@@ -12,11 +12,14 @@ const Taluka = require("../models/masters/Taluka");
 const Hobli = require("../models/masters/Hobli");
 const Village = require("../models/masters/Village");
 const surveySketchAssignmentService = require("./assignment/surveySketchAssignment.service");
-const flowService = require("./config/surveySketchAssignmentFlow.service");
 const sketchPaymentPricing = require("./sketchPaymentPricing.service");
 const phonePeSketchPayment = require("./phonePeSketchPayment.service");
+const cadDownloadEntitlement = require("./cadDownloadEntitlement.service");
+const paymentAttempt = require("./paymentAttempt.service");
 const notificationService = require("./notification.service");
 const { USER_ROLES, SURVEY_SKETCH_ASSIGNMENT_STATUS, SURVEY_SKETCH_STATUS } = require("../config/constants");
+const { applySketchStatus } = require("../config/lifecycleQcSpec");
+const slaDue = require("./slaDue.service");
 const { ForbiddenError, NotFoundError, BadRequestError } = require("../utils/errors");
 const logger = require("../utils/logger");
 
@@ -27,10 +30,10 @@ const MAX_LIMIT = 100;
 /** After a sketch is in workflow PENDING (not PAYMENT_PENDING): auto-assign + surveyor notification. */
 async function postSubmitNotifyAndAutoAssign(docId, surveyorRef) {
   try {
-    const flow = await flowService.getAutoAssignState();
-    if (flow.enabled && flow.updatedBy) {
-      await surveySketchAssignmentService.autoAssignFromFlow(docId, flow.updatedBy);
-    }
+    const autoAssign = require("./autoAssign.service");
+    await autoAssign.enqueueAutoAssign(docId, {
+      actorUserId: surveyorRef?._id || null,
+    });
   } catch (autoAssignError) {
     logger.error("Auto assignment flow failed after sketch creation", autoAssignError, {
       surveyorSketchUploadId: String(docId),
@@ -52,6 +55,7 @@ async function postSubmitNotifyAndAutoAssign(docId, surveyorRef) {
       data: {
         surveyNo: latest?.surveyNo,
         status: latest?.status,
+        autoAssignState: latest?.autoAssignMeta?.state || null,
       },
     });
   } catch (notificationError) {
@@ -65,28 +69,77 @@ async function postSubmitNotifyAndAutoAssign(docId, surveyorRef) {
 /**
  * PhonePe callback: move upload from PAYMENT_PENDING → PENDING and run auto-assign + notification.
  * Idempotent if payment already marked COMPLETED.
+ * Rejects when paid amount ≠ immutable expected amountPaise (C-01).
  */
-async function completeSketchUploadAfterPayment(uploadId, phonepeResponse) {
+async function completeSketchUploadAfterPayment(uploadId, phonepeResponse, { merchantOrderId, expectedAmountPaise } = {}) {
   const upload = await SurveyorSketchUpload.findById(uploadId);
   if (!upload) return null;
   if (upload.sketchPayment?.status === "COMPLETED") {
-    return SurveyorSketchUpload.findById(uploadId).lean();
+    return { ...(await SurveyorSketchUpload.findById(uploadId).lean()), paymentRejected: false };
   }
 
-  upload.status = SURVEY_SKETCH_STATUS.PENDING;
+  const storedOrderId = upload.sketchPayment?.merchantOrderId
+    ? String(upload.sketchPayment.merchantOrderId)
+    : null;
+  if (
+    merchantOrderId &&
+    storedOrderId &&
+    storedOrderId !== String(merchantOrderId)
+  ) {
+    const PaymentAttempt = require("../models/payment/PaymentAttempt");
+    const knownAttempt = await PaymentAttempt.findOne({
+      merchantOrderId: String(merchantOrderId),
+      surveyorSketchUpload: uploadId,
+    })
+      .select("_id expectedAmountPaise")
+      .lean();
+    if (!knownAttempt) {
+      logger.error("PhonePe callback merchantOrderId mismatch for sketch upload", {
+        uploadId: String(uploadId),
+        storedOrderId,
+        callbackOrderId: String(merchantOrderId),
+      });
+      upload.sketchPayment = upload.sketchPayment || {};
+      upload.sketchPayment.status = "AMOUNT_MISMATCH";
+      upload.sketchPayment.paymentFailureReason = "MERCHANT_ORDER_ID_MISMATCH";
+      upload.sketchPayment.phonepeResponse = phonepeResponse;
+      await upload.save();
+      return { paymentRejected: true, reason: "MERCHANT_ORDER_ID_MISMATCH" };
+    }
+  }
+
+  const expectedPaise =
+    expectedAmountPaise != null && Number.isFinite(Number(expectedAmountPaise))
+      ? Math.round(Number(expectedAmountPaise))
+      : upload.sketchPayment?.amountPaise;
+  const match = phonePeSketchPayment.assertPaidMatchesExpected(expectedPaise, phonepeResponse);
+  if (!match.ok) {
+    logger.error("PhonePe sketch payment amount rejected", {
+      uploadId: String(uploadId),
+      reason: match.reason,
+      expectedPaise: match.expectedPaise,
+      paidPaise: match.paidPaise,
+    });
+    upload.sketchPayment = upload.sketchPayment || {};
+    upload.sketchPayment.status = "AMOUNT_MISMATCH";
+    upload.sketchPayment.paymentFailureReason = match.reason;
+    upload.sketchPayment.paidAmountPaise = match.paidPaise;
+    upload.sketchPayment.phonepeResponse = phonepeResponse;
+    await upload.save();
+    return { paymentRejected: true, reason: match.reason };
+  }
+
+  applySketchStatus(upload, SURVEY_SKETCH_STATUS.PENDING);
   upload.sketchPayment = upload.sketchPayment || {};
   upload.sketchPayment.status = "COMPLETED";
   upload.sketchPayment.phonepeResponse = phonepeResponse;
   upload.sketchPayment.paidAt = new Date();
-  const paidPaise =
-    phonePeSketchPayment.extractPaidAmountPaise(phonepeResponse) ?? upload.sketchPayment.amountPaise ?? null;
-  if (paidPaise != null && Number.isFinite(Number(paidPaise))) {
-    upload.sketchPayment.paidAmountPaise = Math.round(Number(paidPaise));
-  }
+  upload.sketchPayment.paidAmountPaise = match.paidPaise;
+  upload.sketchPayment.paymentFailureReason = null;
   await upload.save();
 
   await postSubmitNotifyAndAutoAssign(upload._id, { _id: upload.surveyor });
-  return SurveyorSketchUpload.findById(uploadId).lean();
+  return { ...(await SurveyorSketchUpload.findById(uploadId).lean()), paymentRejected: false };
 }
 
 async function markSketchPaymentFailed(uploadId, phonepeResponse) {
@@ -140,15 +193,11 @@ function buildSketchPaymentMeta({
 }
 
 /**
- * Re-initiate PhonePe checkout when initial sketch upload payment failed or was abandoned.
- * @param {Object} surveyor
- * @param {string} uploadId
- */
-/**
  * Re-initiate PhonePe checkout for an unpaid sketch upload.
- * Optional body.amountPaise / amountRupees / amount overrides the charged amount.
+ * Amount is always server-resolved (or the previously persisted immutable expected amount).
+ * Client amount overrides are rejected.
  */
-async function reinitiateSketchPayment(surveyor, uploadId, options = {}) {
+async function reinitiateSketchPayment(surveyor, uploadId, _options = {}) {
   if (surveyor.role !== USER_ROLES.SURVEYOR) {
     throw new ForbiddenError("Only surveyors can retry sketch upload payment");
   }
@@ -164,8 +213,11 @@ async function reinitiateSketchPayment(surveyor, uploadId, options = {}) {
   }
   if (upload.status !== SURVEY_SKETCH_STATUS.PAYMENT_PENDING) {
     const payStatusEarly = upload.sketchPayment?.status || "NONE";
-    if (payStatusEarly === "FAILED" && Number(upload.sketchPayment?.amountPaise) > 0) {
-      upload.status = SURVEY_SKETCH_STATUS.PAYMENT_PENDING;
+    if (
+      (payStatusEarly === "FAILED" || payStatusEarly === "AMOUNT_MISMATCH") &&
+      Number(upload.sketchPayment?.amountPaise) > 0
+    ) {
+      applySketchStatus(upload, SURVEY_SKETCH_STATUS.PAYMENT_PENDING);
     } else {
       throw new BadRequestError("This upload is not awaiting payment", {
         code: "SKETCH_NOT_AWAITING_PAYMENT",
@@ -180,26 +232,23 @@ async function reinitiateSketchPayment(surveyor, uploadId, options = {}) {
     });
   }
 
-  const clientAmountPaise = options.amountPaise;
-  const baseResolved = await sketchPaymentPricing.resolveSketchUploadFee(clientAmountPaise);
+  // Prefer immutable expected amount already persisted at first initiation; else resolve server pricing.
+  const resolved = await sketchPaymentPricing.resolveSketchUploadFee();
+  const storedExpected = Number(upload.sketchPayment?.amountPaise);
   const feePaise =
-    clientAmountPaise != null && Number(clientAmountPaise) > 0
-      ? Math.round(Number(clientAmountPaise))
-      : Number(upload.sketchPayment?.amountPaise) > 0
-        ? Math.round(Number(upload.sketchPayment.amountPaise))
-        : baseResolved.feePaise;
-  const resolved =
-    clientAmountPaise != null && Number(clientAmountPaise) > 0
-      ? baseResolved
-      : Number(upload.sketchPayment?.amountPaise) > 0
-        ? {
-            feePaise,
-            planAmountRupees: upload.sketchPayment.planAmountRupees ?? null,
-            discountRupees: upload.sketchPayment.discountRupees ?? null,
-            payableRupees: feePaise / 100,
-            source: "stored",
-          }
-        : baseResolved;
+    Number.isFinite(storedExpected) && storedExpected > 0
+      ? Math.round(storedExpected)
+      : resolved.feePaise;
+  const pricingMeta =
+    Number.isFinite(storedExpected) && storedExpected > 0
+      ? {
+          feePaise,
+          planAmountRupees: upload.sketchPayment.planAmountRupees ?? null,
+          discountRupees: upload.sketchPayment.discountRupees ?? null,
+          payableRupees: feePaise / 100,
+          source: upload.sketchPayment.pricingSource || "stored",
+        }
+      : resolved;
 
   if (!Number.isFinite(feePaise) || feePaise <= 0) {
     throw new BadRequestError("No payment is required for this upload", {
@@ -219,9 +268,13 @@ async function reinitiateSketchPayment(surveyor, uploadId, options = {}) {
   upload.sketchPayment.status = "PENDING";
   upload.sketchPayment.merchantOrderId = merchantOrderId;
   upload.sketchPayment.amountPaise = feePaise;
-  upload.sketchPayment.planAmountRupees = resolved.planAmountRupees ?? upload.sketchPayment.planAmountRupees ?? null;
-  upload.sketchPayment.discountRupees = resolved.discountRupees ?? upload.sketchPayment.discountRupees ?? null;
-  upload.status = SURVEY_SKETCH_STATUS.PAYMENT_PENDING;
+  upload.sketchPayment.planAmountRupees =
+    pricingMeta.planAmountRupees ?? upload.sketchPayment.planAmountRupees ?? null;
+  upload.sketchPayment.discountRupees =
+    pricingMeta.discountRupees ?? upload.sketchPayment.discountRupees ?? null;
+  upload.sketchPayment.pricingSource = pricingMeta.source;
+  upload.sketchPayment.paymentFailureReason = null;
+  applySketchStatus(upload, SURVEY_SKETCH_STATUS.PAYMENT_PENDING);
   await upload.save();
 
   let checkoutPageUrl;
@@ -231,10 +284,24 @@ async function reinitiateSketchPayment(surveyor, uploadId, options = {}) {
       merchantOrderId,
       amountPaise: feePaise,
       payableRupees: feePaise / 100,
-      pricingSource: resolved.source,
+      pricingSource: pricingMeta.source,
     });
     const pr = await phonePe.initiatePay(merchantOrderId, feePaise);
     checkoutPageUrl = pr.redirectUrl;
+    try {
+      await paymentAttempt.recordInitiated({
+        purpose: paymentAttempt.PAYMENT_PURPOSE.BOOKING,
+        surveyorSketchUploadId: upload._id,
+        surveyorId: surveyor._id,
+        merchantOrderId,
+        expectedAmountPaise: feePaise,
+      });
+    } catch (ledgerErr) {
+      logger.error("Failed to record booking payment attempt (retry)", ledgerErr, {
+        uploadId: String(uploadId),
+        merchantOrderId,
+      });
+    }
   } catch (pe) {
     logger.error("PhonePe initiatePay failed for sketch upload payment retry", pe, {
       uploadId: String(uploadId),
@@ -253,9 +320,9 @@ async function reinitiateSketchPayment(surveyor, uploadId, options = {}) {
       checkoutPageUrl,
       merchantOrderId,
       feePaise,
-      resolved,
+      resolved: pricingMeta,
       message:
-        payStatus === "FAILED"
+        payStatus === "FAILED" || payStatus === "AMOUNT_MISMATCH"
           ? "Payment retry started. Complete checkout to submit your sketch."
           : "Checkout link refreshed. Complete payment to submit your sketch.",
     }),
@@ -290,7 +357,8 @@ async function clearSketchUpload(surveyor, uploadId) {
 
   const clearable =
     upload.status === SURVEY_SKETCH_STATUS.PAYMENT_PENDING ||
-    (payStatus === "FAILED" && Number(upload.sketchPayment?.amountPaise) > 0);
+    ((payStatus === "FAILED" || payStatus === "AMOUNT_MISMATCH") &&
+      Number(upload.sketchPayment?.amountPaise) > 0);
 
   if (!clearable) {
     throw new BadRequestError("Only unpaid surveys awaiting payment can be cleared", {
@@ -506,7 +574,7 @@ async function create(surveyor, payload) {
       await doc.save();
 
       const phonePe = phonePeSketchPayment;
-      const resolved = await sketchPaymentPricing.resolveSketchUploadFee(payload.amountPaise);
+      const resolved = await sketchPaymentPricing.resolveSketchUploadFee();
       const feePaise = resolved.feePaise;
       if (feePaise > 0) {
         if (!phonePe.isPhonePeConfigured()) {
@@ -515,13 +583,14 @@ async function create(surveyor, payload) {
           });
         }
         const merchantOrderId = `sketch_${doc._id}`;
-        doc.status = SURVEY_SKETCH_STATUS.PAYMENT_PENDING;
+        applySketchStatus(doc, SURVEY_SKETCH_STATUS.PAYMENT_PENDING);
         doc.sketchPayment = {
           status: "PENDING",
           merchantOrderId,
           amountPaise: feePaise,
           planAmountRupees: resolved.planAmountRupees,
           discountRupees: resolved.discountRupees,
+          pricingSource: resolved.source,
         };
         await doc.save();
         let checkoutPageUrl;
@@ -535,6 +604,20 @@ async function create(surveyor, payload) {
           });
           const pr = await phonePe.initiatePay(merchantOrderId, feePaise);
           checkoutPageUrl = pr.redirectUrl;
+          try {
+            await paymentAttempt.recordInitiated({
+              purpose: paymentAttempt.PAYMENT_PURPOSE.BOOKING,
+              surveyorSketchUploadId: doc._id,
+              surveyorId: surveyor._id,
+              merchantOrderId,
+              expectedAmountPaise: feePaise,
+            });
+          } catch (ledgerErr) {
+            logger.error("Failed to record booking payment attempt", ledgerErr, {
+              uploadId: String(doc._id),
+              merchantOrderId,
+            });
+          }
         } catch (pe) {
           logger.error("PhonePe initiatePay failed for sketch upload", pe, { uploadId: String(doc._id) });
           await SurveyorSketchUpload.findByIdAndUpdate(doc._id, { $set: { "sketchPayment.status": "FAILED" } });
@@ -618,8 +701,7 @@ async function getById(actor, uploadId) {
     .populate("district", "code name")
     .populate("taluka", "code name")
     .populate("hobli", "code name")
-    .populate("village", "code name")
-    .lean();
+    .populate("village", "code name");
 
   if (!doc) {
     throw new NotFoundError("Survey sketch upload not found");
@@ -634,7 +716,23 @@ async function getById(actor, uploadId) {
     throw new ForbiddenError("Insufficient permissions");
   }
 
-  return doc;
+  await cadDownloadEntitlement.ensureBalanceRequirementForUpload(doc);
+  if (doc.isModified()) {
+    await doc.save();
+  }
+
+  const base = cadDownloadEntitlement.presentUploadForActor(doc.toObject(), actor);
+  const assignment = await SurveySketchAssignment.findOne({
+    surveyorSketchUpload: doc._id,
+    status: { $ne: SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED },
+  })
+    .sort({ assignedAt: -1 })
+    .lean();
+  return {
+    ...base,
+    assignment: assignment ? slaDue.decorateAssignment(assignment) : null,
+    sla: slaDue.buildSlaSnapshot(assignment),
+  };
 }
 
 /**
@@ -726,7 +824,7 @@ async function list(actor, options = {}) {
   ]);
 
   return {
-    data,
+    data: data.map((row) => cadDownloadEntitlement.presentUploadForActor(row, actor)),
     meta: { page, limit, total },
   };
 }
@@ -846,10 +944,20 @@ async function listOrdersForSurveyor(actor, options = {}) {
     const id = a.surveyorSketchUpload?.toString?.() || String(a.surveyorSketchUpload);
     (listsByUpload[id] ||= []).push(a);
   }
-  const enrichedData = data.map((upload) => ({
-    ...upload,
-    assignment: pickDisplayAssignmentForUpload(listsByUpload[upload._id.toString()] || []) || null,
-  }));
+  const enrichedData = data.map((upload) => {
+    const assignment = pickDisplayAssignmentForUpload(listsByUpload[upload._id.toString()] || []) || null;
+    return {
+      ...cadDownloadEntitlement.presentUploadForActor(upload, actor),
+      assignment: assignment ? slaDue.decorateAssignment(assignment) : null,
+      sla: assignment
+        ? slaDue.buildSlaSnapshot(assignment)
+        : slaDue.buildSlaSnapshot(null),
+    };
+  });
+  // Sort active work by SLA risk when bucket is active
+  if (selectedBucket === SURVEYOR_ORDER_BUCKETS.ACTIVE || selectedBucket === SURVEYOR_ORDER_BUCKETS.ALL) {
+    enrichedData.sort((a, b) => (a.sla?.riskRank ?? 99) - (b.sla?.riskRank ?? 99));
+  }
 
   const statusCount = {};
   for (const s of Object.values(SURVEY_SKETCH_STATUS)) {
@@ -901,4 +1009,10 @@ module.exports = {
   clearSketchUpload,
   sketchUploadMerchantOrderId,
   sketchUploadRetryMerchantOrderId,
+  initiateBalancePayment: (actor, uploadId) =>
+    cadDownloadEntitlement.initiateBalancePayment(actor, uploadId),
+  getCadDownload: (actor, uploadId, options) =>
+    cadDownloadEntitlement.getCadDownloadForSurveyor(actor, uploadId, options),
+  markBalanceRefunded: (actor, uploadId, options) =>
+    cadDownloadEntitlement.markBalanceRefunded(actor, uploadId, options),
 };

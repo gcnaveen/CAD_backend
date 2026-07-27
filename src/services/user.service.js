@@ -422,13 +422,18 @@ async function patch(actor, userId, payload) {
     }
   }
 
+  const prevStatus = user.status;
   await user.save();
+  if (user.status === USER_STATUS.DISABLED && prevStatus !== USER_STATUS.DISABLED) {
+    try {
+      const refreshTokenService = require("./refreshToken.service");
+      await refreshTokenService.revokeAllForUser(user._id, "USER_DISABLED");
+    } catch (_) {
+      /* best-effort */
+    }
+  }
   return { user };
 }
-
-/**
- * Soft-delete user (set deletedAt). Enforces role-based access.
- */
 async function deleteById(actor, userId) {
   const user = await User.findOne({ _id: userId, ...notDeleted });
   if (!user) {
@@ -437,6 +442,12 @@ async function deleteById(actor, userId) {
   assertCanManageUser(actor, user);
   user.deletedAt = new Date();
   await user.save();
+  try {
+    const refreshTokenService = require("./refreshToken.service");
+    await refreshTokenService.revokeAllForUser(user._id, "USER_DELETED");
+  } catch (_) {
+    /* best-effort */
+  }
   return { message: "User deleted successfully" };
 }
 
@@ -456,6 +467,12 @@ async function blockUser(actor, userId) {
   assertCanManageUser(actor, user);
   user.status = USER_STATUS.DISABLED;
   await user.save();
+  try {
+    const refreshTokenService = require("./refreshToken.service");
+    await refreshTokenService.revokeAllForUser(user._id, "USER_BLOCKED");
+  } catch (_) {
+    /* best-effort */
+  }
   return { user, message: "User blocked successfully" };
 }
 
