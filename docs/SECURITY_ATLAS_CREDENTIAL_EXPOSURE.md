@@ -5,8 +5,8 @@
 | Item | Status |
 |------|--------|
 | Working-tree docs scrubbed | Done (`LAMBDA_NETWORK_FIX.md`, `LAMBDA_VPC_FIX.md`, `MONGODB_ATLAS_SETUP.md`) |
-| Git history rewrite | Done via `git filter-repo` (see below) |
-| Force-push cleaned history to GitHub | Required after rewrite (rewrites `main`) |
+| Git history rewrite | Done via `git filter-repo` |
+| Force-push cleaned history to GitHub | Run `git push --force-with-lease origin main` (see below if not done) |
 | Rotate Atlas passwords | **You must do this in Atlas UI now** — agent cannot access Atlas |
 
 Confirmed: the live `.env` `MONGODB_URI` password for user `cad_db_user` **matched** the password that was committed to public docs. Treat it as fully compromised.
@@ -14,7 +14,7 @@ Confirmed: the live `.env` `MONGODB_URI` password for user `cad_db_user` **match
 ## Exposed values (do not reuse)
 
 1. **Real DB user (must rotate):** username `cad_db_user` on cluster host `cadstaging.gntbdiw.mongodb.net` (password was published in `LAMBDA_NETWORK_FIX.md` / `LAMBDA_VPC_FIX.md`).
-2. **Example string (scrubbed; rotate/delete if this user was ever created):** `newuser` / example password in `MONGODB_ATLAS_SETUP.md`. If that Atlas user does not exist, skip; if it does, delete or rotate it.
+2. **Example string (scrubbed; rotate/delete if this user was ever created):** username `newuser` with a weak example password in `MONGODB_ATLAS_SETUP.md`. If that Atlas user does not exist, skip; if it does, delete or rotate it.
 
 ## Rotate Atlas credentials (do this immediately)
 
@@ -27,7 +27,7 @@ Confirmed: the live `.env` `MONGODB_URI` password for user `cad_db_user` **match
    - `MONGODB_URI`
    - `MONGODB_URI_STANDARD` (same user/password)
 5. Update **every Lambda** env var that sets `MONGODB_URI` / `MONGODB_URI_STANDARD` (AWS Console or redeploy with new env).
-6. Smoke-test: local `GET /test` (or health) + one authenticated API call against the deployed stage.
+6. Smoke-test: local health/`GET /test` + one authenticated API call against the deployed stage.
 7. Optionally create a new user (e.g. `cad_db_user_v2`), switch apps to it, then **delete** the old compromised user.
 
 ### B. `newuser` (only if it exists in Atlas)
@@ -49,11 +49,23 @@ No frontend code changes. App continues to use the API; only **backend `.env` / 
 ## Verify scrub on GitHub (after force-push)
 
 ```bash
-# Must return empty
+# Must return empty on the three ops docs
 git fetch origin
-git grep -n '<URL_ENCODED_PASSWORD>\|cad_db_user:caduser\|<LEAKED_EXAMPLE_PASSWORD>' origin/main -- \
-  LAMBDA_NETWORK_FIX.md LAMBDA_VPC_FIX.md MONGODB_ATLAS_SETUP.md
+git grep -nE 'caduser%40|newpassword|cad_db_user:caduser' origin/main -- \
+  LAMBDA_NETWORK_FIX.md LAMBDA_VPC_FIX.md MONGODB_ATLAS_SETUP.md || true
 
-# Raw blob check (replace OWNER/REPO if needed)
-curl -sL "https://raw.githubusercontent.com/gcnaveen/CAD_backend/main/LAMBDA_NETWORK_FIX.md" | grep -E '<URL_ENCODED_PASSWORD>|cad_db_user:' || echo "OK: no leak in raw file"
+# Raw blob check
+curl -sL "https://raw.githubusercontent.com/gcnaveen/CAD_backend/main/LAMBDA_NETWORK_FIX.md" \
+  | grep -E 'caduser%40|mongodb\+srv://cad_db_user:' && echo 'LEAK STILL PRESENT' || echo "OK: no leak in raw file"
 ```
+
+## Force-push (if push failed from this machine)
+
+History is already rewritten locally. From `CAD_backend/`:
+
+```bash
+git remote set-url origin git@github.com:gcnaveen/CAD_backend.git
+git push --force-with-lease origin main
+```
+
+This rewrites public `main`. Coordinate with anyone else who has clones.
