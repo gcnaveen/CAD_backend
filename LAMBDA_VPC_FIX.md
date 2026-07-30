@@ -44,7 +44,7 @@ Try using SRV connection string instead of replica set:
 
 1. Update Lambda environment variable:
    ```
-   MONGODB_URI=mongodb+srv://<DB_USER>:<URL_ENCODED_PASSWORD>@<CLUSTER>.mongodb.net/cad_db?retryWrites=true&w=majority&appName=cadstaging
+   MONGODB_URI=mongodb+srv://<DB_USER>:<URL_ENCODED_PASSWORD>@<CLUSTER>.mongodb.net/<DB_NAME>?retryWrites=true&w=majority&appName=<APP_NAME>
    ```
 
 2. Remove or set to false:

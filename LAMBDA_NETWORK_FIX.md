@@ -58,7 +58,7 @@ Since your database works locally, use the **same SRV connection string** in Lam
    - Lambda → Configuration → Environment variables
    - Add/Update:
      ```
-     MONGODB_URI=mongodb+srv://<DB_USER>:<URL_ENCODED_PASSWORD>@<CLUSTER>.mongodb.net/cad_db?retryWrites=true&w=majority&appName=cadstaging
+     MONGODB_URI=mongodb+srv://<DB_USER>:<URL_ENCODED_PASSWORD>@<CLUSTER>.mongodb.net/<DB_NAME>?retryWrites=true&w=majority&appName=<APP_NAME>
      MONGODB_DISCOVER_PRIMARY=false
      ```
    - Remove or leave empty: `MONGODB_URI_STANDARD`

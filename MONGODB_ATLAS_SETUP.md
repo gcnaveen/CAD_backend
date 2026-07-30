@@ -113,10 +113,11 @@ Update Lambda environment variables in AWS Console or via serverless.yml:
 
 ```env
 # New MongoDB Atlas Account - SRV Connection
-MONGODB_URI=mongodb+srv://<DB_USER>:<URL_ENCODED_PASSWORD>@<CLUSTER>.mongodb.net/cad_db?retryWrites=true&w=majority&appName=cadstaging
+MONGODB_URI=mongodb+srv://<DB_USER>:<URL_ENCODED_PASSWORD>@<CLUSTER>.mongodb.net/cad_db?retryWrites=true&w=majority&appName=<APP_NAME>
 MONGODB_DISCOVER_PRIMARY=false
 
-# Keep other settings
-JWT_SECRET=your-secret-key
+# Keep other settings — never commit real JWT secrets either
+JWT_SECRET=<GENERATE_A_STRONG_SECRET>
 JWT_EXPIRES_IN=24h
 ```
+
