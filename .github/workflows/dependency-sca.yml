@@ -4,7 +4,7 @@ name: dependency-sca
 on:
   pull_request:
   push:
-    branches: [main, master, develop]
+    branches: [main, develop]
 
 jobs:
   sca:
