@@ -51,7 +51,7 @@ No frontend code changes. App continues to use the API; only **backend `.env` / 
 ```bash
 # Must return empty
 git fetch origin
-git grep -n '<URL_ENCODED_PASSWORD>\|cad_db_user:caduser\|newpassword123' origin/main -- \
+git grep -n '<URL_ENCODED_PASSWORD>\|cad_db_user:caduser\|<LEAKED_EXAMPLE_PASSWORD>' origin/main -- \
   LAMBDA_NETWORK_FIX.md LAMBDA_VPC_FIX.md MONGODB_ATLAS_SETUP.md
 
 # Raw blob check (replace OWNER/REPO if needed)
