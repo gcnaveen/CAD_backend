@@ -29,6 +29,7 @@ const {
   TooManyRequestsError,
 } = require("../utils/errors");
 const logger = require("../utils/logger");
+const { normalizeRole, rolesEqual } = require("../utils/roleNormalize");
 
 const EMAIL_PASSWORD_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN, USER_ROLES.CAD];
 const SURVEYOR_ROLE = USER_ROLES.SURVEYOR;
@@ -302,7 +303,7 @@ class AuthService {
           throw new UnauthorizedError("Invalid credentials");
         }
 
-        if (!EMAIL_PASSWORD_ROLES.includes(user.role)) {
+        if (!EMAIL_PASSWORD_ROLES.some((r) => rolesEqual(user.role, r))) {
           throw new BadRequestError(
             "This account uses phone + password login. Use phone number and password to sign in."
           );
@@ -317,7 +318,7 @@ class AuthService {
           throw new UnauthorizedError("Invalid credentials");
         }
 
-        if (user.role !== SURVEYOR_ROLE) {
+        if (!rolesEqual(user.role, SURVEYOR_ROLE)) {
           throw new BadRequestError(
             "This account uses email + password login. Use email and password to sign in."
           );
@@ -342,7 +343,7 @@ class AuthService {
       await authThrottle.recordLoginSuccess(throttleKey);
 
       // Admin MFA gate
-      if (MFA_ROLES.includes(user.role) && user.auth?.mfaEnabled) {
+      if (MFA_ROLES.some((r) => rolesEqual(user.role, r)) && user.auth?.mfaEnabled) {
         const mfaToken = generateMfaPendingToken(user);
         await authAudit.recordLoginEvent({
           success: true,
@@ -401,7 +402,7 @@ class AuthService {
       requestMeta,
     });
 
-    if (prevIp && newIp && prevIp !== newIp && MFA_ROLES.includes(user.role)) {
+    if (prevIp && newIp && prevIp !== newIp && MFA_ROLES.some((r) => rolesEqual(user.role, r))) {
       try {
         await notificationService.create({
           type: "SUSPICIOUS_LOGIN",
@@ -483,7 +484,9 @@ class AuthService {
 
   async refreshSession({ refreshToken }, requestMeta = {}) {
     if (!refreshToken) {
-      throw new BadRequestError("refreshToken is required");
+      throw new UnauthorizedError("Invalid or expired refresh token", {
+        code: "REFRESH_TOKEN_MISSING",
+      });
     }
     const rotated = await refreshTokenService.rotateRefreshToken(refreshToken, requestMeta);
     if (!rotated.ok) {
@@ -543,6 +546,29 @@ class AuthService {
       return { message: "Logged out of all sessions", revokedAll: true };
     }
     return { message: "Logged out" };
+  }
+
+  /**
+   * Current authenticated user (FE session restore after refresh).
+   * Role is canonicalized for case / CAD_USER aliases.
+   */
+  async getMe(actor) {
+    if (!actor?._id) throw new UnauthorizedError("Authentication required");
+    const user = await User.findById(actor._id);
+    if (!user || user.deletedAt) {
+      throw new UnauthorizedError("User not found or inactive");
+    }
+    if (!rolesEqual(user.status, USER_STATUS.ACTIVE)) {
+      throw new UnauthorizedError("User account is not active");
+    }
+    const role = normalizeRole(user.role) || String(user.role || "").toUpperCase();
+    const lean = user.toObject ? user.toObject() : { ...user };
+    if (lean.auth) {
+      delete lean.auth.password;
+      delete lean.auth.mfaSecret;
+    }
+    lean.role = role;
+    return { user: lean, role };
   }
 
   async resendSurveyorOtp(phone, requestMeta = {}) {

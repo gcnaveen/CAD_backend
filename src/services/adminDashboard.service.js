@@ -6,19 +6,12 @@ const User = require("../models/user/User");
 const SurveyDraft = require("../models/surveyor/SurveyDraft");
 const SurveyorSketchUpload = require("../models/surveyor/SurveyorSketchUpload");
 const { USER_ROLES, SURVEY_SKETCH_STATUS } = require("../config/constants");
+const orderStatusCounts = require("./orderStatusCounts.service");
 
 function paiseToRupees(paise) {
   const n = Number(paise);
   if (!Number.isFinite(n)) return 0;
   return Math.round(n) / 100;
-}
-
-function emptyOrderStatusCounts() {
-  const counts = { total: 0 };
-  for (const status of Object.values(SURVEY_SKETCH_STATUS)) {
-    counts[status] = 0;
-  }
-  return counts;
 }
 
 /**
@@ -33,7 +26,7 @@ async function getDashboardStats() {
   const [
     userRoleRows,
     totalDrafts,
-    orderStatusRows,
+    orderCounts,
     sketchPaymentReceived,
     revisionPaymentReceived,
     sketchPendingRows,
@@ -43,7 +36,7 @@ async function getDashboardStats() {
   ] = await Promise.all([
     User.aggregate([{ $group: { _id: "$role", count: { $sum: 1 } } }]),
     SurveyDraft.countDocuments({ deletedAt: null }),
-    SurveyorSketchUpload.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
+    orderStatusCounts.getOrderStatusCounts(),
     SurveyorSketchUpload.aggregate([
       { $match: { "sketchPayment.status": "COMPLETED" } },
       {
@@ -116,13 +109,7 @@ async function getDashboardStats() {
   const surveyorUsers = usersByRole[USER_ROLES.SURVEYOR] || 0;
   const totalUsers = userRoleRows.reduce((sum, r) => sum + r.count, 0);
 
-  const ordersByStatus = emptyOrderStatusCounts();
-  for (const row of orderStatusRows) {
-    if (row._id) {
-      ordersByStatus[row._id] = row.count;
-      ordersByStatus.total += row.count;
-    }
-  }
+  const orders = orderStatusCounts.toDashboardOrdersShape(orderCounts);
 
   const sketchReceivedPaise = sketchPaymentReceived[0]?.amountPaise || 0;
   const sketchReceivedCount = sketchPaymentReceived[0]?.count || 0;
@@ -150,10 +137,7 @@ async function getDashboardStats() {
     drafts: {
       totalDrafts,
     },
-    orders: {
-      byStatus: ordersByStatus,
-      totalOrders: ordersByStatus.total,
-    },
+    orders,
     payments: {
       totalReceived: {
         amountPaise: totalReceivedPaise,

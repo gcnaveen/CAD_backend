@@ -417,7 +417,7 @@ async function tryAutoAssign(uploadId, { source = "RETRY_JOB", actorUserId = nul
       $inc: { "autoAssignMeta.attemptCount": 1 },
     },
     { new: true }
-  ).select("_id status autoAssignMeta");
+  ).select("_id status sketchPayment autoAssignMeta");
 
   if (!locked) {
     await recordAttempt({
@@ -430,6 +430,26 @@ async function tryAutoAssign(uploadId, { source = "RETRY_JOB", actorUserId = nul
       actorUserId: assignedById,
     });
     return { ok: false, code: "LOCK_NOT_ACQUIRED" };
+  }
+
+  try {
+    const { assertSketchBookingPaymentAllowsWorkflow } = require("./sketchPaymentGate.service");
+    assertSketchBookingPaymentAllowsWorkflow(locked, { action: "auto_assign" });
+  } catch (gateErr) {
+    await SurveyorSketchUpload.findByIdAndUpdate(uploadId, {
+      $set: {
+        "autoAssignMeta.state": AUTO_ASSIGN_STATE.EXCEPTION,
+        "autoAssignMeta.lockToken": null,
+        "autoAssignMeta.lockUntil": null,
+      },
+    });
+    return markFailure(uploadId, {
+      attemptNo: Number(locked.autoAssignMeta?.attemptCount || 1),
+      failureCode: gateErr.code || "SKETCH_PAYMENT_PENDING",
+      failureReason: gateErr.message || "Booking payment not completed",
+      source,
+      actorUserId: assignedById,
+    });
   }
 
   const attemptNo = Number(locked.autoAssignMeta?.attemptCount || 1);

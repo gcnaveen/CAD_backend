@@ -28,7 +28,8 @@ function cookieSameSite() {
   // Cross-origin FE (e.g. north-cot.com) → execute-api host needs None; Lax is fine for same-site.
   const raw = String(process.env.AUTH_COOKIE_SAMESITE || "").trim();
   if (raw) return raw;
-  return "Lax";
+  // Secure cookies in prod/staging: default None so SPA↔API refresh works cross-site.
+  return cookieSecure() ? "None" : "Lax";
 }
 
 function cookieDomain() {

@@ -18,6 +18,9 @@ const SurveySketchStandardPricingSchema = new mongoose.Schema(
     /** Balance fee (₹) required after CAD delivery before surveyor download (audit C-02). */
     sketchBalancePlanAmountRupees: { type: Number, default: null },
     sketchBalanceDiscountRupees: { type: Number, default: null },
+    /** Superimpose add-on (₹) charged on top of upload fee when isSuperimpose is true. */
+    sketchSuperimposePlanAmountRupees: { type: Number, default: null },
+    sketchSuperimposeDiscountRupees: { type: Number, default: null },
     updatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

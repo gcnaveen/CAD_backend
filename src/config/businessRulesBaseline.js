@@ -12,9 +12,16 @@ const {
   LIFECYCLE_QC_SPEC,
 } = require("./lifecycleQcSpec");
 
-/** Surveyor post-delivery balance to unlock CAD download — fixed, no tiers. */
-const SURVEYOR_BALANCE_FEE_RUPEES_FIXED = 400;
-const SURVEYOR_BALANCE_FEE_PAISE_FIXED = 40000;
+/** Surveyor post-delivery balance — from approved sketch contract (BIZ-09). */
+function getSurveyorBalanceFeeFixed() {
+  try {
+    const { getApprovedSketchOrderPricing } = require("./sketchOrderPricing");
+    const rule = getApprovedSketchOrderPricing();
+    return { rupees: rule.balanceRupees, paise: rule.balancePaise };
+  } catch (_) {
+    return { rupees: 400, paise: 40000 };
+  }
+}
 
 const QC_CHECKLIST_ID = QC_MATRIX.checklistId;
 const QC_CHECKLIST_VERSION = QC_MATRIX.version;
@@ -37,6 +44,15 @@ function getApprovedBusinessRulesPublic() {
     cadPayout = null;
   }
 
+  let sketchPricing;
+  try {
+    const { getApprovedSketchOrderPricing } = require("./sketchOrderPricing");
+    sketchPricing = getApprovedSketchOrderPricing();
+  } catch (_) {
+    sketchPricing = null;
+  }
+
+  const balanceFixed = getSurveyorBalanceFeeFixed();
   const lifecycleQc = getLifecycleQcPublicSpec();
 
   return {
@@ -46,18 +62,32 @@ function getApprovedBusinessRulesPublic() {
     lifecycleQcVersion: LIFECYCLE_QC_SPEC.version,
     surveyorBalanceFee: {
       model: "FIXED",
-      rupees: SURVEYOR_BALANCE_FEE_RUPEES_FIXED,
-      paise: SURVEYOR_BALANCE_FEE_PAISE_FIXED,
+      rupees: balanceFixed.rupees,
+      paise: balanceFixed.paise,
       tiers: false,
-      publicCopy: "Fixed ₹400 balance after CAD delivery (no tiers).",
+      publicCopy: `Fixed ₹${balanceFixed.rupees} balance after CAD delivery (no tiers).`,
     },
+    /** BIZ-09: same contract as checkout — do not hard-code ₹500 on FE. */
+    sketchOrderPricing: sketchPricing
+      ? {
+          version: sketchPricing.version,
+          baselineId: sketchPricing.baselineId,
+          grossRupees: sketchPricing.grossRupees,
+          bookingRupees: sketchPricing.bookingRupees,
+          balanceRupees: sketchPricing.balanceRupees,
+          revisionRupees: sketchPricing.revisionRupees,
+          superimposeRupees: sketchPricing.superimposeRupees,
+          publicCopy: sketchPricing.publicCopy,
+          phaseRefs: sketchPricing.phaseRefs,
+        }
+      : null,
     cadOperatorEarnings: {
       model: "FIXED",
       tiers: false,
       ruleVersion: cadPayout?.version || null,
-      standardOrderGrossRupees: cadPayout ? cadPayout.grossPricePaise / 100 : 500,
-      bookingRupees: cadPayout ? cadPayout.bookingPaise / 100 : 100,
-      balanceRupees: cadPayout ? cadPayout.balancePaise / 100 : 400,
+      standardOrderGrossRupees: cadPayout ? cadPayout.grossPricePaise / 100 : sketchPricing?.grossRupees ?? 500,
+      bookingRupees: cadPayout ? cadPayout.bookingPaise / 100 : sketchPricing?.bookingRupees ?? 100,
+      balanceRupees: cadPayout ? cadPayout.balancePaise / 100 : sketchPricing?.balanceRupees ?? 400,
       payoutRupees: cadPayout ? cadPayout.operatorPayoutPaise / 100 : 400,
       payoutPaise: cadPayout?.operatorPayoutPaise ?? 40000,
       percent: null,
@@ -101,6 +131,15 @@ function getApprovedBusinessRulesPublic() {
       ],
       note: "Do not publish until documentary basis is filed with Founder.",
     },
+    /** Unified refund policy — Terms + marketing + Admin ops must match (no conflicting refund promise). */
+    refundPolicy: (() => {
+      try {
+        const { getRefundPolicyPublic } = require("./refundPolicy");
+        return getRefundPolicyPublic();
+      } catch (_) {
+        return null;
+      }
+    })(),
     testimonials: {
       fictionalAllowed: false,
       rule: "Only consented, verifiable reviews with name + date + proof on file.",
@@ -113,8 +152,33 @@ function getApprovedBusinessRulesPublic() {
       publicCopyWhenClosed: "CAD operator registration — Coming Soon",
       envFlag: "CAD_INTEREST_ENABLED",
     },
+    /**
+     * SUPPORT-01: customer support links for FE (WhatsApp / email).
+     * Configure via SUPPORT_WHATSAPP_URL (preferred) or SUPPORT_WHATSAPP_NUMBER (+E.164 digits).
+     */
+    supportContact: (() => {
+      const whatsappUrlRaw = String(process.env.SUPPORT_WHATSAPP_URL || "").trim();
+      const whatsappNumber = String(process.env.SUPPORT_WHATSAPP_NUMBER || "").trim().replace(/\s+/g, "");
+      const email = String(process.env.SUPPORT_EMAIL || "").trim() || null;
+      let whatsappUrl = whatsappUrlRaw || null;
+      if (!whatsappUrl && whatsappNumber) {
+        const digits = whatsappNumber.replace(/[^\d]/g, "");
+        if (digits) whatsappUrl = `https://wa.me/${digits}`;
+      }
+      return {
+        whatsappUrl,
+        whatsappNumber: whatsappNumber || null,
+        email,
+        configured: Boolean(whatsappUrl || email),
+      };
+    })(),
   };
 }
+
+const { APPROVED_SKETCH_ORDER_PRICING } = require("./sketchOrderPricing");
+/** @deprecated Prefer getApprovedSketchOrderPricing() — kept for H-08 acceptance. */
+const SURVEYOR_BALANCE_FEE_RUPEES_FIXED = APPROVED_SKETCH_ORDER_PRICING.balancePaise / 100;
+const SURVEYOR_BALANCE_FEE_PAISE_FIXED = APPROVED_SKETCH_ORDER_PRICING.balancePaise;
 
 module.exports = {
   SURVEYOR_BALANCE_FEE_RUPEES_FIXED,

@@ -20,7 +20,7 @@ const { USER_ROLES, SURVEY_SKETCH_STATUS } = require("../config/constants");
 const { ok, redirect } = require("../utils/response");
 const asyncHandler = require("../utils/asyncHandler");
 const logger = require("../utils/logger");
-const { BadRequestError } = require("../utils/errors");
+const { BadRequestError, UnauthorizedError } = require("../utils/errors");
 const sketchPaymentPricing = require("../services/sketchPaymentPricing.service");
 const adminDashboardController = require("../controllers/adminDashboard.controller");
 const opsObservabilityController = require("../controllers/opsObservability.controller");
@@ -157,13 +157,28 @@ exports.login = asyncHandler(async (event) => {
   return await authController.login(body, getRequestMeta(event));
 });
 
+exports.getMe = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(
+    USER_ROLES.SUPER_ADMIN,
+    USER_ROLES.ADMIN,
+    USER_ROLES.CAD,
+    USER_ROLES.SURVEYOR
+  )(event);
+  return await authController.getMe(user);
+});
+
 exports.refreshSession = asyncHandler(async (event) => {
   await ensureDb();
   const body = parseJsonBody(event) || {};
   const authCookies = require("../utils/authCookies");
   authCookies.assertCsrfIfCookieAuth(event, body);
   const refreshToken = authCookies.getRefreshTokenFromRequest(event, body);
-  if (!refreshToken) throw new BadRequestError("refreshToken is required (body or HttpOnly cookie)");
+  if (!refreshToken) {
+    throw new UnauthorizedError("Invalid or expired refresh token", {
+      code: "REFRESH_TOKEN_MISSING",
+    });
+  }
   return await authController.refresh({ refreshToken }, getRequestMeta(event));
 });
 
@@ -419,15 +434,32 @@ exports.adminMarkBalanceRefunded = asyncHandler(async (event) => {
   const { uploadId } = getPathParams(event);
   if (!uploadId) throw new BadRequestError("uploadId is required");
   validObjectId(uploadId, "uploadId");
-  const body = parseJsonBody(event) || {};
-  const reason = body.reason != null ? String(body.reason).trim().slice(0, 500) : undefined;
-  const result = await surveyorSketchUploadController.markBalanceRefunded(user, uploadId, { reason });
+  const body = validate(schemas.balanceRefundMark)(event);
+  const result = await surveyorSketchUploadController.markBalanceRefunded(user, uploadId, body);
   await auditAdmin(event, user, {
     action: "BALANCE_REFUND",
     targetType: "SurveyorSketchUpload",
     targetId: uploadId,
     success: true,
-    meta: reason ? { hasReason: true } : null,
+    meta: { reasonCode: body.reasonCode, policyVersion: body.policyVersion },
+  });
+  return result;
+});
+
+exports.adminReviewSketchTerminal = asyncHandler(async (event) => {
+  await ensureDb();
+  const { user } = await authorize(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN)(event);
+  const { uploadId } = getPathParams(event);
+  if (!uploadId) throw new BadRequestError("uploadId is required");
+  validObjectId(uploadId, "uploadId");
+  const body = validate(schemas.sketchTerminalReview)(event);
+  const result = await surveyorSketchUploadController.reviewSketchTerminal(user, uploadId, body);
+  await auditAdmin(event, user, {
+    action: body.decision === "APPROVED" ? "SKETCH_APPROVE" : "SKETCH_REJECT",
+    targetType: "SurveyorSketchUpload",
+    targetId: uploadId,
+    success: true,
+    meta: { decision: body.decision },
   });
   return result;
 });
@@ -600,9 +632,17 @@ exports.getSurveySketchStatuses = asyncHandler(async (event) => {
   await authorize(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN)(event);
   const { getLifecycleQcPublicSpec } = require("../config/lifecycleQcSpec");
   const spec = getLifecycleQcPublicSpec();
+  // FILTER-01: each status exposes canonical `value` (= code) for admin filters,
+  // including PAYMENT_PENDING.
+  const statuses = (spec.sketchStatuses || []).map((s) => ({
+    ...s,
+    value: s.value || s.code,
+    code: s.code,
+  }));
   return ok({
-    statuses: spec.sketchStatuses,
-    enums: spec.sketchStatuses.map((s) => s.code),
+    statuses,
+    enums: statuses.map((s) => s.value),
+    filterValues: statuses.map((s) => s.value),
     labels: spec.labels,
     transitions: spec.sketchTransitions,
     legacyMap: spec.legacySketchStatusMap,

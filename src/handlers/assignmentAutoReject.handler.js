@@ -18,7 +18,7 @@ exports.handler = asyncHandler(async () => {
     logger.error("auto-assign retry job failed", err);
   }
   try {
-    slaResult = await surveySketchAssignmentService.processSlaAlerts({ limit: 200 });
+    slaResult = await surveySketchAssignmentService.processSlaAlerts();
   } catch (err) {
     logger.error("SLA alert job failed", err);
   }

@@ -44,7 +44,7 @@ provider:
     # M-02/M-12: HttpOnly refresh cookie (set AUTH_OMIT_REFRESH_IN_BODY=true when FE stops localStorage)
     AUTH_USE_REFRESH_COOKIE: ${env:AUTH_USE_REFRESH_COOKIE, 'true'}
     AUTH_OMIT_REFRESH_IN_BODY: ${env:AUTH_OMIT_REFRESH_IN_BODY, 'false'}
-    AUTH_COOKIE_SAMESITE: ${env:AUTH_COOKIE_SAMESITE, 'Lax'}
+    AUTH_COOKIE_SAMESITE: ${env:AUTH_COOKIE_SAMESITE, 'None'}
     AUTH_COOKIE_SECURE: ${env:AUTH_COOKIE_SECURE, ''}
     AUTH_COOKIE_DOMAIN: ${env:AUTH_COOKIE_DOMAIN, ''}
     AUTH_REFRESH_COOKIE_NAME: ${env:AUTH_REFRESH_COOKIE_NAME, 'cad_refresh'}
@@ -70,10 +70,13 @@ provider:
     PHONEPE_CLIENT_SECRET: ${env:PHONEPE_CLIENT_SECRET, env:CLIENT_SECRET, ''}
     PHONEPE_CLIENT_VERSION: ${env:PHONEPE_CLIENT_VERSION, env:CLIENT_VERSION, '1'}
     PHONEPE_ENV: ${env:PHONEPE_ENV, 'SANDBOX'}
-    SKETCH_UPLOAD_FEE_PAISE: ${env:SKETCH_UPLOAD_FEE_PAISE, '0'}
+    # Required — no default (audit): deploy must fail if unset. Booking fee in paise (₹100 = 10000).
+    SKETCH_UPLOAD_FEE_PAISE: ${env:SKETCH_UPLOAD_FEE_PAISE}
     SKETCH_REVISION_FEE_PAISE: ${env:SKETCH_REVISION_FEE_PAISE, '0'}
     # Audit C-02: post-delivery balance (default ₹400). Set 0 to waive download gate.
     SKETCH_BALANCE_FEE_PAISE: ${env:SKETCH_BALANCE_FEE_PAISE, '40000'}
+    # Superimpose add-on on booking when isSuperimpose=true (default ₹200). Set 0 to waive.
+    SKETCH_SUPERIMPOSE_FEE_PAISE: ${env:SKETCH_SUPERIMPOSE_FEE_PAISE, '20000'}
     CAD_DOWNLOAD_URL_TTL_SECONDS: ${env:CAD_DOWNLOAD_URL_TTL_SECONDS, '120'}
     # H-11: fixed CAD payout on standard ₹500 order (₹400), not percent
     CAD_PAYOUT_RULE_VERSION: ${env:CAD_PAYOUT_RULE_VERSION, 'CAD_PAYOUT_V1_FIXED_400'}
@@ -86,8 +89,9 @@ provider:
     CAD_PAYOUT_ADJUSTMENT_PAISE: ${env:CAD_PAYOUT_ADJUSTMENT_PAISE, '0'}
     CAD_REVISION_OPERATOR_PAYOUT_PAISE: ${env:CAD_REVISION_OPERATOR_PAYOUT_PAISE, '0'}
     PAYMENT_ATTEMPT_EXPIRE_MS: ${env:PAYMENT_ATTEMPT_EXPIRE_MS, '86400000'}
-    PHONEPE_SUCCESS_REDIRECT_URL: ${env:PHONEPE_SUCCESS_REDIRECT_URL, 'http://localhost:5173/payment-success'}
-    PHONEPE_FAILURE_REDIRECT_URL: ${env:PHONEPE_FAILURE_REDIRECT_URL, 'http://localhost:5173/payment-failure'}
+    # Required — no localhost defaults (audit): deploy fails if unset. Must be HTTPS North-Cot URLs in prod.
+    PHONEPE_SUCCESS_REDIRECT_URL: ${env:PHONEPE_SUCCESS_REDIRECT_URL}
+    PHONEPE_FAILURE_REDIRECT_URL: ${env:PHONEPE_FAILURE_REDIRECT_URL}
     # Abandoned revision checkout: clear pendingRevisionPayment after this many ms (default 24h) so surveyor can retry.
     REVISION_PAYMENT_PENDING_STALE_MS: ${env:REVISION_PAYMENT_PENDING_STALE_MS, '86400000'}
     # H-05: immutable deploy provenance (written by scripts/write-build-identity.js)
@@ -110,6 +114,10 @@ provider:
     FILE_RETENTION_DAYS: ${env:FILE_RETENTION_DAYS, '365'}
     # H-08: set false to enforce CAD operator “Coming Soon” (blocks POST /api/cad-interest)
     CAD_INTEREST_ENABLED: ${env:CAD_INTEREST_ENABLED, 'true'}
+    # SUPPORT-01: FE WhatsApp / support (exposed on GET /api/public/business-rules → supportContact)
+    SUPPORT_WHATSAPP_URL: ${env:SUPPORT_WHATSAPP_URL, ''}
+    SUPPORT_WHATSAPP_NUMBER: ${env:SUPPORT_WHATSAPP_NUMBER, ''}
+    SUPPORT_EMAIL: ${env:SUPPORT_EMAIL, ''}
     # H-12 CAD deliverable (DWG/DXF source + preview)
     CAD_SOURCE_MAX_BYTES: ${env:CAD_SOURCE_MAX_BYTES, '52428800'}
     CAD_PREVIEW_MAX_BYTES: ${env:CAD_PREVIEW_MAX_BYTES, '15728640'}
@@ -211,6 +219,9 @@ functions:
           path: /api/auth/login
           method: post
       - httpApi:
+          path: /api/auth/me
+          method: get
+      - httpApi:
           path: /api/auth/refresh
           method: post
       - httpApi:
@@ -275,6 +286,9 @@ functions:
           method: get
       - httpApi:
           path: /api/admin/sketch-uploads/{uploadId}/balance-refund
+          method: post
+      - httpApi:
+          path: /api/admin/sketch-uploads/{uploadId}/review
           method: post
       - httpApi:
           path: /api/surveyor/sketch-uploads
@@ -426,13 +440,6 @@ functions:
       - httpApi:
           path: /api/notifications/read-all
           method: post
-
-  testApi:
-    handler: src/handlers/testApi.handler
-    events:
-      - httpApi:
-          path: /test
-          method: GET
 
   versionApi:
     handler: src/handlers/versionApi.handler

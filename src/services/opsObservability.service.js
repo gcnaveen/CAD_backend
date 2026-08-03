@@ -3,41 +3,32 @@
  * Order funnel, payment reconciliation flags, SLA aging, CAD capacity.
  */
 
-const SurveyorSketchUpload = require("../models/surveyor/SurveyorSketchUpload");
 const SurveySketchAssignment = require("../models/assignment/SurveySketchAssignment");
 const User = require("../models/user/User");
 const PaymentAttempt = require("../models/payment/PaymentAttempt");
 const AdminAuditEvent = require("../models/security/AdminAuditEvent");
 const FileAccessEvent = require("../models/security/FileAccessEvent");
 const {
-  SURVEY_SKETCH_STATUS,
   SURVEY_SKETCH_ASSIGNMENT_STATUS,
   USER_ROLES,
 } = require("../config/constants");
 const { RECON_FLAG } = require("../models/payment/PaymentAttempt");
 const paymentReconciliation = require("./paymentReconciliation.service");
+const { mongoRoleEquals } = require("../utils/roleNormalize");
+const orderStatusCounts = require("./orderStatusCounts.service");
+const slaDue = require("./slaDue.service");
 
 function getDeliverySlaMs() {
   const n = Number(process.env.CAD_DELIVERY_SLA_MS || 48 * 60 * 60 * 1000);
   return Number.isFinite(n) && n > 0 ? n : 48 * 60 * 60 * 1000;
 }
 
+/** Same source as admin dashboard order counts (COUNT-01). */
 async function getOrderFunnel() {
-  const statuses = Object.values(SURVEY_SKETCH_STATUS);
-  const rows = await SurveyorSketchUpload.aggregate([
-    { $group: { _id: "$status", count: { $sum: 1 } } },
-  ]);
-  const byStatus = {};
-  for (const s of statuses) byStatus[s] = 0;
-  for (const r of rows) {
-    if (r._id) byStatus[r._id] = r.count;
-  }
-  const total = rows.reduce((s, r) => s + r.count, 0);
-  return { total, byStatus };
+  return orderStatusCounts.getOrderStatusCounts();
 }
 
 async function getSlaAging() {
-  const slaDue = require("./slaDue.service");
   const slaMs = getDeliverySlaMs();
   const openStatuses = [
     SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED,
@@ -52,47 +43,22 @@ async function getSlaAging() {
     )
     .lean();
 
-  const aging = {
-    withinSla: 0,
-    warning: 0,
-    escalated: 0,
-    breached: 0,
-    paused: 0,
-    items: [],
+  const summary = slaDue.computeSlaAgingSummary(open, { itemLimit: 50 });
+  return {
+    withinSla: summary.withinSla,
+    warning: summary.warning,
+    escalated: summary.escalated,
+    breached: summary.breached,
+    paused: summary.paused,
+    items: summary.items,
     slaHours: Math.round(slaMs / 3600000),
-    openCount: open.length,
+    openCount: summary.openCount,
     sortedByRisk: true,
   };
-
-  const decorated = [];
-  for (const a of open) {
-    const snap = slaDue.buildSlaSnapshot(a);
-    decorated.push({ assignment: a, snap });
-    if (snap.state === slaDue.SLA_STATE.BREACHED) aging.breached += 1;
-    else if (snap.state === slaDue.SLA_STATE.ESCALATED) aging.escalated += 1;
-    else if (snap.state === slaDue.SLA_STATE.WARNING) aging.warning += 1;
-    else if (snap.state === slaDue.SLA_STATE.PAUSED) aging.paused += 1;
-    else aging.withinSla += 1;
-  }
-
-  decorated.sort((x, y) => x.snap.riskRank - y.snap.riskRank);
-  aging.items = decorated.slice(0, 50).map(({ assignment: a, snap }) => ({
-    assignmentId: String(a._id),
-    status: a.status,
-    assignedAt: a.assignedAt,
-    dueAt: snap.dueAt,
-    state: snap.state,
-    remainingHours: snap.remainingHours,
-    ageHours: snap.ageHours,
-    cadUserId: a.assignedTo ? String(a.assignedTo) : null,
-    uploadId: a.surveyorSketchUpload ? String(a.surveyorSketchUpload) : null,
-  }));
-
-  return aging;
 }
 
 async function getOperatorCapacity() {
-  const cads = await User.find({ role: USER_ROLES.CAD, deletedAt: null })
+  const cads = await User.find({ ...mongoRoleEquals(USER_ROLES.CAD), deletedAt: null })
     .select("status cadProfile.availabilityStatus")
     .lean();
   const capacity = {

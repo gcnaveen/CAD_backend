@@ -13,6 +13,7 @@ const { UnauthorizedError, ForbiddenError } = require("../utils/errors");
 const logger = require("../utils/logger");
 const { getJwtSecret } = require("../config/secrets");
 const { ACCESS_TOKEN_EXPIRES_IN, MFA_PENDING_EXPIRES_IN } = require("../config/authSecurity");
+const { normalizeRole, normalizeStatus, rolesEqual } = require("../utils/roleNormalize");
 
 const extractToken = (event) => {
   const authHeader = event.headers?.authorization || event.headers?.Authorization;
@@ -54,7 +55,13 @@ const authenticate = async (event) => {
       logger.warn("Auth: user not found", { userId: decoded.userId });
       throw new UnauthorizedError("User not found");
     }
-    if (user.status !== USER_STATUS.ACTIVE) {
+    // Normalize in-memory for this request so mixed-case legacy rows authorize correctly.
+    const canonicalRole = normalizeRole(user.role);
+    const canonicalStatus = normalizeStatus(user.status);
+    if (canonicalRole) user.role = canonicalRole;
+    if (canonicalStatus) user.status = canonicalStatus;
+
+    if (!rolesEqual(user.status, USER_STATUS.ACTIVE)) {
       logger.warn("Auth: user not active", { userId: user._id, status: user.status });
       throw new UnauthorizedError("User account is not active");
     }
@@ -71,7 +78,9 @@ const authenticate = async (event) => {
 const authorize = (...allowedRoles) => {
   return async (event) => {
     const { user } = await authenticate(event);
-    if (!allowedRoles.includes(user.role)) {
+    const role = normalizeRole(user.role) || String(user.role || "").toUpperCase();
+    const allowed = allowedRoles.map((r) => String(r).toUpperCase());
+    if (!allowed.includes(role)) {
       logger.warn("Forbidden: role not allowed", { userId: user._id, role: user.role, allowedRoles });
       throw new ForbiddenError("Insufficient permissions");
     }

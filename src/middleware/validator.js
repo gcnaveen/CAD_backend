@@ -1032,6 +1032,8 @@ const schemas = {
       "sketchRevisionDiscountRupees",
       "sketchBalancePlanAmountRupees",
       "sketchBalanceDiscountRupees",
+      "sketchSuperimposePlanAmountRupees",
+      "sketchSuperimposeDiscountRupees",
     ];
     for (const field of rupeeFields) {
       if (body[field] === undefined) continue;
@@ -1173,9 +1175,8 @@ const schemas = {
       indicators[field] = body[field] === true || body[field] === "true";
     }
 
-    // Optional isSuperimpose boolean flag
-    const isSuperimpose =
-      body.isSuperimpose === true || body.isSuperimpose === "true" ? true : undefined;
+    // Optional isSuperimpose — server prices add-on when true (never trust client amounts).
+    const isSuperimpose = body.isSuperimpose === true || body.isSuperimpose === "true";
 
     // Auto-set to true when the corresponding separate file(s) were uploaded
     for (const [docKey, flagName] of Object.entries(DOC_KEY_TO_FLAG)) {
@@ -1512,6 +1513,33 @@ const schemas = {
       key: String(body.key).trim(),
       uploadId: String(body.uploadId).trim(),
     };
+  },
+
+  /** BIZ-10: Admin terminal review → APPROVED | REJECTED */
+  sketchTerminalReview(body) {
+    requireFields(body, ["decision"]);
+    const decision = String(body.decision || "")
+      .trim()
+      .toUpperCase();
+    if (decision !== "APPROVED" && decision !== "REJECTED") {
+      throw new BadRequestError('decision must be "APPROVED" or "REJECTED"', {
+        code: "INVALID_TERMINAL_DECISION",
+      });
+    }
+    let note = null;
+    if (body.note != null && String(body.note).trim() !== "") {
+      note = String(body.note).trim().slice(0, 500);
+    }
+    if (body.statusNote != null && String(body.statusNote).trim() !== "" && !note) {
+      note = String(body.statusNote).trim().slice(0, 500);
+    }
+    return { decision, note };
+  },
+
+  /** Exceptional Admin balance refund mark (approved refund policy — not customer entitlement). */
+  balanceRefundMark(body) {
+    const { assertExceptionalAdminRefundAllowed } = require("../config/refundPolicy");
+    return assertExceptionalAdminRefundAllowed(body || {});
   },
 };
 

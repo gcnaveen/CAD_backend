@@ -378,6 +378,63 @@ function sortBySlaRisk(list) {
   });
 }
 
+/**
+ * Live SLA aging summary from open assignments (OPS-01).
+ * Alert summaries and observability MUST use this — same snapshot rules as buildSlaSnapshot.
+ *
+ * @param {Array<object>} assignments
+ * @param {{ at?: Date|null, itemLimit?: number }} [opts]
+ * @returns {{
+ *   withinSla: number,
+ *   warning: number,
+ *   escalated: number,
+ *   breached: number,
+ *   paused: number,
+ *   openCount: number,
+ *   items: Array<object>,
+ *   decorated: Array<{ assignment: object, snap: object }>,
+ * }}
+ */
+function computeSlaAgingSummary(assignments, { at = null, itemLimit = 50 } = {}) {
+  const summary = {
+    withinSla: 0,
+    warning: 0,
+    escalated: 0,
+    breached: 0,
+    paused: 0,
+    openCount: 0,
+    items: [],
+  };
+  const decorated = [];
+
+  for (const a of assignments || []) {
+    const snap = buildSlaSnapshot(a, { at });
+    decorated.push({ assignment: a, snap });
+    if (snap.state === SLA_STATE.BREACHED) summary.breached += 1;
+    else if (snap.state === SLA_STATE.ESCALATED) summary.escalated += 1;
+    else if (snap.state === SLA_STATE.WARNING) summary.warning += 1;
+    else if (snap.state === SLA_STATE.PAUSED) summary.paused += 1;
+    else summary.withinSla += 1;
+  }
+
+  summary.openCount = decorated.length;
+  decorated.sort((x, y) => x.snap.riskRank - y.snap.riskRank);
+  const lim = Number.isFinite(itemLimit) && itemLimit >= 0 ? itemLimit : 50;
+  summary.items = decorated.slice(0, lim).map(({ assignment: a, snap }) => ({
+    assignmentId: String(a._id),
+    status: a.status,
+    assignedAt: a.assignedAt,
+    dueAt: snap.dueAt,
+    state: snap.state,
+    remainingHours: snap.remainingHours,
+    ageHours: snap.ageHours,
+    cadUserId: a.assignedTo ? String(a.assignedTo) : null,
+    uploadId: a.surveyorSketchUpload ? String(a.surveyorSketchUpload) : null,
+  }));
+  summary.decorated = decorated;
+  return summary;
+}
+
 module.exports = {
   SLA_STATE,
   DISPLAY_TIMEZONE,
@@ -401,5 +458,6 @@ module.exports = {
   decorateAssignment,
   decorateAssignmentList,
   sortBySlaRisk,
+  computeSlaAgingSummary,
   sumExtensionsMs,
 };

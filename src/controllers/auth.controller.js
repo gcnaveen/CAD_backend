@@ -44,6 +44,11 @@ async function login(payload, requestMeta) {
   return withSessionCookies(ok(result), result);
 }
 
+async function getMe(actor) {
+  const result = await authService.getMe(actor);
+  return ok(result);
+}
+
 async function refresh(payload, requestMeta) {
   const result = await authService.refreshSession(payload, requestMeta);
   return withSessionCookies(ok(result), result);
@@ -87,6 +92,7 @@ module.exports = {
   surveyorForgotPasswordStart,
   surveyorForgotPasswordReset,
   login,
+  getMe,
   refresh,
   listSessions,
   revokeSession,

@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 /**
  * Deploy with immutable build identity (H-05) + required env gates (H-06).
- * Usage: node scripts/deploy-with-identity.js --stage dev [--tag v1.0.0] [--insecure]
+ * Usage: node scripts/deploy-with-identity.js --stage dev [--tag v1.0.0]
+ *
+ * TLS verification is always required. Do not set NODE_TLS_REJECT_UNAUTHORIZED=0.
+ * If deploy fails with certificate errors, fix the local trust chain (see DEPLOY.md).
  */
 const { spawnSync } = require("child_process");
 const path = require("path");
@@ -28,13 +31,28 @@ function requireEnv(name, env) {
   return v;
 }
 
+if (process.argv.includes("--insecure")) {
+  console.error(
+    "ERROR: --insecure is removed (audit). TLS verification cannot be disabled.\n" +
+      "Fix your local CA/proxy trust chain — see DEPLOY.md § TLS / certificate errors."
+  );
+  process.exit(1);
+}
+
+if (String(process.env.NODE_TLS_REJECT_UNAUTHORIZED || "").trim() === "0") {
+  console.error(
+    "ERROR: NODE_TLS_REJECT_UNAUTHORIZED=0 is forbidden for deploy (audit).\n" +
+      "Unset it and repair the trust chain — see DEPLOY.md § TLS / certificate errors."
+  );
+  process.exit(1);
+}
+
 const stage = argValue("--stage");
 if (!stage || !["dev", "prod", "staging"].includes(stage)) {
   console.error("ERROR: --stage is required and must be one of: dev | staging | prod");
   process.exit(1);
 }
 const tag = argValue("--tag");
-const insecure = process.argv.includes("--insecure");
 
 requireEnv("S3_BUCKET", process.env);
 requireEnv("JWT_SECRET", process.env);
@@ -52,6 +70,18 @@ try {
   );
 } catch (err) {
   console.error(`ERROR: CAD payout config invalid (audit H-11): ${err.message}`);
+  process.exit(1);
+}
+
+// BIZ-09 / NEW-02 / NEW-04: one sketch pricing contract aligned with H-11
+try {
+  const { assertSketchOrderPricingReady } = require("../src/config/sketchOrderPricing");
+  const sketch = assertSketchOrderPricingReady();
+  console.log(
+    `BIZ-09 sketch pricing OK: ${sketch.version} → gross ₹${sketch.grossRupees} (booking ₹${sketch.bookingRupees} + balance ₹${sketch.balanceRupees})`
+  );
+} catch (err) {
+  console.error(`ERROR: Sketch pricing contract invalid (BIZ-09): ${err.message}`);
   process.exit(1);
 }
 
@@ -80,10 +110,34 @@ if (stage === "prod") {
   if (String(process.env.PHONEPE_ENV || "").toUpperCase() === "SANDBOX") {
     console.warn("WARN: PHONEPE_ENV=SANDBOX on prod stage — confirm intentional.");
   }
-  const success = String(process.env.PHONEPE_SUCCESS_REDIRECT_URL || "");
-  if (/localhost/i.test(success)) {
-    console.error("ERROR: PHONEPE_SUCCESS_REDIRECT_URL must not point to localhost for prod.");
-    process.exit(1);
+  const allowedHosts = new Set(["north-cot.com", "www.north-cot.com"]);
+  for (const key of ["PHONEPE_SUCCESS_REDIRECT_URL", "PHONEPE_FAILURE_REDIRECT_URL"]) {
+    const raw = String(process.env[key] || "").trim();
+    if (!raw) {
+      console.error(`ERROR: ${key} is required for prod (no localhost default).`);
+      process.exit(1);
+    }
+    let parsed;
+    try {
+      parsed = new URL(raw);
+    } catch (_) {
+      console.error(`ERROR: ${key} is not a valid URL: ${raw}`);
+      process.exit(1);
+    }
+    if (parsed.protocol !== "https:") {
+      console.error(`ERROR: ${key} must use HTTPS for prod.`);
+      process.exit(1);
+    }
+    if (/localhost|127\.0\.0\.1/i.test(parsed.hostname)) {
+      console.error(`ERROR: ${key} must not point to localhost for prod.`);
+      process.exit(1);
+    }
+    if (!allowedHosts.has(parsed.hostname.toLowerCase())) {
+      console.error(
+        `ERROR: ${key} must be an HTTPS North-Cot URL (north-cot.com or www.north-cot.com). Got host: ${parsed.hostname}`
+      );
+      process.exit(1);
+    }
   }
 }
 
@@ -103,7 +157,6 @@ const env = {
   STAGE: stage,
 };
 if (identity.releaseTag) env.BUILD_RELEASE_TAG = identity.releaseTag;
-if (insecure) env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 const slsArgs = ["serverless", "deploy", "--stage", stage];
 r = spawnSync("npx", slsArgs, { cwd: root, stdio: "inherit", env, shell: process.platform === "win32" });

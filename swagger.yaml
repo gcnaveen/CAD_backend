@@ -2506,13 +2506,16 @@ paths:
     get:
       tags: [Admin - Assignments]
       summary: List Survey Sketch Status Options
-      description: Returns all survey sketch status values for dropdown (PENDING, ASSIGNED, UNDER_REVISION, APPROVED, REJECTED). Admin/Super Admin only.
+      description: |
+        Returns canonical survey sketch status catalog for admin filters/dropdowns.
+        Includes **PAYMENT_PENDING** as a first-class filter value (`value` === `code`).
+        Admin/Super Admin only.
       operationId: getSurveySketchStatuses
       security:
         - bearerAuth: []
       responses:
         "200":
-          description: List of status strings for dropdown
+          description: Status catalog with filter-friendly value/code fields
           content:
             application/json:
               schema:
@@ -2520,9 +2523,46 @@ paths:
                 properties:
                   success: { type: boolean, example: true }
                   data:
-                    type: array
-                    items: { type: string }
-                    example: [PENDING, ASSIGNED, UNDER_REVISION, APPROVED, REJECTED]
+                    type: object
+                    properties:
+                      statuses:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            code: { type: string, example: PAYMENT_PENDING }
+                            value: { type: string, example: PAYMENT_PENDING }
+                            label: { type: string, example: Awaiting booking payment }
+                            terminal: { type: boolean }
+                      enums:
+                        type: array
+                        items: { type: string }
+                        example:
+                          [
+                            PAYMENT_PENDING,
+                            PENDING,
+                            ASSIGNED,
+                            CAD_DELIVERED,
+                            UNDER_REVISION,
+                            APPROVED,
+                            REJECTED,
+                          ]
+                      filterValues:
+                        type: array
+                        items: { type: string }
+                        example:
+                          [
+                            PAYMENT_PENDING,
+                            PENDING,
+                            ASSIGNED,
+                            CAD_DELIVERED,
+                            UNDER_REVISION,
+                            APPROVED,
+                            REJECTED,
+                          ]
+                      labels:
+                        type: object
+                        additionalProperties: { type: string }
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -3714,12 +3754,14 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
-  /test:
+  /api/health:
     get:
       tags: [Health]
-      summary: Health / Smoke
-      description: Service and DB connectivity check.
-      operationId: healthCheck
+      summary: Health check (non-mutating)
+      description: |
+        Public liveness/readiness. Connects to MongoDB and runs `ping` only — does **not** write documents.
+        Replaces the removed `GET /test` endpoint (which upserted `health_checks`).
+      operationId: getHealth
       security: []
       responses:
         "200":
@@ -3729,11 +3771,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
               example:
-                ok: true
-                service: cad-backend-api
-                stage: dev
-                dbConnected: true
-                dbName: cad_db
+                success: true
+                data:
+                  ok: true
+                  service: cad-backend-api
+                  stage: dev
+                  db: up
+        "503":
+          description: Database unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
 
 components:
   securitySchemes:
@@ -5843,10 +5892,14 @@ components:
         stage:
           type: string
           example: dev
-        dbConnected:
-          type: boolean
-        dbName:
+        db:
           type: string
+          enum: [up, down, connecting, unknown]
+          description: Non-mutating ping result
+        correlationId:
+          type: string
+        slaHours:
+          type: number
 
     ErrorResponse:
       type: object

@@ -15,6 +15,10 @@ describe("H-08 business rules", () => {
     assert.equal(r.cadOperatorEarnings.payoutRupees, 400);
     assert.equal(QC_CHECKLIST_11E.length, 10);
     assert.equal(r.governmentClaims.allowed, false);
+    assert.equal(r.refundPolicy.customerRefundEntitled, false);
+    assert.equal(r.refundPolicy.selfServiceRefundEnabled, false);
+    assert.ok(r.supportContact);
+    assert.equal(typeof r.supportContact.configured, "boolean");
   });
 
   it("GET handler returns ok payload", async () => {

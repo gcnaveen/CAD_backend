@@ -13,10 +13,13 @@ const authHandler = require("../../src/handlers/auth.handler");
 
 const REQUIRED_ROUTES = [
   { path: "/api/auth/login", method: "post" },
+  { path: "/api/auth/me", method: "get" },
   { path: "/api/auth/refresh", method: "post" },
+  { path: "/api/auth/logout", method: "post" },
   { path: "/api/payments/phonepe/callback", method: "get" },
   { path: "/api/surveyor/sketch-pricing", method: "get" },
   { path: "/api/upload/image", method: "post" },
+  { path: "/api/admin/sketch-uploads/{uploadId}/review", method: "post" },
 ];
 
 describe("API contract: serverless routes present", () => {
@@ -33,9 +36,11 @@ describe("API contract: serverless routes present", () => {
 });
 
 describe("API contract: handler exports for critical flows", () => {
-  it("exports phonePe callback, refresh, logout", () => {
+  it("exports phonePe callback, refresh, logout, getMe, adminReviewSketchTerminal", () => {
     assert.equal(typeof authHandler.phonePeSketchCallback, "function");
     assert.equal(typeof authHandler.refreshSession, "function");
     assert.equal(typeof authHandler.logout, "function");
+    assert.equal(typeof authHandler.getMe, "function");
+    assert.equal(typeof authHandler.adminReviewSketchTerminal, "function");
   });
 });

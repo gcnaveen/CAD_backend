@@ -13,12 +13,18 @@ const UserSchema = new mongoose.Schema({
     enum: Object.values(USER_ROLES),
     required: true,
     index: true,
+    set: (v) => {
+      if (v == null || v === "") return v;
+      const { normalizeRole } = require("../../utils/roleNormalize");
+      return normalizeRole(v) || String(v).trim().toUpperCase();
+    },
   },
   status: {
     type: String,
     enum: Object.values(USER_STATUS),
     default: USER_STATUS.ACTIVE,
     index: true,
+    set: (v) => (v == null || v === "" ? v : String(v).trim().toUpperCase()),
   },
 
   name: {

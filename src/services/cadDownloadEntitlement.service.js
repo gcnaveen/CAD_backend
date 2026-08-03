@@ -100,6 +100,8 @@ function appendBalanceLedger(uploadDoc, event, extra = {}) {
     merchantOrderId: extra.merchantOrderId != null ? String(extra.merchantOrderId) : null,
     amountPaise: extra.amountPaise != null ? Number(extra.amountPaise) : null,
     paidAmountPaise: extra.paidAmountPaise != null ? Number(extra.paidAmountPaise) : null,
+    reasonCode: extra.reasonCode != null ? String(extra.reasonCode) : null,
+    policyVersion: extra.policyVersion != null ? String(extra.policyVersion) : null,
     note: extra.note != null ? String(extra.note).slice(0, 500) : null,
   });
 }
@@ -540,19 +542,31 @@ async function markBalancePaymentFailed(uploadId, phonepeResponse) {
 }
 
 /**
- * Admin: mark balance as refunded — irrevocably revokes download entitlement (audit C-02).
+ * Admin: mark balance as refunded — exceptional ops only (approved refund policy).
+ * Irrevocably revokes download entitlement (audit C-02). Not a customer entitlement.
  */
-async function markBalanceRefunded(actor, uploadId, { reason } = {}) {
+async function markBalanceRefunded(actor, uploadId, payload = {}) {
   if (actor.role !== USER_ROLES.ADMIN && actor.role !== USER_ROLES.SUPER_ADMIN) {
     throw new ForbiddenError("Only admin can mark balance refunded", { code: "ADMIN_ONLY" });
   }
+
+  const { assertExceptionalAdminRefundAllowed } = require("../config/refundPolicy");
+  const approved = assertExceptionalAdminRefundAllowed(payload);
+
   const upload = await SurveyorSketchUpload.findById(uploadId);
   if (!upload) {
     throw new NotFoundError("Survey sketch upload not found", { code: "SURVEY_SKETCH_NOT_FOUND" });
   }
   upload.balancePayment = upload.balancePayment || {};
+  if (upload.balancePayment.status === BALANCE_PAYMENT_STATUSES.REFUNDED) {
+    throw new BadRequestError("Balance payment is already marked REFUNDED", {
+      code: "ALREADY_REFUNDED",
+    });
+  }
   upload.balancePayment.status = BALANCE_PAYMENT_STATUSES.REFUNDED;
   upload.balancePayment.refundedAt = new Date();
+  upload.balancePayment.refundReasonCode = approved.reasonCode;
+  upload.balancePayment.refundPolicyVersion = approved.policyVersion;
   upload.downloadEntitlement = {
     granted: false,
     grantedAt: null,
@@ -563,7 +577,9 @@ async function markBalanceRefunded(actor, uploadId, { reason } = {}) {
     merchantOrderId: upload.balancePayment.merchantOrderId,
     amountPaise: upload.balancePayment.amountPaise,
     paidAmountPaise: upload.balancePayment.paidAmountPaise,
-    note: reason != null ? String(reason).slice(0, 500) : "admin_refund",
+    reasonCode: approved.reasonCode,
+    policyVersion: approved.policyVersion,
+    note: approved.note,
   });
   await upload.save();
 
@@ -571,7 +587,7 @@ async function markBalanceRefunded(actor, uploadId, { reason } = {}) {
     const paymentAttempt = require("./paymentAttempt.service");
     if (upload.balancePayment.merchantOrderId) {
       await paymentAttempt.markAttemptRefunded(upload.balancePayment.merchantOrderId, {
-        note: reason || "admin_refund",
+        note: `${approved.reasonCode}: ${approved.note}`,
       });
     }
   } catch (ledgerErr) {

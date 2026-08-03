@@ -31,6 +31,10 @@ assert("QC has 10 checks", QC_CHECKLIST_11E.length === 10 && rules.qc.checkCount
 assert("government claims disallowed", rules.governmentClaims.allowed === false);
 assert("fictional testimonials disallowed", rules.testimonials.fictionalAllowed === false);
 assert("SURVEYOR_BALANCE_FEE_RUPEES_FIXED === 400", SURVEYOR_BALANCE_FEE_RUPEES_FIXED === 400);
+assert(
+  "refund policy non-refundable for customers",
+  rules.refundPolicy && rules.refundPolicy.customerRefundEntitled === false
+);
 
 assert("content matrix exists", fs.existsSync(path.join(root, "docs/CONTENT_CLAIMS_MATRIX_H08.md")));
 assert("FE H-08 doc exists", fs.existsSync(path.join(root, "docs/FRONTEND_H08_PUBLIC_CLAIMS.md")));
@@ -45,6 +49,7 @@ assert("Coming Soon gate in cadInterest", /CAD_INTEREST_COMING_SOON/.test(intere
 
 const pricing = fs.readFileSync(path.join(root, "src/services/sketchPaymentPricing.service.js"), "utf8");
 assert("pricing embeds businessRules", /businessRules/.test(pricing));
+assert("public rules expose sketchOrderPricing", rules.sketchOrderPricing && rules.sketchOrderPricing.grossRupees === 500);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 console.log("NOTE: Marketing site scrub + Founder signature are outside this repo.");

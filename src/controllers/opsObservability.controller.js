@@ -13,9 +13,14 @@ async function getHealth() {
   let okFlag = true;
   try {
     const state = mongoose.connection?.readyState;
-    if (state === 1) db = "up";
-    else if (state === 2) db = "connecting";
-    else {
+    if (state === 1 && mongoose.connection.db) {
+      // Non-mutating connectivity check (no collection writes).
+      await mongoose.connection.db.admin().command({ ping: 1 });
+      db = "up";
+    } else if (state === 2) {
+      db = "connecting";
+      okFlag = false;
+    } else {
       db = "down";
       okFlag = false;
     }

@@ -39,6 +39,8 @@ exports.handler = asyncHandler(async (event) => {
 
     case "POST /api/auth/login":
       return authHandler.login(event);
+    case "GET /api/auth/me":
+      return authHandler.getMe(event);
     case "POST /api/auth/refresh":
       return authHandler.refreshSession(event);
     case "GET /api/auth/sessions":
@@ -91,6 +93,8 @@ exports.handler = asyncHandler(async (event) => {
       return authHandler.getSurveyorCadDownload(event);
     case "POST /api/admin/sketch-uploads/{uploadId}/balance-refund":
       return authHandler.adminMarkBalanceRefunded(event);
+    case "POST /api/admin/sketch-uploads/{uploadId}/review":
+      return authHandler.adminReviewSketchTerminal(event);
     case "GET /api/surveyor/sketch-uploads":
       return authHandler.listSurveyorSketchUploads(event);
     case "GET /api/surveyor/orders":

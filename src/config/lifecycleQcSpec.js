@@ -91,6 +91,7 @@ const QC_MATRIX = Object.freeze({
 const SKETCH_STATUS_CATALOG = Object.freeze([
   {
     code: SURVEY_SKETCH_STATUS.PAYMENT_PENDING,
+    value: SURVEY_SKETCH_STATUS.PAYMENT_PENDING,
     label: "Awaiting booking payment",
     analyticsKey: "sketch_payment_pending",
     terminal: false,
@@ -98,6 +99,7 @@ const SKETCH_STATUS_CATALOG = Object.freeze([
   },
   {
     code: SURVEY_SKETCH_STATUS.PENDING,
+    value: SURVEY_SKETCH_STATUS.PENDING,
     label: "Queued for CAD assignment",
     analyticsKey: "sketch_pending_assignment",
     terminal: false,
@@ -105,6 +107,7 @@ const SKETCH_STATUS_CATALOG = Object.freeze([
   },
   {
     code: SURVEY_SKETCH_STATUS.ASSIGNED,
+    value: SURVEY_SKETCH_STATUS.ASSIGNED,
     label: "Assigned to CAD",
     analyticsKey: "sketch_assigned",
     terminal: false,
@@ -112,6 +115,7 @@ const SKETCH_STATUS_CATALOG = Object.freeze([
   },
   {
     code: SURVEY_SKETCH_STATUS.CAD_DELIVERED,
+    value: SURVEY_SKETCH_STATUS.CAD_DELIVERED,
     label: "CAD delivered (balance may be required)",
     analyticsKey: "sketch_cad_delivered",
     terminal: false,
@@ -119,6 +123,7 @@ const SKETCH_STATUS_CATALOG = Object.freeze([
   },
   {
     code: SURVEY_SKETCH_STATUS.UNDER_REVISION,
+    value: SURVEY_SKETCH_STATUS.UNDER_REVISION,
     label: "Under revision",
     analyticsKey: "sketch_under_revision",
     terminal: false,
@@ -126,6 +131,7 @@ const SKETCH_STATUS_CATALOG = Object.freeze([
   },
   {
     code: SURVEY_SKETCH_STATUS.APPROVED,
+    value: SURVEY_SKETCH_STATUS.APPROVED,
     label: "Completed",
     analyticsKey: "sketch_approved",
     terminal: true,
@@ -133,6 +139,7 @@ const SKETCH_STATUS_CATALOG = Object.freeze([
   },
   {
     code: SURVEY_SKETCH_STATUS.REJECTED,
+    value: SURVEY_SKETCH_STATUS.REJECTED,
     label: "Cancelled / rejected",
     analyticsKey: "sketch_rejected",
     terminal: true,

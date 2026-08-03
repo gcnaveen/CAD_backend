@@ -17,6 +17,7 @@ const {
 const cadPayoutPricing = require("./cadPayoutPricing.service");
 const { NotFoundError, BadRequestError } = require("../utils/errors");
 const logger = require("../utils/logger");
+const { mongoRoleEquals } = require("../utils/roleNormalize");
 
 function parseNonNegativeIntEnv(name, defaultValue = 0) {
   const raw = process.env[name];
@@ -494,7 +495,7 @@ async function countOpenEntriesForCad(cadUserId) {
 async function loadCadUserForAdmin(cadUserId) {
   const user = await User.findOne({
     _id: cadUserId,
-    role: USER_ROLES.CAD,
+    ...mongoRoleEquals(USER_ROLES.CAD),
     deletedAt: null,
   })
     .select("name role auth.email auth.phone")
@@ -698,7 +699,7 @@ async function getPendingPayoutSummaryForAdmin(cadUserId) {
     return buildCadUserPayoutBundle(cadUser, { includeAssignments: true });
   }
 
-  const users = await User.find({ role: USER_ROLES.CAD, deletedAt: null })
+  const users = await User.find({ ...mongoRoleEquals(USER_ROLES.CAD), deletedAt: null })
     .select("name role auth.email auth.phone")
     .sort({ createdAt: -1 })
     .lean();

@@ -87,4 +87,24 @@ describe("M-02 auth cookies", () => {
     const res = clearSessionCookies(ok({ message: "Logged out" }));
     assert.ok(res.cookies.every((c) => /Max-Age=0/.test(c)));
   });
+
+  it("defaults SameSite=None when Secure (cross-site SPA)", () => {
+    const prevSite = process.env.AUTH_COOKIE_SAMESITE;
+    const prevSecure = process.env.AUTH_COOKIE_SECURE;
+    delete process.env.AUTH_COOKIE_SAMESITE;
+    process.env.AUTH_COOKIE_SECURE = "true";
+    try {
+      // Re-require would cache; exercise via attachSessionCookies build
+      const res = attachSessionCookies(ok({ accessToken: "a", refreshToken: "r2" }), {
+        refreshToken: "r2",
+      });
+      assert.ok(res.cookies.some((c) => /SameSite=None/.test(c)));
+      assert.ok(res.cookies.some((c) => /Secure/.test(c) && c.startsWith("cad_refresh=")));
+    } finally {
+      if (prevSite === undefined) delete process.env.AUTH_COOKIE_SAMESITE;
+      else process.env.AUTH_COOKIE_SAMESITE = prevSite;
+      if (prevSecure === undefined) delete process.env.AUTH_COOKIE_SECURE;
+      else process.env.AUTH_COOKIE_SECURE = prevSecure;
+    }
+  });
 });

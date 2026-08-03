@@ -1,5 +1,6 @@
 /**
- * H-04: pricing / state rules (Node built-in test runner).
+ * H-04 / B4: pricing / state rules (Node built-in test runner).
+ * Admin may discount only; plan amounts come from sketch order contract / env.
  */
 const { describe, it, beforeEach, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -9,6 +10,7 @@ const {
   payableRupeesFromPlan,
   resolveSketchUploadFee,
   resolveSketchBalanceFee,
+  getPublicPricingBreakdown,
 } = require("../../src/services/sketchPaymentPricing.service");
 const { isDownloadEntitled, isRefunded } = require("../../src/services/cadDownloadEntitlement.service");
 
@@ -25,38 +27,90 @@ describe("pricing: payableRupeesFromPlan", () => {
   });
 });
 
-describe("pricing: resolveSketchUploadFee from admin plan", () => {
+describe("pricing: resolveSketchUploadFee from contract + discount", () => {
   let orig;
+  const envKeys = [
+    "SKETCH_UPLOAD_FEE_PAISE",
+    "SKETCH_BALANCE_FEE_PAISE",
+    "SKETCH_ORDER_GROSS_PAISE",
+    "SKETCH_SUPERIMPOSE_FEE_PAISE",
+  ];
+  const prevEnv = {};
+
   beforeEach(() => {
     orig = pricingRepo.getStandardPricingLean;
+    for (const k of envKeys) {
+      prevEnv[k] = process.env[k];
+      delete process.env[k];
+    }
   });
   afterEach(() => {
     pricingRepo.getStandardPricingLean = orig;
+    for (const k of envKeys) {
+      if (prevEnv[k] === undefined) delete process.env[k];
+      else process.env[k] = prevEnv[k];
+    }
   });
 
-  it("uses admin plan − discount in paise", async () => {
+  it("applies admin discount on contract booking plan", async () => {
     pricingRepo.getStandardPricingLean = async () => ({
-      sketchUploadPlanAmountRupees: 500,
-      sketchUploadDiscountRupees: 100,
+      sketchUploadDiscountRupees: 20,
     });
     const fee = await resolveSketchUploadFee();
-    assert.equal(fee.source, "admin");
-    assert.equal(fee.feePaise, 40000);
-    assert.equal(fee.payableRupees, 400);
+    assert.equal(fee.source, "contract+discount");
+    assert.equal(fee.planAmountRupees, 100);
+    assert.equal(fee.feePaise, 8000);
+    assert.equal(fee.payableRupees, 80);
   });
 
-  it("falls back to env when no admin plan", async () => {
+  it("uses contract/env booking when admin unset (fee still > 0)", async () => {
     pricingRepo.getStandardPricingLean = async () => ({});
-    const prev = process.env.SKETCH_UPLOAD_FEE_PAISE;
-    process.env.SKETCH_UPLOAD_FEE_PAISE = "12345";
-    try {
-      const fee = await resolveSketchUploadFee();
-      assert.equal(fee.source, "env");
-      assert.equal(fee.feePaise, 12345);
-    } finally {
-      if (prev == null) delete process.env.SKETCH_UPLOAD_FEE_PAISE;
-      else process.env.SKETCH_UPLOAD_FEE_PAISE = prev;
-    }
+    process.env.SKETCH_UPLOAD_FEE_PAISE = "10000";
+    process.env.SKETCH_BALANCE_FEE_PAISE = "40000";
+    process.env.SKETCH_ORDER_GROSS_PAISE = "50000";
+    const fee = await resolveSketchUploadFee();
+    assert.ok(fee.feePaise > 0);
+    assert.equal(fee.feePaise, 10000);
+    assert.equal(fee.superimposeFeePaise, 0);
+    assert.match(fee.source, /^contract/);
+  });
+
+  it("adds superimpose add-on when isSuperimpose=true", async () => {
+    pricingRepo.getStandardPricingLean = async () => ({});
+    process.env.SKETCH_UPLOAD_FEE_PAISE = "10000";
+    process.env.SKETCH_BALANCE_FEE_PAISE = "40000";
+    process.env.SKETCH_ORDER_GROSS_PAISE = "50000";
+    process.env.SKETCH_SUPERIMPOSE_FEE_PAISE = "20000";
+    const fee = await resolveSketchUploadFee({ isSuperimpose: true });
+    assert.equal(fee.baseFeePaise, 10000);
+    assert.equal(fee.superimposeFeePaise, 20000);
+    assert.equal(fee.feePaise, 30000);
+    assert.equal(fee.payableRupees, 300);
+    assert.equal(fee.isSuperimpose, true);
+  });
+
+  it("does not add superimpose when flag false", async () => {
+    pricingRepo.getStandardPricingLean = async () => ({});
+    process.env.SKETCH_UPLOAD_FEE_PAISE = "10000";
+    process.env.SKETCH_BALANCE_FEE_PAISE = "40000";
+    process.env.SKETCH_ORDER_GROSS_PAISE = "50000";
+    process.env.SKETCH_SUPERIMPOSE_FEE_PAISE = "20000";
+    const fee = await resolveSketchUploadFee({ isSuperimpose: false });
+    assert.equal(fee.feePaise, 10000);
+    assert.equal(fee.superimposeFeePaise, 0);
+  });
+
+  it("public breakdown exposes superimpose + uploadWithSuperimpose", async () => {
+    pricingRepo.getStandardPricingLean = async () => ({});
+    process.env.SKETCH_UPLOAD_FEE_PAISE = "10000";
+    process.env.SKETCH_BALANCE_FEE_PAISE = "40000";
+    process.env.SKETCH_ORDER_GROSS_PAISE = "50000";
+    process.env.SKETCH_SUPERIMPOSE_FEE_PAISE = "20000";
+    const breakdown = await getPublicPricingBreakdown();
+    assert.ok(breakdown.superimpose);
+    assert.equal(breakdown.superimpose.feePaise, 20000);
+    assert.equal(breakdown.upload.feePaise, 10000);
+    assert.equal(breakdown.uploadWithSuperimpose.feePaise, 30000);
   });
 });
 
@@ -69,14 +123,11 @@ describe("pricing: balance fee resolve", () => {
     pricingRepo.getStandardPricingLean = orig;
   });
 
-  it("resolves balance admin plan", async () => {
-    pricingRepo.getStandardPricingLean = async () => ({
-      sketchBalancePlanAmountRupees: 400,
-      sketchBalanceDiscountRupees: 0,
-    });
+  it("resolves balance from contract", async () => {
+    pricingRepo.getStandardPricingLean = async () => ({});
     const fee = await resolveSketchBalanceFee();
     assert.equal(fee.feePaise, 40000);
-    assert.equal(fee.source, "admin");
+    assert.match(fee.source, /^contract/);
   });
 });
 

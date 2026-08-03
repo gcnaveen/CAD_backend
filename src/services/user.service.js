@@ -13,6 +13,14 @@ const {
   ForbiddenError,
   NotFoundError,
 } = require("../utils/errors");
+const {
+  normalizeRole,
+  normalizeStatus,
+  rolesEqual,
+  mongoRoleEquals,
+  mongoRoleIn,
+  mongoStatusEquals,
+} = require("../utils/roleNormalize");
 
 /** Roles that Super Admin is allowed to create */
 const SUPER_ADMIN_CREATABLE_ROLES = [USER_ROLES.ADMIN, USER_ROLES.CAD, USER_ROLES.SURVEYOR];
@@ -31,11 +39,12 @@ function assertCanManageUser(actor, targetUser) {
   if (!actor || !actor.role) {
     throw new ForbiddenError("Unauthorized");
   }
-  if (actor.role === USER_ROLES.SUPER_ADMIN) {
+  if (rolesEqual(actor.role, USER_ROLES.SUPER_ADMIN)) {
     return;
   }
-  if (actor.role === USER_ROLES.ADMIN) {
-    if (!ADMIN_MANAGEABLE_ROLES.includes(targetUser.role)) {
+  if (rolesEqual(actor.role, USER_ROLES.ADMIN)) {
+    const targetRole = normalizeRole(targetUser.role);
+    if (!targetRole || !ADMIN_MANAGEABLE_ROLES.includes(targetRole)) {
       throw new ForbiddenError("Admin can only manage CAD or Surveyor users");
     }
     return;
@@ -54,15 +63,17 @@ function assertCanCreateRole(creator, targetRole) {
     throw new ForbiddenError("Unauthorized");
   }
 
-  if (creator.role === USER_ROLES.SUPER_ADMIN) {
-    if (!SUPER_ADMIN_CREATABLE_ROLES.includes(targetRole)) {
+  const normalizedTarget = normalizeRole(targetRole) || String(targetRole || "").toUpperCase();
+
+  if (rolesEqual(creator.role, USER_ROLES.SUPER_ADMIN)) {
+    if (!SUPER_ADMIN_CREATABLE_ROLES.includes(normalizedTarget)) {
       throw new ForbiddenError("Super Admin can only create Admin, CAD, or Surveyor users");
     }
     return;
   }
 
-  if (creator.role === USER_ROLES.ADMIN) {
-    if (!ADMIN_CREATABLE_ROLES.includes(targetRole)) {
+  if (rolesEqual(creator.role, USER_ROLES.ADMIN)) {
+    if (!ADMIN_CREATABLE_ROLES.includes(normalizedTarget)) {
       throw new ForbiddenError("Admin can only create CAD or Surveyor users");
     }
     return;
@@ -234,30 +245,33 @@ async function getById(actor, userId) {
 /**
  * List users with pagination and optional filters (role, status).
  * Super Admin sees all; Admin sees only CAD and Surveyor.
+ * Role/status filters are case-insensitive so legacy mixed-case rows remain visible.
  */
 async function getAll(actor, options = {}) {
   const { page = 1, limit = 20, role, status } = options;
   const skip = Math.max(0, (Number(page) || 1) - 1) * Math.min(100, Math.max(1, Number(limit) || 20));
   const perPage = Math.min(100, Math.max(1, Number(limit) || 20));
 
-  const filter = { ...notDeleted };
+  const clauses = [{ ...notDeleted }];
 
-  if (actor.role === USER_ROLES.ADMIN) {
-    filter.role = { $in: ADMIN_MANAGEABLE_ROLES };
+  if (rolesEqual(actor.role, USER_ROLES.ADMIN)) {
+    clauses.push(mongoRoleIn(ADMIN_MANAGEABLE_ROLES));
   }
 
   if (role) {
-    const r = String(role).toUpperCase();
-    if (Object.values(USER_ROLES).includes(r)) {
-      filter.role = r;
+    const r = normalizeRole(role);
+    if (r) {
+      clauses.push(mongoRoleEquals(r));
     }
   }
   if (status) {
-    const s = String(status).toUpperCase();
-    if (Object.values(USER_STATUS).includes(s)) {
-      filter.status = s;
+    const s = normalizeStatus(status);
+    if (s) {
+      clauses.push(mongoStatusEquals(s));
     }
   }
+
+  const filter = clauses.length === 1 ? clauses[0] : { $and: clauses };
 
   const [items, total] = await Promise.all([
     User.find(filter).sort({ createdAt: -1 }).skip(skip).limit(perPage).lean(),
@@ -280,11 +294,11 @@ async function getAll(actor, options = {}) {
  * Enforces same access as getAll (Super Admin sees all; Admin only CAD/Surveyor).
  */
 async function getByRole(actor, role, options = {}) {
-  const normalizedRole = String(role).toUpperCase();
-  if (!Object.values(USER_ROLES).includes(normalizedRole)) {
+  const normalizedRole = normalizeRole(role);
+  if (!normalizedRole) {
     throw new BadRequestError(`role must be one of: ${Object.values(USER_ROLES).join(", ")}`);
   }
-  if (actor.role === USER_ROLES.ADMIN && !ADMIN_MANAGEABLE_ROLES.includes(normalizedRole)) {
+  if (rolesEqual(actor.role, USER_ROLES.ADMIN) && !ADMIN_MANAGEABLE_ROLES.includes(normalizedRole)) {
     throw new ForbiddenError("Admin can only list CAD or Surveyor users");
   }
   return getAll(actor, { ...options, role: normalizedRole });
@@ -302,7 +316,7 @@ async function patch(actor, userId, payload) {
     throw new NotFoundError("User not found");
   }
   const isSelfUpdate = String(actor?._id) === String(user._id);
-  if (actor?.role === USER_ROLES.CAD) {
+  if (rolesEqual(actor?.role, USER_ROLES.CAD)) {
     if (!isSelfUpdate) {
       throw new ForbiddenError("CAD users can update only their own profile");
     }
@@ -350,7 +364,7 @@ async function patch(actor, userId, payload) {
     }
   }
 
-  if (user.role === USER_ROLES.CAD && cadCenter !== undefined) {
+  if (rolesEqual(user.role, USER_ROLES.CAD) && cadCenter !== undefined) {
     const CadCenter = require("../models/masters/CadCenter");
     const centerExists = await CadCenter.findById(cadCenter);
     if (!centerExists) {
@@ -359,11 +373,11 @@ async function patch(actor, userId, payload) {
     user.cadProfile = user.cadProfile || {};
     user.cadProfile.cadCenter = cadCenter;
   }
-  if (user.role !== USER_ROLES.CAD && hasCadProfilePayload) {
+  if (!rolesEqual(user.role, USER_ROLES.CAD) && hasCadProfilePayload) {
     throw new BadRequestError("CAD profile fields can be updated only for CAD users");
   }
 
-  if (user.role === USER_ROLES.CAD) {
+  if (rolesEqual(user.role, USER_ROLES.CAD)) {
     if (personalDetails !== undefined) {
       user.personalDetails = {
         ...(user.personalDetails || {}),
@@ -405,7 +419,7 @@ async function patch(actor, userId, payload) {
     }
   }
 
-  if (user.role === USER_ROLES.SURVEYOR && (district !== undefined || taluka !== undefined || category !== undefined || surveyType !== undefined)) {
+  if (rolesEqual(user.role, USER_ROLES.SURVEYOR) && (district !== undefined || taluka !== undefined || category !== undefined || surveyType !== undefined)) {
     user.surveyorProfile = user.surveyorProfile || {};
     if (district !== undefined) user.surveyorProfile.district = district;
     if (taluka !== undefined) user.surveyorProfile.taluka = taluka;

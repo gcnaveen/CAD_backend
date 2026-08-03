@@ -23,7 +23,10 @@ async function getUploadForCad(actor, uploadId) {
 
 async function listUploads(actor, options) {
   const result = await surveyorSketchUploadService.list(actor, options);
-  return ok(result.data, result.meta);
+  return ok(result.data, {
+    ...result.meta,
+    ...(result.counts ? { counts: result.counts } : {}),
+  });
 }
 
 async function listSurveyorOrders(actor, options) {
@@ -59,6 +62,11 @@ async function markBalanceRefunded(actor, uploadId, body) {
   return ok(result);
 }
 
+async function reviewSketchTerminal(actor, uploadId, body) {
+  const result = await surveyorSketchUploadService.reviewSketchTerminal(actor, uploadId, body || {});
+  return ok(result);
+}
+
 async function listAllWithAssignment(options) {
   const result = await surveyorSketchUploadService.listAllWithAssignment(options);
   const { paginationMeta } = require("../../utils/pagination");
@@ -77,5 +85,6 @@ module.exports = {
   initiateBalancePayment,
   getCadDownload,
   markBalanceRefunded,
+  reviewSketchTerminal,
   listAllWithAssignment,
 };

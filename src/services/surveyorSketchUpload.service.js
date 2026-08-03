@@ -20,12 +20,49 @@ const notificationService = require("./notification.service");
 const { USER_ROLES, SURVEY_SKETCH_ASSIGNMENT_STATUS, SURVEY_SKETCH_STATUS } = require("../config/constants");
 const { applySketchStatus } = require("../config/lifecycleQcSpec");
 const slaDue = require("./slaDue.service");
+const orderStatusCounts = require("./orderStatusCounts.service");
+const { withWorkflowPhase } = require("../utils/workflowPhase");
 const { ForbiddenError, NotFoundError, BadRequestError } = require("../utils/errors");
 const logger = require("../utils/logger");
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
+
+/** NOTIF-01: inbox event when sketch awaits booking payment. */
+async function notifySketchPaymentPending(docId, surveyorRef, extras = {}) {
+  try {
+    const latest = await SurveyorSketchUpload.findById(docId).lean();
+    const sid = surveyorRef?._id != null ? surveyorRef._id : surveyorRef;
+    await notificationService.create({
+      type: "SKETCH_PAYMENT_PENDING",
+      title: "Complete sketch payment",
+      message: `Sketch ${latest?.applicationId || ""} is awaiting booking payment.`,
+      entityType: "SurveyorSketchUpload",
+      entityId: docId,
+      targetRoles: [USER_ROLES.SURVEYOR],
+      targetUsers: sid ? [sid] : [],
+      createdBy: sid || null,
+      data: {
+        surveyNo: latest?.surveyNo || null,
+        applicationId: latest?.applicationId || null,
+        status: latest?.status || SURVEY_SKETCH_STATUS.PAYMENT_PENDING,
+        amountPaise: latest?.sketchPayment?.amountPaise ?? extras.amountPaise ?? null,
+        payableRupees:
+          latest?.sketchPayment?.amountPaise != null
+            ? latest.sketchPayment.amountPaise / 100
+            : extras.payableRupees ?? null,
+        checkoutPageUrl: extras.checkoutPageUrl || null,
+        merchantOrderId:
+          latest?.sketchPayment?.merchantOrderId || extras.merchantOrderId || null,
+      },
+    });
+  } catch (notificationError) {
+    logger.error("Failed to create SKETCH_PAYMENT_PENDING notification", notificationError, {
+      surveyorSketchUploadId: String(docId),
+    });
+  }
+}
 
 /** After a sketch is in workflow PENDING (not PAYMENT_PENDING): auto-assign + surveyor notification. */
 async function postSubmitNotifyAndAutoAssign(docId, surveyorRef) {
@@ -183,6 +220,9 @@ function buildSketchPaymentMeta({
       redirectUrl: checkoutPageUrl,
       merchantOrderId,
       amountPaise: feePaise,
+      baseFeePaise: resolved.baseFeePaise ?? null,
+      superimposeFeePaise: resolved.superimposeFeePaise ?? 0,
+      isSuperimpose: resolved.isSuperimpose === true,
       planAmountRupees: resolved.planAmountRupees,
       discountRupees: resolved.discountRupees,
       payableRupees: resolved.payableRupees,
@@ -233,7 +273,9 @@ async function reinitiateSketchPayment(surveyor, uploadId, _options = {}) {
   }
 
   // Prefer immutable expected amount already persisted at first initiation; else resolve server pricing.
-  const resolved = await sketchPaymentPricing.resolveSketchUploadFee();
+  const resolved = await sketchPaymentPricing.resolveSketchUploadFee({
+    isSuperimpose: upload.isSuperimpose === true,
+  });
   const storedExpected = Number(upload.sketchPayment?.amountPaise);
   const feePaise =
     Number.isFinite(storedExpected) && storedExpected > 0
@@ -243,6 +285,9 @@ async function reinitiateSketchPayment(surveyor, uploadId, _options = {}) {
     Number.isFinite(storedExpected) && storedExpected > 0
       ? {
           feePaise,
+          baseFeePaise: upload.sketchPayment.baseFeePaise ?? null,
+          superimposeFeePaise: upload.sketchPayment.superimposeFeePaise ?? 0,
+          isSuperimpose: upload.isSuperimpose === true,
           planAmountRupees: upload.sketchPayment.planAmountRupees ?? null,
           discountRupees: upload.sketchPayment.discountRupees ?? null,
           payableRupees: feePaise / 100,
@@ -268,6 +313,10 @@ async function reinitiateSketchPayment(surveyor, uploadId, _options = {}) {
   upload.sketchPayment.status = "PENDING";
   upload.sketchPayment.merchantOrderId = merchantOrderId;
   upload.sketchPayment.amountPaise = feePaise;
+  upload.sketchPayment.baseFeePaise =
+    pricingMeta.baseFeePaise ?? upload.sketchPayment.baseFeePaise ?? null;
+  upload.sketchPayment.superimposeFeePaise =
+    pricingMeta.superimposeFeePaise ?? upload.sketchPayment.superimposeFeePaise ?? 0;
   upload.sketchPayment.planAmountRupees =
     pricingMeta.planAmountRupees ?? upload.sketchPayment.planAmountRupees ?? null;
   upload.sketchPayment.discountRupees =
@@ -314,8 +363,14 @@ async function reinitiateSketchPayment(surveyor, uploadId, _options = {}) {
   }
 
   const data = await loadSketchUploadDetail(uploadId);
+  await notifySketchPaymentPending(upload._id, surveyor, {
+    checkoutPageUrl,
+    merchantOrderId,
+    amountPaise: feePaise,
+    payableRupees: feePaise / 100,
+  });
   return {
-    data,
+    data: withWorkflowPhase(data, null),
     meta: buildSketchPaymentMeta({
       checkoutPageUrl,
       merchantOrderId,
@@ -557,6 +612,7 @@ async function create(surveyor, payload) {
       other_documents: Array.isArray(payload.other_documents) ? payload.other_documents : [],
       singleUpload: Array.isArray(payload.singleUpload) ? payload.singleUpload : payload.singleUpload ? [payload.singleUpload] : [],
       others: payload.others ?? null,
+      isSuperimpose: payload.isSuperimpose === true,
     });
 
   async function cleanupDraftIfRequested() {
@@ -574,7 +630,9 @@ async function create(surveyor, payload) {
       await doc.save();
 
       const phonePe = phonePeSketchPayment;
-      const resolved = await sketchPaymentPricing.resolveSketchUploadFee();
+      const resolved = await sketchPaymentPricing.resolveSketchUploadFee({
+        isSuperimpose: doc.isSuperimpose === true,
+      });
       const feePaise = resolved.feePaise;
       if (feePaise > 0) {
         if (!phonePe.isPhonePeConfigured()) {
@@ -588,6 +646,8 @@ async function create(surveyor, payload) {
           status: "PENDING",
           merchantOrderId,
           amountPaise: feePaise,
+          baseFeePaise: resolved.baseFeePaise,
+          superimposeFeePaise: resolved.superimposeFeePaise,
           planAmountRupees: resolved.planAmountRupees,
           discountRupees: resolved.discountRupees,
           pricingSource: resolved.source,
@@ -625,22 +685,21 @@ async function create(surveyor, payload) {
           throw new BadRequestError(pe?.message || "Payment gateway error", { code: "PHONEPE_INIT_FAILED" });
         }
         await cleanupDraftIfRequested();
+        await notifySketchPaymentPending(doc._id, surveyor, {
+          checkoutPageUrl,
+          merchantOrderId,
+          amountPaise: feePaise,
+          payableRupees: feePaise / 100,
+        });
         const latestPaid = await SurveyorSketchUpload.findById(doc._id).lean();
         return {
-          data: latestPaid || (doc.toJSON ? doc.toJSON() : doc),
-          meta: {
-            payment: {
-              requiresPayment: true,
-              checkoutPageUrl,
-              redirectUrl: checkoutPageUrl,
-              merchantOrderId,
-              amountPaise: feePaise,
-              planAmountRupees: resolved.planAmountRupees,
-              discountRupees: resolved.discountRupees,
-              payableRupees: resolved.payableRupees,
-              pricingSource: resolved.source,
-            },
-          },
+          data: withWorkflowPhase(latestPaid || (doc.toJSON ? doc.toJSON() : doc), null),
+          meta: buildSketchPaymentMeta({
+            checkoutPageUrl,
+            merchantOrderId,
+            feePaise,
+            resolved,
+          }),
         };
       }
 
@@ -722,17 +781,22 @@ async function getById(actor, uploadId) {
   }
 
   const base = cadDownloadEntitlement.presentUploadForActor(doc.toObject(), actor);
-  const assignment = await SurveySketchAssignment.findOne({
+  const assignmentRows = await SurveySketchAssignment.find({
     surveyorSketchUpload: doc._id,
-    status: { $ne: SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED },
   })
     .sort({ assignedAt: -1 })
     .lean();
-  return {
-    ...base,
-    assignment: assignment ? slaDue.decorateAssignment(assignment) : null,
-    sla: slaDue.buildSlaSnapshot(assignment),
-  };
+  const assignment = pickDisplayAssignmentForUpload(assignmentRows);
+  const decorated = assignment ? slaDue.decorateAssignment(assignment) : null;
+  return withWorkflowPhase(
+    {
+      ...base,
+      assignment: decorated,
+      assignmentId: decorated?._id ? String(decorated._id) : null,
+      sla: slaDue.buildSlaSnapshot(decorated),
+    },
+    decorated
+  );
 }
 
 /**
@@ -809,7 +873,15 @@ async function list(actor, options = {}) {
     filter._id = { $in: uploadIds };
   }
 
-  const [data, total] = await Promise.all([
+  const isAdminList =
+    actor.role === USER_ROLES.ADMIN || actor.role === USER_ROLES.SUPER_ADMIN;
+
+  // COUNT-01: admin request counts share the same source as dashboard / ops funnel.
+  const countsPromise = isAdminList
+    ? orderStatusCounts.getOrderStatusCounts()
+    : Promise.resolve(null);
+
+  const [data, total, globalCounts] = await Promise.all([
     SurveyorSketchUpload.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -821,11 +893,57 @@ async function list(actor, options = {}) {
       .populate("village", "code name")
       .lean(),
     SurveyorSketchUpload.countDocuments(filter),
+    countsPromise,
   ]);
 
+  const presented = data.map((row) => cadDownloadEntitlement.presentUploadForActor(row, actor));
+  const countsPayload = globalCounts
+    ? { total: globalCounts.total, byStatus: globalCounts.byStatus, source: "orderStatusCounts" }
+    : undefined;
+
+  // Admin/SuperAdmin table: attach display assignment in one batch (avoids FE N+1 hang).
+  if (!isAdminList || !presented.length) {
+    return {
+      data: presented.map((u) => withWorkflowPhase(u, null)),
+      meta: { page, limit, total },
+      ...(countsPayload ? { counts: countsPayload } : {}),
+    };
+  }
+
+  const uploadIds = presented.map((u) => u._id).filter(Boolean);
+  const assignments = await SurveySketchAssignment.find({
+    surveyorSketchUpload: { $in: uploadIds },
+  })
+    .populate("cadCenter", "name code")
+    .populate("assignedTo", "name auth")
+    .populate("assignedBy", "name")
+    .lean();
+
+  const listsByUpload = {};
+  for (const a of assignments) {
+    const id = a.surveyorSketchUpload?.toString?.() || String(a.surveyorSketchUpload);
+    (listsByUpload[id] ||= []).push(a);
+  }
+
+  const withAssignment = presented.map((upload) => {
+    const uploadKey = upload._id?.toString?.() || String(upload._id);
+    const assignment = pickDisplayAssignmentForUpload(listsByUpload[uploadKey] || []) || null;
+    const decorated = assignment ? slaDue.decorateAssignment(assignment) : null;
+    return withWorkflowPhase(
+      {
+        ...upload,
+        assignment: decorated,
+        assignmentId: decorated?._id ? String(decorated._id) : null,
+        sla: slaDue.buildSlaSnapshot(decorated),
+      },
+      decorated
+    );
+  });
+
   return {
-    data: data.map((row) => cadDownloadEntitlement.presentUploadForActor(row, actor)),
+    data: withAssignment,
     meta: { page, limit, total },
+    ...(countsPayload ? { counts: countsPayload } : {}),
   };
 }
 
@@ -871,10 +989,10 @@ async function listAllWithAssignment(options = {}) {
     assignmentByUploadId[uploadId] = pickDisplayAssignmentForUpload(list);
   }
 
-  const data = uploads.map((upload) => ({
-    ...upload,
-    assignment: assignmentByUploadId[upload._id.toString()] || null,
-  }));
+  const data = uploads.map((upload) => {
+    const assignment = assignmentByUploadId[upload._id.toString()] || null;
+    return withWorkflowPhase({ ...upload, assignment }, assignment);
+  });
 
   return {
     data,
@@ -914,7 +1032,7 @@ async function listOrdersForSurveyor(actor, options = {}) {
     listFilter.status = { $in: ORDER_BUCKET_TO_STATUSES[selectedBucket] || [] };
   }
 
-  const [data, total, byStatus] = await Promise.all([
+  const [data, total, statusCounts] = await Promise.all([
     SurveyorSketchUpload.find(listFilter)
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -925,10 +1043,7 @@ async function listOrdersForSurveyor(actor, options = {}) {
       .populate("village", "code name")
       .lean(),
     SurveyorSketchUpload.countDocuments(listFilter),
-    SurveyorSketchUpload.aggregate([
-      { $match: baseFilter },
-      { $group: { _id: "$status", count: { $sum: 1 } } },
-    ]),
+    orderStatusCounts.getOrderStatusCounts({ match: baseFilter }),
   ]);
 
   const uploadIds = data.map((u) => u._id);
@@ -946,36 +1061,30 @@ async function listOrdersForSurveyor(actor, options = {}) {
   }
   const enrichedData = data.map((upload) => {
     const assignment = pickDisplayAssignmentForUpload(listsByUpload[upload._id.toString()] || []) || null;
-    return {
-      ...cadDownloadEntitlement.presentUploadForActor(upload, actor),
-      assignment: assignment ? slaDue.decorateAssignment(assignment) : null,
-      sla: assignment
-        ? slaDue.buildSlaSnapshot(assignment)
-        : slaDue.buildSlaSnapshot(null),
-    };
+    const decorated = assignment ? slaDue.decorateAssignment(assignment) : null;
+    return withWorkflowPhase(
+      {
+        ...cadDownloadEntitlement.presentUploadForActor(upload, actor),
+        assignment: decorated,
+        assignmentId: decorated?._id ? String(decorated._id) : null,
+        sla: decorated ? slaDue.buildSlaSnapshot(decorated) : slaDue.buildSlaSnapshot(null),
+      },
+      decorated
+    );
   });
   // Sort active work by SLA risk when bucket is active
   if (selectedBucket === SURVEYOR_ORDER_BUCKETS.ACTIVE || selectedBucket === SURVEYOR_ORDER_BUCKETS.ALL) {
     enrichedData.sort((a, b) => (a.sla?.riskRank ?? 99) - (b.sla?.riskRank ?? 99));
   }
 
-  const statusCount = {};
-  for (const s of Object.values(SURVEY_SKETCH_STATUS)) {
-    statusCount[s] = 0;
-  }
-  byStatus.forEach((r) => {
-    const key = r._id === "UNDER_REVIEW" ? SURVEY_SKETCH_STATUS.UNDER_REVISION : r._id;
-    if (key && statusCount[key] !== undefined) {
-      statusCount[key] += r.count;
-    }
-  });
+  const statusCount = statusCounts.byStatus;
   const activeCount = ORDER_BUCKET_TO_STATUSES[SURVEYOR_ORDER_BUCKETS.ACTIVE]
     .reduce((sum, s) => sum + (statusCount[s] || 0), 0);
   const completedCount = ORDER_BUCKET_TO_STATUSES[SURVEYOR_ORDER_BUCKETS.COMPLETED]
     .reduce((sum, s) => sum + (statusCount[s] || 0), 0);
   const cancelledCount = ORDER_BUCKET_TO_STATUSES[SURVEYOR_ORDER_BUCKETS.CANCELLED]
     .reduce((sum, s) => sum + (statusCount[s] || 0), 0);
-  const allCount = Object.values(statusCount).reduce((sum, n) => sum + n, 0);
+  const allCount = statusCounts.total;
 
   return {
     data: enrichedData,
@@ -996,6 +1105,102 @@ async function listOrdersForSurveyor(actor, options = {}) {
   };
 }
 
+/**
+ * Admin terminal review: set APPROVED or REJECTED (BIZ-10 / lifecycle terminals).
+ * APPROVED requires CAD_DELIVERED + booking payment satisfied.
+ * REJECTED allowed from unpaid PAYMENT_PENDING (cancel unpaid) or mid-workflow statuses.
+ */
+async function reviewSketchTerminal(actor, uploadId, { decision, note } = {}) {
+  const raw = String(decision || "")
+    .trim()
+    .toUpperCase();
+  const terminal =
+    raw === SURVEY_SKETCH_STATUS.APPROVED
+      ? SURVEY_SKETCH_STATUS.APPROVED
+      : raw === SURVEY_SKETCH_STATUS.REJECTED
+        ? SURVEY_SKETCH_STATUS.REJECTED
+        : null;
+
+  if (!terminal) {
+    throw new BadRequestError('decision must be "APPROVED" or "REJECTED"', {
+      code: "INVALID_TERMINAL_DECISION",
+    });
+  }
+
+  const upload = await SurveyorSketchUpload.findById(uploadId);
+  if (!upload) {
+    throw new NotFoundError("Survey sketch upload not found", { code: "SURVEY_SKETCH_NOT_FOUND" });
+  }
+
+  if (terminal === SURVEY_SKETCH_STATUS.APPROVED) {
+    const { assertSketchBookingPaymentAllowsWorkflow } = require("./sketchPaymentGate.service");
+    assertSketchBookingPaymentAllowsWorkflow(upload, { action: "terminal_approve" });
+    const { assertQcRequiredForRelease, ORDER_TYPES } = require("../config/lifecycleQcSpec");
+    assertQcRequiredForRelease(ORDER_TYPES.STANDARD_11E);
+  }
+
+  applySketchStatus(upload, terminal);
+  const trimmedNote =
+    note != null && String(note).trim() ? String(note).trim().slice(0, 500) : null;
+  upload.statusNote = trimmedNote;
+  upload.reviewedAt = new Date();
+  upload.reviewedBy = actor?._id || null;
+  await upload.save();
+
+  if (terminal === SURVEY_SKETCH_STATUS.REJECTED) {
+    const slaDue = require("./slaDue.service");
+    await SurveySketchAssignment.updateMany(
+      {
+        surveyorSketchUpload: upload._id,
+        status: {
+          $in: [
+            SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED,
+            SURVEY_SKETCH_ASSIGNMENT_STATUS.IN_PROGRESS,
+            SURVEY_SKETCH_ASSIGNMENT_STATUS.ON_HOLD,
+          ],
+        },
+      },
+      {
+        $set: {
+          status: SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED,
+          slaState: slaDue.SLA_STATE.CANCELLED,
+          notes: trimmedNote
+            ? `Cancelled on sketch REJECTED: ${trimmedNote}`
+            : "Cancelled on sketch REJECTED",
+        },
+      }
+    );
+  }
+
+  try {
+    await notificationService.create({
+      type: terminal === SURVEY_SKETCH_STATUS.APPROVED ? "SKETCH_APPROVED" : "SKETCH_REJECTED",
+      title: terminal === SURVEY_SKETCH_STATUS.APPROVED ? "Sketch approved" : "Sketch rejected",
+      message:
+        terminal === SURVEY_SKETCH_STATUS.APPROVED
+          ? `Sketch ${upload.applicationId || ""} was approved.`
+          : `Sketch ${upload.applicationId || ""} was rejected.${trimmedNote ? ` ${trimmedNote}` : ""}`,
+      entityType: "SurveyorSketchUpload",
+      entityId: upload._id,
+      targetRoles: [USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN],
+      targetUsers: upload.surveyor ? [upload.surveyor] : [],
+      createdBy: actor?._id || null,
+      data: { status: terminal, applicationId: upload.applicationId || null },
+    });
+  } catch (err) {
+    logger.error("Failed to notify sketch terminal review", err, { uploadId: String(uploadId) });
+  }
+
+  return SurveyorSketchUpload.findById(upload._id)
+    .populate("surveyor", "name role")
+    .populate("reviewedBy", "name role")
+    .populate("district", "code name")
+    .populate("taluka", "code name")
+    .populate("hobli", "code name")
+    .populate("village", "code name")
+    .lean();
+}
+
 module.exports = {
   create,
   getById,
@@ -1009,6 +1214,7 @@ module.exports = {
   clearSketchUpload,
   sketchUploadMerchantOrderId,
   sketchUploadRetryMerchantOrderId,
+  reviewSketchTerminal,
   initiateBalancePayment: (actor, uploadId) =>
     cadDownloadEntitlement.initiateBalancePayment(actor, uploadId),
   getCadDownload: (actor, uploadId, options) =>

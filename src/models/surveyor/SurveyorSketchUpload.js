@@ -210,6 +210,10 @@ const SurveyorSketchUploadSchema = new mongoose.Schema(
       merchantOrderId: { type: String, default: null, index: true },
       /** Immutable expected amount (paise) set at checkout initiation — server pricing only. */
       amountPaise: { type: Number, default: null },
+      /** Base upload fee (paise) before superimpose add-on. */
+      baseFeePaise: { type: Number, default: null },
+      /** Superimpose add-on (paise) included in amountPaise when isSuperimpose. */
+      superimposeFeePaise: { type: Number, default: null },
       /** Snapshot at checkout: admin plan (₹) and discount (₹) if pricing source was admin. */
       planAmountRupees: { type: Number, default: null },
       discountRupees: { type: Number, default: null },
@@ -280,6 +284,9 @@ const SurveyorSketchUploadSchema = new mongoose.Schema(
       phonepeResponse: { type: mongoose.Schema.Types.Mixed, default: null },
       paidAt: { type: Date, default: null },
       refundedAt: { type: Date, default: null },
+      /** Exceptional refund audit (approved refund policy). */
+      refundReasonCode: { type: String, default: null },
+      refundPolicyVersion: { type: String, default: null },
       /** Append-only payment/download audit events. */
       ledger: {
         type: [
@@ -289,6 +296,8 @@ const SurveyorSketchUploadSchema = new mongoose.Schema(
             merchantOrderId: { type: String, default: null },
             amountPaise: { type: Number, default: null },
             paidAmountPaise: { type: Number, default: null },
+            reasonCode: { type: String, default: null },
+            policyVersion: { type: String, default: null },
             note: { type: String, default: null, maxlength: 500 },
           },
         ],

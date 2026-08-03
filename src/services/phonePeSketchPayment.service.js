@@ -1,7 +1,8 @@
 /**
  * PhonePe Standard Checkout for survey sketch submission and paid revisions (pg-sdk-node).
  * Env: PHONEPE_CLIENT_ID, PHONEPE_CLIENT_SECRET, PHONEPE_CLIENT_VERSION (default 1), PHONEPE_ENV (SANDBOX|PRODUCTION),
- * PUBLIC_API_BASE_URL (API Gateway base, no trailing slash), SKETCH_UPLOAD_FEE_PAISE, SKETCH_REVISION_FEE_PAISE,
+ * PUBLIC_API_BASE_URL (API Gateway base, no trailing slash),
+ * sketch fee paise via `src/config/sketchOrderPricing.js` (SKETCH_UPLOAD_FEE_PAISE / BALANCE / SUPERIMPOSE overrides),
  * PHONEPE_SUCCESS_REDIRECT_URL, PHONEPE_FAILURE_REDIRECT_URL.
  * Legacy: CLIENT_ID / CLIENT_SECRET accepted as aliases for PhonePe credentials.
  */
@@ -49,31 +50,74 @@ function getPublicApiBaseUrl() {
 }
 
 function getSketchUploadFeePaise() {
-  const n = parseInt(process.env.SKETCH_UPLOAD_FEE_PAISE || "0", 10);
-  return Number.isFinite(n) && n > 0 ? n : 0;
+  const { getApprovedSketchOrderPricing } = require("../config/sketchOrderPricing");
+  return getApprovedSketchOrderPricing().bookingPaise;
 }
 
 function getSketchRevisionFeePaise() {
-  const n = parseInt(process.env.SKETCH_REVISION_FEE_PAISE || "0", 10);
-  return Number.isFinite(n) && n > 0 ? n : 0;
+  const { getApprovedSketchOrderPricing } = require("../config/sketchOrderPricing");
+  return getApprovedSketchOrderPricing().revisionPaise;
 }
 
-/** Balance fee (paise) after CAD delivery before download. Default ₹400 (40000). Set 0 to waive. */
+/** Balance fee (paise) after CAD delivery before download — from approved sketch contract. */
 function getSketchBalanceFeePaise() {
-  const raw = process.env.SKETCH_BALANCE_FEE_PAISE;
-  if (raw === undefined || raw === null || String(raw).trim() === "") {
-    return 40000;
+  const { getApprovedSketchOrderPricing } = require("../config/sketchOrderPricing");
+  return getApprovedSketchOrderPricing().balancePaise;
+}
+
+/** Superimpose add-on (paise) — from approved sketch contract. */
+function getSketchSuperimposeFeePaise() {
+  const { getApprovedSketchOrderPricing } = require("../config/sketchOrderPricing");
+  return getApprovedSketchOrderPricing().superimposePaise;
+}
+
+function isLocalhostHost(hostname) {
+  const h = String(hostname || "").toLowerCase();
+  return h === "localhost" || h === "127.0.0.1" || h === "::1" || h.endsWith(".localhost");
+}
+
+/**
+ * Resolve PhonePe browser return URL. Required env — never defaults to localhost.
+ * @param {"PHONEPE_SUCCESS_REDIRECT_URL"|"PHONEPE_FAILURE_REDIRECT_URL"} envName
+ */
+function resolvePhonePeRedirectUrl(envName) {
+  const url = String(process.env[envName] || "").trim();
+  if (!url) {
+    throw new BadRequestError(`${envName} is not configured`, {
+      code: "PHONEPE_REDIRECT_URL_REQUIRED",
+    });
   }
-  const n = parseInt(String(raw), 10);
-  return Number.isFinite(n) && n > 0 ? n : 0;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch (_) {
+    throw new BadRequestError(`${envName} is not a valid URL`, {
+      code: "PHONEPE_REDIRECT_URL_INVALID",
+    });
+  }
+  if (isLocalhostHost(parsed.hostname)) {
+    throw new BadRequestError(`${envName} must not point to localhost`, {
+      code: "PHONEPE_REDIRECT_LOCALHOST_FORBIDDEN",
+    });
+  }
+  const phonePeEnv = String(process.env.PHONEPE_ENV || "").toUpperCase();
+  const stage = String(process.env.STAGE || process.env.NODE_ENV || "").toLowerCase();
+  const requireHttps =
+    phonePeEnv === "PRODUCTION" || stage === "prod" || stage === "production" || stage === "staging";
+  if (requireHttps && parsed.protocol !== "https:") {
+    throw new BadRequestError(`${envName} must use HTTPS in production/staging`, {
+      code: "PHONEPE_REDIRECT_HTTPS_REQUIRED",
+    });
+  }
+  return url;
 }
 
 function getSuccessRedirectUrl() {
-  return process.env.PHONEPE_SUCCESS_REDIRECT_URL || "http://localhost:5173/payment-success";
+  return resolvePhonePeRedirectUrl("PHONEPE_SUCCESS_REDIRECT_URL");
 }
 
 function getFailureRedirectUrl() {
-  return process.env.PHONEPE_FAILURE_REDIRECT_URL || "http://www.localhost:5173/payment-failure";
+  return resolvePhonePeRedirectUrl("PHONEPE_FAILURE_REDIRECT_URL");
 }
 
 /** PhonePe transaction / merchant order ids must stay ≤35 chars (alphanumeric + underscore). */
@@ -425,8 +469,10 @@ module.exports = {
   getSketchUploadFeePaise,
   getSketchRevisionFeePaise,
   getSketchBalanceFeePaise,
+  getSketchSuperimposeFeePaise,
   getSuccessRedirectUrl,
   getFailureRedirectUrl,
+  resolvePhonePeRedirectUrl,
   buildCallbackUrl,
   extractPayRedirectUrl,
   extractPaidAmountPaise,

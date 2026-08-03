@@ -23,6 +23,9 @@ const {
   CAD_WALLET_ENTRY_KIND,
 } = require("../../config/constants");
 const {
+  assertSketchBookingPaymentAllowsWorkflow,
+} = require("../sketchPaymentGate.service");
+const {
   applySketchStatus,
   applyAssignmentStatus,
   assertSketchStatusTransition,
@@ -36,6 +39,7 @@ const phonePeSketchPayment = require("../phonePeSketchPayment.service");
 const paymentAttempt = require("../paymentAttempt.service");
 const cadWalletService = require("../cadWallet.service");
 const { normalizeStoredDocumentList } = require("../../utils/surveyDocuments");
+const { mongoRoleEquals, mongoStatusEquals } = require("../../utils/roleNormalize");
 
 // CAD must accept within this window after assignment; otherwise it is auto-rejected.
 const AUTO_REJECT_AFTER_MS = 2 * 60 * 60 * 1000; // 2 hours
@@ -173,11 +177,7 @@ async function create(payload, assignedBy) {
       code: "SURVEY_SKETCH_NOT_FOUND",
     });
   }
-  if (sketch.status === SURVEY_SKETCH_STATUS.PAYMENT_PENDING) {
-    throw new BadRequestError("Survey sketch payment is not completed yet.", {
-      code: "SKETCH_PAYMENT_PENDING",
-    });
-  }
+  assertSketchBookingPaymentAllowsWorkflow(sketch, { action: "assign" });
 
   const autoAssign = require("../autoAssign.service");
   // Manual assign gate when auto-assign is on (M-09): allow after timeout / exception.
@@ -192,8 +192,8 @@ async function create(payload, assignedBy) {
   if (assignedCadUserId) {
     const cadUser = await User.findOne({
       _id: assignedCadUserId,
-      role: USER_ROLES.CAD,
-      status: USER_STATUS.ACTIVE,
+      ...mongoRoleEquals(USER_ROLES.CAD),
+      ...mongoStatusEquals(USER_STATUS.ACTIVE),
       deletedAt: null,
     }).lean();
     if (!cadUser) {
@@ -210,8 +210,8 @@ async function create(payload, assignedBy) {
     } else {
       const cadUser = await User.findOne({
         _id: cadCenterId,
-        role: USER_ROLES.CAD,
-        status: USER_STATUS.ACTIVE,
+        ...mongoRoleEquals(USER_ROLES.CAD),
+        ...mongoStatusEquals(USER_STATUS.ACTIVE),
         deletedAt: null,
       }).lean();
       if (cadUser) {
@@ -390,6 +390,14 @@ async function update(assignmentId, updates, actor) {
   if (!doc) {
     throw new NotFoundError("Assignment not found", { code: "ASSIGNMENT_NOT_FOUND" });
   }
+  if (doc.surveyorSketchUpload) {
+    const sketchForGate = await SurveyorSketchUpload.findById(doc.surveyorSketchUpload).select(
+      "status sketchPayment"
+    );
+    if (sketchForGate) {
+      assertSketchBookingPaymentAllowsWorkflow(sketchForGate, { action: "assignment_update" });
+    }
+  }
 
   let reassignedCad = false;
   if (updates.assignedCadUserId !== undefined) {
@@ -406,8 +414,8 @@ async function update(assignmentId, updates, actor) {
     }
     const cadUser = await User.findOne({
       _id: updates.assignedCadUserId,
-      role: USER_ROLES.CAD,
-      status: USER_STATUS.ACTIVE,
+      ...mongoRoleEquals(USER_ROLES.CAD),
+      ...mongoStatusEquals(USER_STATUS.ACTIVE),
       deletedAt: null,
     }).lean();
     if (!cadUser) {
@@ -502,6 +510,14 @@ async function pullbackAndReassign(assignmentId, { assignedCadUserId, reason }, 
   if (!doc) {
     throw new NotFoundError("Assignment not found", { code: "ASSIGNMENT_NOT_FOUND" });
   }
+  if (doc.surveyorSketchUpload) {
+    const sketchForGate = await SurveyorSketchUpload.findById(doc.surveyorSketchUpload).select(
+      "status sketchPayment"
+    );
+    if (sketchForGate) {
+      assertSketchBookingPaymentAllowsWorkflow(sketchForGate, { action: "pullback_reassign" });
+    }
+  }
 
   if (!ACTIVE_ASSIGNMENT_STATUSES.includes(doc.status)) {
     throw new BadRequestError(
@@ -512,8 +528,8 @@ async function pullbackAndReassign(assignmentId, { assignedCadUserId, reason }, 
 
   const nextCadUser = await User.findOne({
     _id: assignedCadUserId,
-    role: USER_ROLES.CAD,
-    status: USER_STATUS.ACTIVE,
+    ...mongoRoleEquals(USER_ROLES.CAD),
+    ...mongoStatusEquals(USER_STATUS.ACTIVE),
     deletedAt: null,
   }).lean();
   if (!nextCadUser) {
@@ -571,6 +587,14 @@ async function respondToAssignment(assignmentId, cadUser, action) {
   const doc = await SurveySketchAssignment.findById(assignmentId);
   if (!doc) {
     throw new NotFoundError("Assignment not found", { code: "ASSIGNMENT_NOT_FOUND" });
+  }
+  if (doc.surveyorSketchUpload) {
+    const sketchForGate = await SurveyorSketchUpload.findById(doc.surveyorSketchUpload).select(
+      "status sketchPayment"
+    );
+    if (sketchForGate) {
+      assertSketchBookingPaymentAllowsWorkflow(sketchForGate, { action: "cad_respond" });
+    }
   }
 
   const userCenterId =
@@ -894,6 +918,14 @@ async function deliverCadSketch(assignmentId, cadUser, fileMeta) {
   if (!doc) {
     throw new NotFoundError("Assignment not found", { code: "ASSIGNMENT_NOT_FOUND" });
   }
+  if (doc.surveyorSketchUpload) {
+    const sketchForGate = await SurveyorSketchUpload.findById(doc.surveyorSketchUpload).select(
+      "status sketchPayment"
+    );
+    if (sketchForGate) {
+      assertSketchBookingPaymentAllowsWorkflow(sketchForGate, { action: "cad_deliver" });
+    }
+  }
   if (String(doc.assignedTo) !== String(cadUser._id)) {
     throw new ForbiddenError("Only the assigned CAD user can submit the deliverable", {
       code: "NOT_ASSIGNED_CAD_USER",
@@ -1179,6 +1211,7 @@ async function requestSketchRevision(uploadId, surveyor, payload) {
   if (!uploadDoc) {
     throw new NotFoundError("Survey sketch upload not found", { code: "SURVEY_SKETCH_NOT_FOUND" });
   }
+  assertSketchBookingPaymentAllowsWorkflow(uploadDoc, { action: "revision_request" });
   if (String(uploadDoc.surveyor) !== String(surveyor._id)) {
     throw new ForbiddenError("You can request revision only for your own sketch", {
       code: "NOT_YOUR_SKETCH",
@@ -1446,6 +1479,7 @@ async function deliverCadSketchRevision(assignmentId, cadUser, fileMeta) {
   if (!uploadDoc) {
     throw new NotFoundError("Survey sketch upload not found", { code: "SURVEY_SKETCH_NOT_FOUND" });
   }
+  assertSketchBookingPaymentAllowsWorkflow(uploadDoc, { action: "cad_revision_deliver" });
   if (!hasCadDeliverableFiles(uploadDoc.cadDeliverable)) {
     throw new BadRequestError(
       "Base CAD deliverable not found. Submit initial deliverable first.",
@@ -1546,11 +1580,16 @@ async function getCadDashboardStats(cadUser) {
 
   const [
     totalOrders,
+    pendingAcceptOrders,
     inProgressOrders,
-    acceptedOrders,
+    completedOrders,
     rejectedOrders,
   ] = await Promise.all([
     SurveySketchAssignment.countDocuments(touched),
+    SurveySketchAssignment.countDocuments({
+      assignedTo: uid,
+      status: SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED,
+    }),
     SurveySketchAssignment.countDocuments({
       assignedTo: uid,
       status: {
@@ -1562,13 +1601,7 @@ async function getCadDashboardStats(cadUser) {
     }),
     SurveySketchAssignment.countDocuments({
       assignedTo: uid,
-      status: {
-        $in: [
-          SURVEY_SKETCH_ASSIGNMENT_STATUS.IN_PROGRESS,
-          SURVEY_SKETCH_ASSIGNMENT_STATUS.ON_HOLD,
-          SURVEY_SKETCH_ASSIGNMENT_STATUS.COMPLETED,
-        ],
-      },
+      status: SURVEY_SKETCH_ASSIGNMENT_STATUS.COMPLETED,
     }),
     SurveySketchAssignment.countDocuments({
       rejectedByCad: uid,
@@ -1576,11 +1609,32 @@ async function getCadDashboardStats(cadUser) {
     }),
   ]);
 
+  // Legacy: acceptedOrders = working + completed (does NOT include pending accept).
+  const acceptedOrders = inProgressOrders + completedOrders;
+
   return {
     totalOrders,
+    pendingAcceptOrders,
+    inProgressOrders,
+    completedOrders,
+    /** @deprecated Prefer pendingAccept + inProgress + completed; kept for existing FE cards. */
     acceptedOrders,
     rejectedOrders,
-    inProgressOrders,
+    countSemantics: {
+      version: "CAD_DASHBOARD_COUNTS_V2",
+      note:
+        "Do not expect acceptedOrders + rejectedOrders === totalOrders. " +
+        "pendingAcceptOrders (ASSIGNED, not yet accepted) is in totalOrders but not in acceptedOrders. " +
+        "Partition: pendingAccept + inProgress + completed + rejected ≈ rows this CAD touched (minus cancelled-by-admin without reject).",
+      fields: {
+        totalOrders: "assignedTo OR rejectedByCad (all statuses)",
+        pendingAcceptOrders: "assignedTo + status ASSIGNED",
+        inProgressOrders: "assignedTo + IN_PROGRESS|ON_HOLD",
+        completedOrders: "assignedTo + COMPLETED",
+        acceptedOrders: "legacy = inProgressOrders + completedOrders",
+        rejectedOrders: "rejectedByCad + CANCELLED",
+      },
+    },
   };
 }
 
@@ -1644,56 +1698,68 @@ async function extendAssignmentSla(assignmentId, { hours, ms, reason }, actor) {
 
 /**
  * Recompute slaState + emit warning/escalate/breach alerts (scheduled).
+ * Alert summary counts are live aging (OPS-01), not only newly transitioned rows.
+ * Scans all open assignments (sorted by dueAt); optional limit only caps transition processing.
  */
-async function processSlaAlerts({ limit = 100 } = {}) {
+async function processSlaAlerts({ limit = null } = {}) {
   const openStatuses = [
     SURVEY_SKETCH_ASSIGNMENT_STATUS.ASSIGNED,
     SURVEY_SKETCH_ASSIGNMENT_STATUS.IN_PROGRESS,
     SURVEY_SKETCH_ASSIGNMENT_STATUS.ON_HOLD,
   ];
   const open = await SurveySketchAssignment.find({ status: { $in: openStatuses } })
-    .select("status assignedAt dueAt slaDurationMs slaPausedTotalMs slaPausedAt slaExtensions slaState assignedTo surveyorSketchUpload")
-    .limit(limit)
+    .select(
+      "status assignedAt dueAt slaDurationMs slaPausedTotalMs slaPausedAt slaExtensions slaState assignedTo surveyorSketchUpload"
+    )
+    .sort({ dueAt: 1 })
     .lean();
 
-  let warned = 0;
-  let escalated = 0;
-  let breached = 0;
   const updates = [];
 
+  // Backfill dueAt on all open rows first so aging matches live truth.
   for (const a of open) {
-    // Backfill dueAt for legacy rows
     if (!a.dueAt && a.assignedAt) {
-      const tmp = {
-        ...a,
-        slaDurationMs: a.slaDurationMs || slaDue.getStandardSlaMs(),
-        slaExtensions: a.slaExtensions || [],
-      };
+      const slaDurationMs = a.slaDurationMs || slaDue.getStandardSlaMs();
       const dueAt = slaDue.computeDueAt({
-        assignedAt: tmp.assignedAt,
-        slaDurationMs: tmp.slaDurationMs,
-        pausedTotalMs: tmp.slaPausedTotalMs || 0,
-        slaPausedAt: tmp.slaPausedAt,
-        extensions: tmp.slaExtensions,
+        assignedAt: a.assignedAt,
+        slaDurationMs,
+        pausedTotalMs: a.slaPausedTotalMs || 0,
+        slaPausedAt: a.slaPausedAt,
+        extensions: a.slaExtensions || [],
       });
       a.dueAt = dueAt;
+      a.slaDurationMs = slaDurationMs;
       updates.push(
         SurveySketchAssignment.updateOne(
           { _id: a._id },
-          { $set: { dueAt, dueDate: dueAt, slaDurationMs: tmp.slaDurationMs } }
+          { $set: { dueAt, dueDate: dueAt, slaDurationMs } }
+        )
+      );
+    }
+  }
+
+  const aging = slaDue.computeSlaAgingSummary(open, { itemLimit: 50 });
+  const processLimit =
+    limit != null && Number(limit) > 0 ? Math.min(Number(limit), open.length) : open.length;
+  const toProcess = open.slice(0, processLimit);
+
+  let newlyWarned = 0;
+  let newlyEscalated = 0;
+  let newlyBreached = 0;
+
+  for (const a of toProcess) {
+    const snap = slaDue.resolveSlaState(a);
+    if (snap.state !== a.slaState) {
+      updates.push(
+        SurveySketchAssignment.updateOne(
+          { _id: a._id },
+          { $set: { slaState: snap.state, dueAt: snap.dueAt } }
         )
       );
     }
 
-    const snap = slaDue.resolveSlaState(a);
-    if (snap.state !== a.slaState) {
-      updates.push(
-        SurveySketchAssignment.updateOne({ _id: a._id }, { $set: { slaState: snap.state, dueAt: snap.dueAt } })
-      );
-    }
-
     if (snap.state === slaDue.SLA_STATE.WARNING && a.slaState !== slaDue.SLA_STATE.WARNING) {
-      warned += 1;
+      newlyWarned += 1;
       logger.warn("ALERT_SLA_WARNING", {
         alertType: "SLA_WARNING",
         severity: "medium",
@@ -1702,8 +1768,11 @@ async function processSlaAlerts({ limit = 100 } = {}) {
         remainingMs: snap.remainingMs,
         escalateTo: "operations",
       });
-    } else if (snap.state === slaDue.SLA_STATE.ESCALATED && a.slaState !== slaDue.SLA_STATE.ESCALATED) {
-      escalated += 1;
+    } else if (
+      snap.state === slaDue.SLA_STATE.ESCALATED &&
+      a.slaState !== slaDue.SLA_STATE.ESCALATED
+    ) {
+      newlyEscalated += 1;
       logger.warn("ALERT_SLA_ESCALATED", {
         alertType: "SLA_ESCALATED",
         severity: "high",
@@ -1712,8 +1781,11 @@ async function processSlaAlerts({ limit = 100 } = {}) {
         remainingMs: snap.remainingMs,
         escalateTo: "operations",
       });
-    } else if (snap.state === slaDue.SLA_STATE.BREACHED && a.slaState !== slaDue.SLA_STATE.BREACHED) {
-      breached += 1;
+    } else if (
+      snap.state === slaDue.SLA_STATE.BREACHED &&
+      a.slaState !== slaDue.SLA_STATE.BREACHED
+    ) {
+      newlyBreached += 1;
       logger.warn("ALERT_SLA_BREACH", {
         alertType: "SLA_BREACH",
         severity: "high",
@@ -1726,7 +1798,35 @@ async function processSlaAlerts({ limit = 100 } = {}) {
   }
 
   if (updates.length) await Promise.all(updates);
-  return { scanned: open.length, warned, escalated, breached };
+
+  // Summary fields match live aging (same as getSlaAging / observability alerts).
+  return {
+    scanned: open.length,
+    processed: toProcess.length,
+    warned: aging.warning,
+    escalated: aging.escalated,
+    breached: aging.breached,
+    paused: aging.paused,
+    withinSla: aging.withinSla,
+    openCount: aging.openCount,
+    transitions: {
+      warned: newlyWarned,
+      escalated: newlyEscalated,
+      breached: newlyBreached,
+    },
+    newlyWarned,
+    newlyEscalated,
+    newlyBreached,
+    aging: {
+      withinSla: aging.withinSla,
+      warning: aging.warning,
+      escalated: aging.escalated,
+      breached: aging.breached,
+      paused: aging.paused,
+      openCount: aging.openCount,
+      items: aging.items,
+    },
+  };
 }
 
 module.exports = {

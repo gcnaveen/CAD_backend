@@ -7,7 +7,6 @@
 
 const { connectDB, disconnectDB, mongoose } = require("./database");
 
-// Back-compat alias used by `testApi`
 async function connectToDatabase() {
   return connectDB();
 }
@@ -18,4 +17,3 @@ module.exports = {
   connectToDatabase,
   mongoose,
 };
-

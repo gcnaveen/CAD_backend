@@ -1,19 +1,20 @@
 /**
- * Resolves sketch upload / paid-revision / balance amounts — **server-side only**.
+ * Resolves sketch upload / paid-revision / balance / superimpose amounts — **server-side only**.
  *
- * Priority:
- * 1. Admin standard-pricing plan + discount (₹) if set
- * 2. Global env fees (`SKETCH_UPLOAD_FEE_PAISE` / `SKETCH_REVISION_FEE_PAISE` / `SKETCH_BALANCE_FEE_PAISE`)
+ * Single server-owned contract (BIZ-09 / NEW-02 / NEW-04):
+ *   `src/config/sketchOrderPricing.js` → booking ₹100 + balance ₹400 = ₹500 (+ superimpose ₹200)
  *
- * Client request amounts (`amount`, `amountRupees`, `amountPaise`) are **never** accepted.
+ * Admin may apply **discounts only** (cannot replace plan with ₹1 / arbitrary amounts).
+ * Client request amounts are **never** accepted.
+ *
+ * When `isSuperimpose` is true, upload charge = booking + superimpose add-on.
  */
 
 const pricingRepo = require("./sketchStandardPricing.repository");
 const {
-  getSketchUploadFeePaise,
-  getSketchRevisionFeePaise,
-  getSketchBalanceFeePaise,
-} = require("./phonePeSketchPayment.service");
+  getApprovedSketchOrderPricing,
+  contractPlanRupees,
+} = require("../config/sketchOrderPricing");
 
 /** Exported for unit tests (plan − discount, discount capped at plan). */
 function payableRupeesFromPlan(planRupees, discountRupees) {
@@ -24,91 +25,111 @@ function payableRupeesFromPlan(planRupees, discountRupees) {
   return Math.max(0, p - cappedDisc);
 }
 
-async function resolveSketchUploadFee() {
-  const pricing = await pricingRepo.getStandardPricingLean();
-  const plan = pricing?.sketchUploadPlanAmountRupees;
-  if (plan != null && Number.isFinite(Number(plan)) && Number(plan) >= 0) {
-    const payRupees = payableRupeesFromPlan(plan, pricing?.sketchUploadDiscountRupees);
-    const feePaise = Math.round(Number(payRupees) * 100);
-    return {
-      feePaise,
-      planAmountRupees: Number(plan),
-      discountRupees: Math.min(Math.max(0, Number(pricing?.sketchUploadDiscountRupees) || 0), Number(plan)),
-      payableRupees: Number(payRupees),
-      source: "admin",
-    };
-  }
-  const envPaise = getSketchUploadFeePaise();
+/**
+ * @param {"upload"|"balance"|"revision"|"superimpose"} line
+ * @param {object|null} pricing admin lean doc
+ * @param {string} discountKey
+ */
+function resolveContractLine(line, pricing, discountKey) {
+  const contract = getApprovedSketchOrderPricing();
+  const planRupees = contractPlanRupees(line);
+  const rawDisc = pricing?.[discountKey];
+  const discountRupees =
+    rawDisc != null && Number.isFinite(Number(rawDisc)) ? Math.max(0, Number(rawDisc)) : 0;
+  const cappedDisc = Math.min(discountRupees, planRupees);
+  const payRupees = payableRupeesFromPlan(planRupees, cappedDisc);
+  const feePaise = Math.round(Number(payRupees) * 100);
   return {
-    feePaise: envPaise,
+    feePaise,
+    planAmountRupees: planRupees,
+    discountRupees: cappedDisc,
+    payableRupees: Number(payRupees),
+    source: cappedDisc > 0 ? "contract+discount" : "contract",
+    contractVersion: contract.version,
+    baselineId: contract.baselineId,
+  };
+}
+
+async function resolveSuperimposeFee() {
+  const pricing = await pricingRepo.getStandardPricingLean();
+  return resolveContractLine("superimpose", pricing, "sketchSuperimposeDiscountRupees");
+}
+
+/**
+ * @param {{ isSuperimpose?: boolean }} [options]
+ */
+async function resolveSketchUploadFee(options = {}) {
+  const isSuperimpose = options.isSuperimpose === true;
+  const pricing = await pricingRepo.getStandardPricingLean();
+  const base = resolveContractLine("upload", pricing, "sketchUploadDiscountRupees");
+
+  let superimpose = {
+    feePaise: 0,
     planAmountRupees: null,
     discountRupees: null,
-    payableRupees: envPaise / 100,
-    source: envPaise > 0 ? "env" : "none",
+    payableRupees: 0,
+    source: "none",
+  };
+  if (isSuperimpose) {
+    superimpose = await resolveSuperimposeFee();
+  }
+
+  const feePaise = Math.round(Number(base.feePaise) || 0) + Math.round(Number(superimpose.feePaise) || 0);
+  return {
+    feePaise,
+    planAmountRupees: base.planAmountRupees,
+    discountRupees: base.discountRupees,
+    payableRupees: feePaise / 100,
+    source: base.source,
+    contractVersion: base.contractVersion,
+    baselineId: base.baselineId,
+    baseFeePaise: Math.round(Number(base.feePaise) || 0),
+    superimposeFeePaise: Math.round(Number(superimpose.feePaise) || 0),
+    isSuperimpose,
+    superimpose: isSuperimpose ? superimpose : null,
   };
 }
 
 async function resolveSketchRevisionFee() {
   const pricing = await pricingRepo.getStandardPricingLean();
-  const plan = pricing?.sketchRevisionPlanAmountRupees;
-  if (plan != null && Number.isFinite(Number(plan)) && Number(plan) >= 0) {
-    const payRupees = payableRupeesFromPlan(plan, pricing?.sketchRevisionDiscountRupees);
-    const feePaise = Math.round(Number(payRupees) * 100);
-    return {
-      feePaise,
-      planAmountRupees: Number(plan),
-      discountRupees: Math.min(Math.max(0, Number(pricing?.sketchRevisionDiscountRupees) || 0), Number(plan)),
-      payableRupees: Number(payRupees),
-      source: "admin",
-    };
-  }
-  const envPaise = getSketchRevisionFeePaise();
-  return {
-    feePaise: envPaise,
-    planAmountRupees: null,
-    discountRupees: null,
-    payableRupees: envPaise / 100,
-    source: envPaise > 0 ? "env" : "none",
-  };
+  return resolveContractLine("revision", pricing, "sketchRevisionDiscountRupees");
 }
 
 /** Post-delivery balance fee that unlocks CAD download (audit C-02). */
 async function resolveSketchBalanceFee() {
   const pricing = await pricingRepo.getStandardPricingLean();
-  const plan = pricing?.sketchBalancePlanAmountRupees;
-  if (plan != null && Number.isFinite(Number(plan)) && Number(plan) >= 0) {
-    const payRupees = payableRupeesFromPlan(plan, pricing?.sketchBalanceDiscountRupees);
-    const feePaise = Math.round(Number(payRupees) * 100);
-    return {
-      feePaise,
-      planAmountRupees: Number(plan),
-      discountRupees: Math.min(Math.max(0, Number(pricing?.sketchBalanceDiscountRupees) || 0), Number(plan)),
-      payableRupees: Number(payRupees),
-      source: "admin",
-    };
-  }
-  const envPaise = getSketchBalanceFeePaise();
-  return {
-    feePaise: envPaise,
-    planAmountRupees: null,
-    discountRupees: null,
-    payableRupees: envPaise / 100,
-    source: envPaise > 0 ? "env" : "none",
-  };
+  return resolveContractLine("balance", pricing, "sketchBalanceDiscountRupees");
 }
 
 async function getPublicPricingBreakdown() {
-  const [upload, revision, balance] = await Promise.all([
-    resolveSketchUploadFee(),
+  const contract = getApprovedSketchOrderPricing();
+  const [upload, revision, balance, superimpose] = await Promise.all([
+    resolveSketchUploadFee({ isSuperimpose: false }),
     resolveSketchRevisionFee(),
     resolveSketchBalanceFee(),
+    resolveSuperimposeFee(),
   ]);
   const { getApprovedBusinessRulesPublic } = require("../config/businessRulesBaseline");
+  const uploadWithSuperimpose = await resolveSketchUploadFee({ isSuperimpose: true });
   return {
+    /** Single server-owned contract — FE must prefer this over hard-coded ₹500. */
+    pricingContract: {
+      version: contract.version,
+      baselineId: contract.baselineId,
+      reviewDate: contract.reviewDate,
+      phaseRefs: contract.phaseRefs,
+      grossRupees: contract.grossRupees,
+      bookingRupees: contract.bookingRupees,
+      balanceRupees: contract.balanceRupees,
+      revisionRupees: contract.revisionRupees,
+      superimposeRupees: contract.superimposeRupees,
+      publicCopy: contract.publicCopy,
+    },
     upload,
     revision,
     balance,
-    // H-08: canonical rules for FE (no tiers; fixed ₹400 balance; one QC list)
+    superimpose,
+    uploadWithSuperimpose,
     businessRules: getApprovedBusinessRulesPublic(),
   };
 }
@@ -118,5 +139,6 @@ module.exports = {
   resolveSketchUploadFee,
   resolveSketchRevisionFee,
   resolveSketchBalanceFee,
+  resolveSuperimposeFee,
   getPublicPricingBreakdown,
 };

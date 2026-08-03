@@ -1,7 +1,10 @@
 /**
  * Masters API handler – District → Taluka → Hobli hierarchy + CAD Center.
  * Ensures DB connection, validates input, delegates to controllers.
- * CAD Center endpoints require Super Admin or Admin role.
+ *
+ * Geo write routes (district / taluka / hobli / village): SUPER_ADMIN only.
+ * CAD Center endpoints: Super Admin or Admin.
+ * Read (GET) geo hierarchy stays public for enrollment / sketch forms.
  */
 
 const { connectDB } = require("../config/db");
@@ -27,6 +30,11 @@ async function ensureDb() {
     await connectDB();
     dbConnected = true;
   }
+}
+
+/** Geo master-data writes — SUPER_ADMIN only. */
+async function requireSuperAdmin(event) {
+  return authorize(USER_ROLES.SUPER_ADMIN)(event);
 }
 
 function getPathParams(event) {
@@ -58,6 +66,7 @@ function getPagination(event) {
 // -------- District --------
 exports.createDistrict = asyncHandler(async (event) => {
   await ensureDb();
+  await requireSuperAdmin(event);
   const body = validate(schemas.districtCreate)(event);
   return await districtController.createDistrict(body);
 });
@@ -81,6 +90,7 @@ exports.getDistrict = asyncHandler(async (event) => {
 
 exports.updateDistrict = asyncHandler(async (event) => {
   await ensureDb();
+  await requireSuperAdmin(event);
   const { districtId } = getPathParams(event);
   validObjectId(districtId, "districtId");
   const body = validate(schemas.districtUpdate)(event);
@@ -101,6 +111,7 @@ exports.listTalukasByDistrict = asyncHandler(async (event) => {
 // -------- Taluka (under District) --------
 exports.createTaluka = asyncHandler(async (event) => {
   await ensureDb();
+  await requireSuperAdmin(event);
   const body = validate(schemas.talukaCreate)(event);
   return await talukaController.createTaluka(body);
 });
@@ -126,6 +137,7 @@ exports.getTaluka = asyncHandler(async (event) => {
 
 exports.updateTaluka = asyncHandler(async (event) => {
   await ensureDb();
+  await requireSuperAdmin(event);
   const { talukaId } = getPathParams(event);
   validObjectId(talukaId, "talukaId");
   const body = validate(schemas.talukaUpdate)(event);
@@ -146,6 +158,7 @@ exports.listHoblisByTaluka = asyncHandler(async (event) => {
 // -------- Hobli (under Taluka) --------
 exports.createHobli = asyncHandler(async (event) => {
   await ensureDb();
+  await requireSuperAdmin(event);
   const body = validate(schemas.hobliCreate)(event);
   return await hobliController.createHobli(body);
 });
@@ -172,6 +185,7 @@ exports.getHobli = asyncHandler(async (event) => {
 
 exports.updateHobli = asyncHandler(async (event) => {
   await ensureDb();
+  await requireSuperAdmin(event);
   const { hobliId } = getPathParams(event);
   validObjectId(hobliId, "hobliId");
   const body = validate(schemas.hobliUpdate)(event);
@@ -192,6 +206,7 @@ exports.listVillagesByHobli = asyncHandler(async (event) => {
 // -------- Village (under District → Taluka → Hobli) --------
 exports.createVillage = asyncHandler(async (event) => {
   await ensureDb();
+  await requireSuperAdmin(event);
   const body = validate(schemas.villageCreate)(event);
   return await villageController.createVillage(body);
 });
@@ -218,6 +233,7 @@ exports.getVillage = asyncHandler(async (event) => {
 
 exports.updateVillage = asyncHandler(async (event) => {
   await ensureDb();
+  await requireSuperAdmin(event);
   const { villageId } = getPathParams(event);
   validObjectId(villageId, "villageId");
   const body = validate(schemas.villageUpdate)(event);
