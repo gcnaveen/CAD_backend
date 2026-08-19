@@ -56,13 +56,14 @@ function created(data, meta) {
   return json(201, { success: true, data, ...(meta ? { meta } : null) });
 }
 
-/** Browser redirect (PhonePe return URL, OAuth, etc.). */
+/** Browser redirect (PhonePe return URL, OAuth, etc.). Minimal headers — CSP applied by asyncHandler is skipped for 3xx. */
 function redirect(url, statusCode = 302) {
-  const base = {
-    Location: String(url),
-    ...defaultApiHeaders(),
-  };
-  return response(statusCode, "", { headers: base });
+  return response(statusCode, "", {
+    headers: {
+      Location: String(url),
+      "Cache-Control": "no-store",
+    },
+  });
 }
 
 /**

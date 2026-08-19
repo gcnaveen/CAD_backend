@@ -120,6 +120,68 @@ function getFailureRedirectUrl() {
   return resolvePhonePeRedirectUrl("PHONEPE_FAILURE_REDIRECT_URL");
 }
 
+/**
+ * Allow-listed browser origin for post-PhonePe return (keeps www vs apex session).
+ * @param {string|null|undefined} raw
+ * @returns {string|null}
+ */
+function sanitizeReturnOrigin(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  let origin;
+  try {
+    origin = new URL(s).origin;
+  } catch {
+    return null;
+  }
+  const { parseAllowlist } = require("../utils/httpSecurity");
+  const allow = parseAllowlist();
+  if (!allow.includes(origin)) return null;
+  return origin;
+}
+
+/**
+ * Final browser Location after PhonePe callback.
+ * Always lands on surveyor dashboard (never /login), with payment outcome query.
+ * Prefer returnOrigin from checkout start so localStorage/session host matches.
+ *
+ * @param {"success"|"cancelled"} outcome
+ * @param {{ returnOrigin?: string|null }} [opts]
+ */
+function buildBrowserPaymentReturnUrl(outcome, { returnOrigin = null } = {}) {
+  const base =
+    outcome === "success" ? getSuccessRedirectUrl() : getFailureRedirectUrl();
+  let u;
+  try {
+    u = new URL(base);
+  } catch {
+    u = new URL("https://north-cot.com/dashboard/user");
+  }
+
+  const safeOrigin = sanitizeReturnOrigin(returnOrigin);
+  if (safeOrigin) {
+    const o = new URL(safeOrigin);
+    u.protocol = o.protocol;
+    u.host = o.host;
+  }
+
+  // Never bounce users to login after payment cancel/fail — that looks like a logout.
+  const path = String(u.pathname || "/");
+  if (
+    path === "/" ||
+    /\/login/i.test(path) ||
+    /\/register/i.test(path) ||
+    /payment-success/i.test(path) ||
+    /payment-failure/i.test(path) ||
+    /\/payment\/return/i.test(path)
+  ) {
+    u.pathname = "/dashboard/user";
+  }
+
+  u.searchParams.set("payment", outcome === "success" ? "success" : "cancelled");
+  return u.toString();
+}
+
 /** PhonePe transaction / merchant order ids must stay ≤35 chars (alphanumeric + underscore). */
 const PHONEPE_MAX_ORDER_ID_LEN = 35;
 
@@ -302,14 +364,16 @@ function assertPaidMatchesExpected(expectedPaise, phonepeResponse) {
 
 /**
  * Browser redirect handler after PhonePe (GET callback).
+ * Cancel / fail / success all return to the surveyor dashboard (session preserved).
  * @param {string} merchantOrderId
  * @returns {Promise<{ redirectUrl: string }>}
  */
 async function handlePhonePeCallback(merchantOrderId) {
-  const successUrl = getSuccessRedirectUrl();
-  const failUrl = getFailureRedirectUrl();
+  const pickReturn = (outcome, returnOrigin = null) =>
+    buildBrowserPaymentReturnUrl(outcome, { returnOrigin });
+
   if (!merchantOrderId || typeof merchantOrderId !== "string") {
-    return { redirectUrl: failUrl };
+    return { redirectUrl: pickReturn("cancelled") };
   }
 
   const client = getClient();
@@ -340,6 +404,11 @@ async function handlePhonePeCallback(merchantOrderId) {
     assertPaidMatchesExpected,
   });
 
+  const returnOrigin =
+    attemptResult.attempt?.providerReference?.returnOrigin ||
+    attemptResult.attempt?.returnOrigin ||
+    null;
+
   if (attemptResult.reason === "UNKNOWN_PAYMENT_ATTEMPT") {
     // Fall through to legacy routing for pre-ledger payments.
   } else if (attemptResult.attempt) {
@@ -362,7 +431,7 @@ async function handlePhonePeCallback(merchantOrderId) {
         parsedUploadId,
         lockedUploadId,
       });
-      return { redirectUrl: failUrl };
+      return { redirectUrl: pickReturn("cancelled", returnOrigin) };
     }
 
     if (!attemptResult.ok) {
@@ -373,7 +442,7 @@ async function handlePhonePeCallback(merchantOrderId) {
       } else if (purpose === paymentAttempt.PAYMENT_PURPOSE.REVISION) {
         await surveySketchAssignmentService.markRevisionPaymentFailed(merchantOrderId, phonepeResponse);
       }
-      return { redirectUrl: failUrl };
+      return { redirectUrl: pickReturn("cancelled", returnOrigin) };
     }
 
     if (purpose === paymentAttempt.PAYMENT_PURPOSE.BALANCE) {
@@ -382,7 +451,9 @@ async function handlePhonePeCallback(merchantOrderId) {
         phonepeResponse,
         { merchantOrderId, expectedAmountPaise: attemptResult.expectedPaise }
       );
-      return { redirectUrl: result?.paymentRejected ? failUrl : successUrl };
+      return {
+        redirectUrl: pickReturn(result?.paymentRejected ? "cancelled" : "success", returnOrigin),
+      };
     }
     if (purpose === paymentAttempt.PAYMENT_PURPOSE.BOOKING) {
       const result = await surveyorSketchUploadService.completeSketchUploadAfterPayment(
@@ -390,14 +461,18 @@ async function handlePhonePeCallback(merchantOrderId) {
         phonepeResponse,
         { merchantOrderId, expectedAmountPaise: attemptResult.expectedPaise }
       );
-      return { redirectUrl: result?.paymentRejected ? failUrl : successUrl };
+      return {
+        redirectUrl: pickReturn(result?.paymentRejected ? "cancelled" : "success", returnOrigin),
+      };
     }
     if (purpose === paymentAttempt.PAYMENT_PURPOSE.REVISION) {
       const result = await surveySketchAssignmentService.completeRevisionAfterPayment(
         merchantOrderId,
         phonepeResponse
       );
-      return { redirectUrl: result?.paymentRejected ? failUrl : successUrl };
+      return {
+        redirectUrl: pickReturn(result?.paymentRejected ? "cancelled" : "success", returnOrigin),
+      };
     }
   }
 
@@ -406,11 +481,11 @@ async function handlePhonePeCallback(merchantOrderId) {
     const uploadId = parseBalanceUploadIdFromMerchantOrder(merchantOrderId);
     if (!uploadId) {
       logger.error("PhonePe callback: could not parse balance upload id", { merchantOrderId });
-      return { redirectUrl: failUrl };
+      return { redirectUrl: pickReturn("cancelled") };
     }
     if (!completed) {
       await cadDownloadEntitlement.markBalancePaymentFailed(uploadId, phonepeResponse);
-      return { redirectUrl: failUrl };
+      return { redirectUrl: pickReturn("cancelled") };
     }
     const result = await cadDownloadEntitlement.completeBalancePaymentAfterPhonePe(
       uploadId,
@@ -418,20 +493,20 @@ async function handlePhonePeCallback(merchantOrderId) {
       { merchantOrderId }
     );
     if (result?.paymentRejected) {
-      return { redirectUrl: failUrl };
+      return { redirectUrl: pickReturn("cancelled") };
     }
-    return { redirectUrl: successUrl };
+    return { redirectUrl: pickReturn("success") };
   }
 
   if (merchantOrderId.startsWith("sketch_") || merchantOrderId.startsWith("sk")) {
     const uploadId = parseSketchUploadIdFromMerchantOrder(merchantOrderId);
     if (!uploadId) {
       logger.error("PhonePe callback: could not parse sketch upload id", { merchantOrderId });
-      return { redirectUrl: failUrl };
+      return { redirectUrl: pickReturn("cancelled") };
     }
     if (!completed) {
       await surveyorSketchUploadService.markSketchPaymentFailed(uploadId, phonepeResponse);
-      return { redirectUrl: failUrl };
+      return { redirectUrl: pickReturn("cancelled") };
     }
     const result = await surveyorSketchUploadService.completeSketchUploadAfterPayment(
       uploadId,
@@ -439,27 +514,27 @@ async function handlePhonePeCallback(merchantOrderId) {
       { merchantOrderId }
     );
     if (result?.paymentRejected) {
-      return { redirectUrl: failUrl };
+      return { redirectUrl: pickReturn("cancelled") };
     }
-    return { redirectUrl: successUrl };
+    return { redirectUrl: pickReturn("success") };
   }
 
   if (merchantOrderId.startsWith("rev_")) {
     if (!completed) {
       await surveySketchAssignmentService.markRevisionPaymentFailed(merchantOrderId, phonepeResponse);
-      return { redirectUrl: failUrl };
+      return { redirectUrl: pickReturn("cancelled") };
     }
     const result = await surveySketchAssignmentService.completeRevisionAfterPayment(
       merchantOrderId,
       phonepeResponse
     );
     if (result?.paymentRejected) {
-      return { redirectUrl: failUrl };
+      return { redirectUrl: pickReturn("cancelled") };
     }
-    return { redirectUrl: successUrl };
+    return { redirectUrl: pickReturn("success") };
   }
 
-  return { redirectUrl: failUrl };
+  return { redirectUrl: pickReturn("cancelled") };
 }
 
 module.exports = {
@@ -473,6 +548,8 @@ module.exports = {
   getSuccessRedirectUrl,
   getFailureRedirectUrl,
   resolvePhonePeRedirectUrl,
+  sanitizeReturnOrigin,
+  buildBrowserPaymentReturnUrl,
   buildCallbackUrl,
   extractPayRedirectUrl,
   extractPaidAmountPaise,

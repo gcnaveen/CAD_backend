@@ -10,6 +10,8 @@ const opsObservability = require("../services/opsObservability.service");
 const logger = require("../utils/logger");
 
 exports.handler = async (event) => {
+  const { assertProductionJwtSecret } = require("../config/secrets");
+  assertProductionJwtSecret();
   await connectDB();
   const asOf = event?.asOf || event?.date || undefined;
   logger.info("Running payment reconciliation", { asOf: asOf || "today_utc" });

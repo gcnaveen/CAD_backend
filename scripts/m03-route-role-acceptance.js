@@ -33,7 +33,10 @@ assert("authz tests CAD vs admin", /cad allowed on cad route, not admin/.test(au
 assert("authz tests surveyor vs admin", /surveyor forbidden on admin route/.test(authz));
 
 const mw = fs.readFileSync(path.join(root, "src/middleware/auth.middleware.js"), "utf8");
-assert("authorize enforces allowedRoles", /allowedRoles\.includes\(user\.role\)/.test(mw));
+assert(
+  "authorize enforces allowedRoles",
+  /allowed\.includes\(role\)/.test(mw) || /allowedRoles\.includes\(user\.role\)/.test(mw)
+);
 
 const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 assert("test:m03 script", typeof pkg.scripts["test:m03"] === "string");

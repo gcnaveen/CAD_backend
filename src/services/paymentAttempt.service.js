@@ -77,6 +77,10 @@ async function recordInitiated({
     throw new Error("Invalid payment attempt initiation");
   }
 
+  const { getRequestOrigin } = require("../utils/requestContext");
+  const { sanitizeReturnOrigin } = require("./phonePeSketchPayment.service");
+  const returnOrigin = sanitizeReturnOrigin(getRequestOrigin());
+
   try {
     const doc = await PaymentAttempt.create({
       purpose,
@@ -87,7 +91,10 @@ async function recordInitiated({
       expectedAmountPaise: expected,
       providerState: PROVIDER_STATE.PENDING,
       initiatedAt: new Date(),
-      providerReference: sanitizeProviderReference(null, merchantOrderId),
+      providerReference: {
+        ...sanitizeProviderReference(null, merchantOrderId),
+        ...(returnOrigin ? { returnOrigin } : {}),
+      },
     });
     return doc;
   } catch (err) {

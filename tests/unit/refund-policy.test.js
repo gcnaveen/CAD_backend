@@ -23,6 +23,8 @@ describe("refund policy unified", () => {
     assert.equal(r.refundPolicy.customerRefundEntitled, false);
     assert.ok(Array.isArray(r.refundPolicy.prohibitedCopy));
     assert.ok(r.refundPolicy.prohibitedCopy.some((c) => /money-back/i.test(c)));
+    assert.equal(r.refundPolicy.title, "Refund policy");
+    assert.ok(String(r.refundPolicy.summary).length > 20);
   });
 
   it("admin exceptional refund requires reasonCode + note", () => {

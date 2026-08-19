@@ -35,7 +35,9 @@ provider:
     MONGODB_URI: ${env:MONGODB_URI, ''}
     MONGODB_URI_STANDARD: ${env:MONGODB_URI_STANDARD, ''}
     MONGODB_DISCOVER_PRIMARY: 'false'
-    # Production: JWT_SECRET required — no fallback (audit H-01). Inject via env / SSM / Secrets Manager.
+    # SEC-27 / H-01: required. No fallback (not change-me, not a code default).
+    # Deploy fails if unset. Inject via Lambda env / SSM / Secrets Manager — never commit.
+    # Rotation signs out every active user; see docs/SECURITY_H01_SECRET_ROTATION.md.
     JWT_SECRET: ${env:JWT_SECRET}
     JWT_EXPIRES_IN: ${env:JWT_EXPIRES_IN, '24h'}
     JWT_ACCESS_EXPIRES_IN: ${env:JWT_ACCESS_EXPIRES_IN, '15m'}
@@ -49,7 +51,8 @@ provider:
     AUTH_COOKIE_DOMAIN: ${env:AUTH_COOKIE_DOMAIN, ''}
     AUTH_REFRESH_COOKIE_NAME: ${env:AUTH_REFRESH_COOKIE_NAME, 'cad_refresh'}
     AUTH_CSRF_COOKIE_NAME: ${env:AUTH_CSRF_COOKIE_NAME, 'cad_csrf'}
-    # Default 4 keeps current FE working; set PASSWORD_MIN_LENGTH=10 when FE ships H-02 password UI
+    # Do not raise PASSWORD_MIN_LENGTH without a coordinated frontend change.
+    # FE login/register/enrollment cap and validate exactly 4 numeric digits.
     PASSWORD_MIN_LENGTH: ${env:PASSWORD_MIN_LENGTH, '4'}
     BCRYPT_COST: ${env:BCRYPT_COST, '12'}
     AUTH_LOGIN_MAX_FAILURES: ${env:AUTH_LOGIN_MAX_FAILURES, '5'}
@@ -72,6 +75,8 @@ provider:
     PHONEPE_ENV: ${env:PHONEPE_ENV, 'SANDBOX'}
     # Required — no default (audit): deploy must fail if unset. Booking fee in paise (₹100 = 10000).
     SKETCH_UPLOAD_FEE_PAISE: ${env:SKETCH_UPLOAD_FEE_PAISE}
+    # PRICE-02: 0 = revision #2+ is not charged (after complimentary revision #1).
+    # Do not advertise a public ₹100 unless this (or admin revision plan) is > 0.
     SKETCH_REVISION_FEE_PAISE: ${env:SKETCH_REVISION_FEE_PAISE, '0'}
     # Audit C-02: post-delivery balance (default ₹400). Set 0 to waive download gate.
     SKETCH_BALANCE_FEE_PAISE: ${env:SKETCH_BALANCE_FEE_PAISE, '40000'}

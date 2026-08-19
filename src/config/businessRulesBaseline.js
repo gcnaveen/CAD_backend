@@ -131,15 +131,20 @@ function getApprovedBusinessRulesPublic() {
       ],
       note: "Do not publish until documentary basis is filed with Founder.",
     },
-    /** Unified refund policy — Terms + marketing + Admin ops must match (no conflicting refund promise). */
-    refundPolicy: (() => {
-      try {
-        const { getRefundPolicyPublic } = require("./refundPolicy");
-        return getRefundPolicyPublic();
-      } catch (_) {
-        return null;
-      }
-    })(),
+    /** Unified refund policy — Terms + marketing + Admin ops must match (LEGAL-01). */
+    refundPolicy: require("./refundPolicy").getRefundPolicyPublic(),
+    /**
+     * PRICE-02: homepage revision fee. 0 = do not advertise a paid revision
+     * (complimentary revision #1; #2+ unpaid unless SKETCH_REVISION_FEE_PAISE or admin plan > 0).
+     */
+    revisionPaise: sketchPricing ? sketchPricing.revisionPaise : 0,
+    revisionRupees: sketchPricing ? sketchPricing.revisionRupees : 0,
+    pricing: {
+      revision: {
+        payableRupees: sketchPricing ? sketchPricing.revisionRupees : 0,
+        paise: sketchPricing ? sketchPricing.revisionPaise : 0,
+      },
+    },
     testimonials: {
       fictionalAllowed: false,
       rule: "Only consented, verifiable reviews with name + date + proof on file.",

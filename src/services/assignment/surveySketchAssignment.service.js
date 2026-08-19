@@ -33,6 +33,9 @@ const {
   assertQcRequiredForRelease,
   ORDER_TYPES,
 } = require("../../config/lifecycleQcSpec");
+const {
+  requireLoadedUpload,
+} = require("../requireLoadedRecord");
 const slaDue = require("../slaDue.service");
 const sketchPaymentPricing = require("../sketchPaymentPricing.service");
 const phonePeSketchPayment = require("../phonePeSketchPayment.service");
@@ -111,6 +114,21 @@ function idFromRef(ref) {
 function getNotificationCadUserIds(assignmentDoc) {
   const assignedId = idFromRef(assignmentDoc?.assignedTo);
   return assignedId ? [assignedId] : [];
+}
+
+/** N3 / GUARD-01: load upload or throw — never skip payment/status gates. */
+async function loadUploadOrThrow(uploadId, select) {
+  if (!uploadId) requireLoadedUpload(null);
+  let q = SurveyorSketchUpload.findById(uploadId);
+  if (select) q = q.select(select);
+  const upload = await q;
+  return requireLoadedUpload(upload);
+}
+
+async function assertPaymentGateForUploadId(uploadId, action) {
+  const upload = await loadUploadOrThrow(uploadId, "status sketchPayment");
+  assertSketchBookingPaymentAllowsWorkflow(upload, { action });
+  return upload;
 }
 
 async function notifyAssignmentEvent({
@@ -292,12 +310,10 @@ async function create(payload, assignedBy) {
   slaDue.applySlaOnAssign(doc);
   await doc.save();
 
-  const sketchForAssign = await SurveyorSketchUpload.findById(surveyorSketchUploadId).select("status");
-  if (sketchForAssign) {
-    assertSketchStatusTransition(sketchForAssign.status, SURVEY_SKETCH_STATUS.ASSIGNED);
-    sketchForAssign.status = SURVEY_SKETCH_STATUS.ASSIGNED;
-    await sketchForAssign.save();
-  }
+  const sketchForAssign = await loadUploadOrThrow(surveyorSketchUploadId, "status");
+  assertSketchStatusTransition(sketchForAssign.status, SURVEY_SKETCH_STATUS.ASSIGNED);
+  sketchForAssign.status = SURVEY_SKETCH_STATUS.ASSIGNED;
+  await sketchForAssign.save();
 
   await autoAssign.markManualAssignSucceeded(surveyorSketchUploadId, doc._id, assignedBy._id);
 
@@ -390,14 +406,7 @@ async function update(assignmentId, updates, actor) {
   if (!doc) {
     throw new NotFoundError("Assignment not found", { code: "ASSIGNMENT_NOT_FOUND" });
   }
-  if (doc.surveyorSketchUpload) {
-    const sketchForGate = await SurveyorSketchUpload.findById(doc.surveyorSketchUpload).select(
-      "status sketchPayment"
-    );
-    if (sketchForGate) {
-      assertSketchBookingPaymentAllowsWorkflow(sketchForGate, { action: "assignment_update" });
-    }
-  }
+  await assertPaymentGateForUploadId(doc.surveyorSketchUpload, "assignment_update");
 
   let reassignedCad = false;
   if (updates.assignedCadUserId !== undefined) {
@@ -466,12 +475,10 @@ async function update(assignmentId, updates, actor) {
 
   // When assignment is cancelled, revert survey sketch status to PENDING so admin can reassign
   if (allowed.status === SURVEY_SKETCH_ASSIGNMENT_STATUS.CANCELLED && doc.surveyorSketchUpload) {
-    const upload = await SurveyorSketchUpload.findById(doc.surveyorSketchUpload).select("status");
-    if (upload) {
-      assertSketchStatusTransition(upload.status, SURVEY_SKETCH_STATUS.PENDING);
-      upload.status = SURVEY_SKETCH_STATUS.PENDING;
-      await upload.save();
-    }
+    const upload = await loadUploadOrThrow(doc.surveyorSketchUpload, "status");
+    assertSketchStatusTransition(upload.status, SURVEY_SKETCH_STATUS.PENDING);
+    upload.status = SURVEY_SKETCH_STATUS.PENDING;
+    await upload.save();
   }
   const populated = await SurveySketchAssignment.findById(doc._id)
     .populate("surveyorSketchUpload", "applicationId surveyNo status")
@@ -510,14 +517,7 @@ async function pullbackAndReassign(assignmentId, { assignedCadUserId, reason }, 
   if (!doc) {
     throw new NotFoundError("Assignment not found", { code: "ASSIGNMENT_NOT_FOUND" });
   }
-  if (doc.surveyorSketchUpload) {
-    const sketchForGate = await SurveyorSketchUpload.findById(doc.surveyorSketchUpload).select(
-      "status sketchPayment"
-    );
-    if (sketchForGate) {
-      assertSketchBookingPaymentAllowsWorkflow(sketchForGate, { action: "pullback_reassign" });
-    }
-  }
+  await assertPaymentGateForUploadId(doc.surveyorSketchUpload, "pullback_reassign");
 
   if (!ACTIVE_ASSIGNMENT_STATUSES.includes(doc.status)) {
     throw new BadRequestError(
@@ -588,14 +588,7 @@ async function respondToAssignment(assignmentId, cadUser, action) {
   if (!doc) {
     throw new NotFoundError("Assignment not found", { code: "ASSIGNMENT_NOT_FOUND" });
   }
-  if (doc.surveyorSketchUpload) {
-    const sketchForGate = await SurveyorSketchUpload.findById(doc.surveyorSketchUpload).select(
-      "status sketchPayment"
-    );
-    if (sketchForGate) {
-      assertSketchBookingPaymentAllowsWorkflow(sketchForGate, { action: "cad_respond" });
-    }
-  }
+  await assertPaymentGateForUploadId(doc.surveyorSketchUpload, "cad_respond");
 
   const userCenterId =
     cadUser.cadProfile?.cadCenter != null ? String(cadUser.cadProfile.cadCenter) : null;
@@ -663,12 +656,10 @@ async function respondToAssignment(assignmentId, cadUser, action) {
     doc.rejectedByCad = cadUser._id;
     await doc.save();
     if (doc.surveyorSketchUpload) {
-      const upload = await SurveyorSketchUpload.findById(doc.surveyorSketchUpload).select("status");
-      if (upload) {
-        assertSketchStatusTransition(upload.status, SURVEY_SKETCH_STATUS.PENDING);
-        upload.status = SURVEY_SKETCH_STATUS.PENDING;
-        await upload.save();
-      }
+      const upload = await loadUploadOrThrow(doc.surveyorSketchUpload, "status");
+      assertSketchStatusTransition(upload.status, SURVEY_SKETCH_STATUS.PENDING);
+      upload.status = SURVEY_SKETCH_STATUS.PENDING;
+      await upload.save();
     }
   }
   const populated = await SurveySketchAssignment.findById(doc._id)
@@ -918,14 +909,7 @@ async function deliverCadSketch(assignmentId, cadUser, fileMeta) {
   if (!doc) {
     throw new NotFoundError("Assignment not found", { code: "ASSIGNMENT_NOT_FOUND" });
   }
-  if (doc.surveyorSketchUpload) {
-    const sketchForGate = await SurveyorSketchUpload.findById(doc.surveyorSketchUpload).select(
-      "status sketchPayment"
-    );
-    if (sketchForGate) {
-      assertSketchBookingPaymentAllowsWorkflow(sketchForGate, { action: "cad_deliver" });
-    }
-  }
+  await assertPaymentGateForUploadId(doc.surveyorSketchUpload, "cad_deliver");
   if (String(doc.assignedTo) !== String(cadUser._id)) {
     throw new ForbiddenError("Only the assigned CAD user can submit the deliverable", {
       code: "NOT_ASSIGNED_CAD_USER",

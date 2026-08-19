@@ -87,6 +87,9 @@ function getRefundPolicyPublic() {
     version: p.version,
     baselineId: p.baselineId,
     reviewDate: p.reviewDate,
+    /** FE Terms + FAQ (LEGAL-01). */
+    title: "Refund policy",
+    summary: p.publicCopyShort,
     customerRefundEntitled: p.customerRefundEntitled,
     selfServiceRefundEnabled: p.selfServiceRefundEnabled,
     termsCopyApproved: p.termsCopyApproved,

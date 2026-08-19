@@ -36,10 +36,16 @@ function getCorrelationId() {
   return als.getStore()?.correlationId || null;
 }
 
+/** Browser Origin from the initiating request (PhonePe return host / CORS). */
+function getRequestOrigin() {
+  return als.getStore()?.origin || null;
+}
+
 module.exports = {
   newCorrelationId,
   extractIncomingCorrelationId,
   runWithRequestContext,
   getRequestContext,
   getCorrelationId,
+  getRequestOrigin,
 };

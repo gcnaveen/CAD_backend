@@ -64,7 +64,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1095.0",
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.4.5",
-    "js-yaml": "4.3.0",
+    "js-yaml": "4.3.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.24.1",
     "pg-sdk-node": "2.0.2"
@@ -79,14 +79,14 @@
     "form-data": "4.0.6",
     "follow-redirects": "1.16.0",
     "fast-xml-parser": "5.10.1",
-    "js-yaml": "4.3.0",
+    "js-yaml": "4.3.1",
     "velocityjs": "2.1.7",
     "@hapi/content": "6.0.2",
     "simple-git": "3.36.0",
     "adm-zip": "0.6.0",
     "ws": "8.21.1",
-    "fast-uri": "3.1.4",
-    "brace-expansion": "5.0.8",
+    "fast-uri": "3.1.5",
+    "brace-expansion": "5.0.9",
     "tar": "7.5.22"
   }
 }

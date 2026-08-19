@@ -12,7 +12,7 @@ const {
   SURVEY_SKETCH_STATUS,
   SURVEY_SKETCH_ASSIGNMENT_STATUS,
 } = require("./constants");
-const { BadRequestError } = require("../utils/errors");
+const { BadRequestError, NotFoundError } = require("../utils/errors");
 
 const LIFECYCLE_QC_SPEC = Object.freeze({
   specId: "NORTHCOT-LIFECYCLE-QC-M08",
@@ -365,21 +365,27 @@ function assertAssignmentStatusTransition(fromRaw, toRaw) {
 
 /**
  * Apply a sketch status change with M-08 transition enforcement.
- * Mutates `doc.status` to the canonical code.
+ * Mutates `doc.status` to the canonical code. Fail closed if the record is missing (N3).
  */
 function applySketchStatus(doc, nextStatus) {
-  const result = assertSketchStatusTransition(doc?.status, nextStatus);
-  if (doc && typeof doc === "object") {
-    doc.status = result.to;
+  if (!doc) {
+    throw new NotFoundError("Survey sketch upload not found", {
+      code: "SURVEY_SKETCH_NOT_FOUND",
+    });
   }
+  const result = assertSketchStatusTransition(doc.status, nextStatus);
+  doc.status = result.to;
   return result;
 }
 
 function applyAssignmentStatus(doc, nextStatus) {
-  const result = assertAssignmentStatusTransition(doc?.status, nextStatus);
-  if (doc && typeof doc === "object") {
-    doc.status = result.to;
+  if (!doc) {
+    throw new NotFoundError("Assignment not found", {
+      code: "ASSIGNMENT_NOT_FOUND",
+    });
   }
+  const result = assertAssignmentStatusTransition(doc.status, nextStatus);
+  doc.status = result.to;
   return result;
 }
 

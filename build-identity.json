@@ -1,10 +1,10 @@
 {
   "service": "cad-backend-api",
   "stage": "dev",
-  "gitSha": "ef2a14cb22a0177483b6de9b751aca2c37e25d39",
-  "lockHash": "f5212b89a6a346eac467fd1fda9527acb0b44e52494b1d59dfe61245307035f4",
+  "gitSha": "cb41e5c4ccad9d8de39aa22fb03df7c8524ba1b8",
+  "lockHash": "045ea570e48f39c1d22180a3d29f86e28165b3429d1d6e9b2b8c3f356acd2f92",
   "migrationVersion": "2026.07.30.role-case-normalize",
-  "deployedAt": "2026-08-01T10:56:07.626Z",
+  "deployedAt": "2026-08-13T12:04:51.832Z",
   "releaseTag": "",
   "packageVersion": "1.0.0"
 }

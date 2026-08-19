@@ -66,8 +66,9 @@ function validateExact4Password(password, field = "password") {
 }
 
 /**
- * Audit H-02 password policy. Default min length is 4 (compat with current FE).
- * Set PASSWORD_MIN_LENGTH=10 when frontend ships stronger password UI.
+ * Audit H-02 / N10 password policy. Default min length is 4 (compat with current FE).
+ * Do not raise PASSWORD_MIN_LENGTH without a coordinated frontend change.
+ * FE login/register/enrollment cap and validate exactly 4 numeric digits.
  */
 function validatePasswordPolicy(password, field = "password") {
   const { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } = require("../config/authSecurity");

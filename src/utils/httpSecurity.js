@@ -155,6 +155,25 @@ function applySecurityHeaders(event, result) {
     delete existing["access-control-allow-origin"];
   }
 
+  const status = Number(result.statusCode) || 0;
+  const isRedirect = status >= 300 && status < 400 && Boolean(existing.location);
+  // PhonePe browser return: keep navigation clean — do not attach API CSP/COOP on 302s.
+  if (isRedirect) {
+    const merged = {
+      location: existing.location,
+      "cache-control": "no-store",
+      "referrer-policy": "no-referrer",
+      ...corsHeadersForEvent(event),
+    };
+    const allowOrigin = resolveAllowOrigin(event);
+    if (allowOrigin) merged["access-control-allow-origin"] = allowOrigin;
+    else delete merged["access-control-allow-origin"];
+    if (existing["x-correlation-id"]) {
+      merged["x-correlation-id"] = existing["x-correlation-id"];
+    }
+    return { ...result, headers: merged };
+  }
+
   const isHtml = String(existing["content-type"] || "").toLowerCase().includes("text/html");
   const baseSecurity = securityHeaders();
   if (isHtml) {

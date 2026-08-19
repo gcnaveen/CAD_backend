@@ -68,4 +68,19 @@ describe("B3 PhonePe redirect URLs", () => {
     assert.equal(getSuccessRedirectUrl(), "https://north-cot.com/payment-success");
     assert.equal(getFailureRedirectUrl(), "https://www.north-cot.com/payment-failure");
   });
+
+  it("browser return maps cancel to dashboard and keeps session host", () => {
+    process.env.PHONEPE_SUCCESS_REDIRECT_URL = "https://north-cot.com/dashboard/user";
+    process.env.PHONEPE_FAILURE_REDIRECT_URL = "https://north-cot.com/login";
+    process.env.CORS_ALLOW_ORIGINS = "https://north-cot.com,https://www.north-cot.com";
+    const {
+      buildBrowserPaymentReturnUrl,
+    } = require("../../src/services/phonePeSketchPayment.service");
+    const cancelled = buildBrowserPaymentReturnUrl("cancelled", {
+      returnOrigin: "https://www.north-cot.com",
+    });
+    assert.equal(cancelled, "https://www.north-cot.com/dashboard/user?payment=cancelled");
+    const ok = buildBrowserPaymentReturnUrl("success");
+    assert.equal(ok, "https://north-cot.com/dashboard/user?payment=success");
+  });
 });

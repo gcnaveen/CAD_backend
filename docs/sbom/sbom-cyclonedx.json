@@ -3,7 +3,7 @@
   "specVersion": "1.5",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-07-25T07:55:30.562Z",
+    "timestamp": "2026-08-13T12:05:48.719Z",
     "component": {
       "type": "application",
       "name": "cad-backend-api",
@@ -64,10 +64,10 @@
     {
       "type": "library",
       "name": "js-yaml",
-      "version": "4.3.0",
+      "version": "4.3.1",
       "scope": "required",
-      "bom-ref": "pkg:npm/js-yaml@4.3.0",
-      "purl": "pkg:npm/js-yaml@4.3.0"
+      "bom-ref": "pkg:npm/js-yaml@4.3.1",
+      "purl": "pkg:npm/js-yaml@4.3.1"
     },
     {
       "type": "library",

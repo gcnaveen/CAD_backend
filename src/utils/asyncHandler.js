@@ -11,6 +11,7 @@ const {
 } = require("./requestContext");
 const { AppError } = require("./errors");
 const { HTTP_STATUS } = require("../config/constants");
+const { assertProductionJwtSecret } = require("../config/secrets");
 
 function withCorrelationHeader(event, result, correlationId) {
   if (!result || typeof result !== "object") return result;
@@ -21,10 +22,14 @@ function withCorrelationHeader(event, result, correlationId) {
 
 const asyncHandler = (fn) => {
   return async (event, context) => {
+    assertProductionJwtSecret();
     const correlationId = extractIncomingCorrelationId(event);
     const awsRequestId = context?.awsRequestId || event?.requestContext?.requestId || null;
+    const headers = event?.headers || {};
+    const origin =
+      headers.origin || headers.Origin || headers.ORIGIN || null;
 
-    return runWithRequestContext({ correlationId, awsRequestId }, async () => {
+    return runWithRequestContext({ correlationId, awsRequestId, origin }, async () => {
       try {
         const result = await fn(event, context);
         return withCorrelationHeader(event, result, correlationId);

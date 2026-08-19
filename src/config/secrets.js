@@ -52,6 +52,7 @@ function throwSecretsMisconfigured(logDetail) {
 
 /**
  * Resolve JWT signing secret. Fail closed — never fall back to a code default.
+ * SEC-27: production must not boot with a missing/default/leaked JWT_SECRET.
  * @returns {string}
  */
 function getJwtSecret() {
@@ -60,6 +61,17 @@ function getJwtSecret() {
     throwSecretsMisconfigured("JWT_SECRET missing, too short, or matches banned digest");
   }
   return secret;
+}
+
+/**
+ * Production-only JWT check (no Mongo). Call from HTTP/job entrypoints (SEC-27).
+ * Rejects missing, <32 chars, and SHA-256 of known defaults such as
+ * "change-me" and "your-super-secret-jwt-key-change-in-production".
+ */
+function assertProductionJwtSecret() {
+  const { isProductionRuntime } = require("./authSecurity");
+  if (!isProductionRuntime()) return;
+  getJwtSecret();
 }
 
 /**
@@ -85,6 +97,7 @@ module.exports = {
   BANNED_JWT_SECRET_HASHES,
   isBannedJwtSecret,
   getJwtSecret,
+  assertProductionJwtSecret,
   assertCriticalSecretsConfigured,
   normalizeSecret,
   sha256Hex,

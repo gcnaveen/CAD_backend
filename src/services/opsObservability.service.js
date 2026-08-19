@@ -138,13 +138,38 @@ async function getObservabilitySnapshot() {
     payments,
     recentPaymentMismatches: mismatches,
     auditActivity,
-    alerts: {
-      slaBreach: sla.breached > 0,
-      slaEscalated: sla.escalated > 0,
-      slaWarning: sla.warning > 0,
-      paymentFlags: payments.openFlagCount > 0,
-      noAvailableCad: capacity.available === 0 && capacity.active > 0,
-    },
+    alerts: (() => {
+      const slaBreach = sla.breached > 0;
+      const slaEscalated = sla.escalated > 0;
+      const slaWarning = sla.warning > 0;
+      const paymentFlags = payments.openFlagCount > 0;
+      const noAvailableCad = capacity.available === 0 && capacity.active > 0;
+      const count =
+        Number(sla.breached || 0) +
+        Number(sla.escalated || 0) +
+        Number(sla.warning || 0) +
+        Number(payments.openFlagCount || 0) +
+        (noAvailableCad ? 1 : 0);
+      let level = "ok";
+      if (slaBreach || paymentFlags || noAvailableCad) level = "critical";
+      else if (slaEscalated || slaWarning) level = "warning";
+      const parts = [];
+      if (slaBreach) parts.push(`${sla.breached} SLA breach`);
+      if (slaEscalated) parts.push(`${sla.escalated} SLA escalated`);
+      if (slaWarning) parts.push(`${sla.warning} SLA warning`);
+      if (paymentFlags) parts.push(`${payments.openFlagCount} payment flag`);
+      if (noAvailableCad) parts.push("no available CAD");
+      return {
+        slaBreach,
+        slaEscalated,
+        slaWarning,
+        paymentFlags,
+        noAvailableCad,
+        level,
+        message: parts.length ? parts.join("; ") : "No ops alerts",
+        count,
+      };
+    })(),
   };
 }
 

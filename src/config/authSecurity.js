@@ -7,6 +7,8 @@ function envInt(name, fallback) {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+// Do not raise PASSWORD_MIN_LENGTH without a coordinated frontend change.
+// FE login/register/enrollment cap and validate exactly 4 numeric digits.
 const PASSWORD_MIN_LENGTH = envInt("PASSWORD_MIN_LENGTH", 4);
 const PASSWORD_MAX_LENGTH = 128;
 const BCRYPT_COST = envInt("BCRYPT_COST", 12);

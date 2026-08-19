@@ -15,6 +15,7 @@ const notificationService = require("./notification.service");
 const logger = require("../utils/logger");
 const { getCorrelationId } = require("../utils/requestContext");
 const { ForbiddenError } = require("../utils/errors");
+const { requireLoadedUpload } = require("./requireLoadedRecord");
 const {
   USER_ROLES,
   SURVEY_SKETCH_STATUS,
@@ -519,11 +520,10 @@ async function tryAutoAssign(uploadId, { source = "RETRY_JOB", actorUserId = nul
     await doc.save();
 
     const sketchAuto = await SurveyorSketchUpload.findById(uploadId).select("status");
-    if (sketchAuto) {
-      assertSketchStatusTransition(sketchAuto.status, SURVEY_SKETCH_STATUS.ASSIGNED);
-      sketchAuto.status = SURVEY_SKETCH_STATUS.ASSIGNED;
-      await sketchAuto.save();
-    }
+    requireLoadedUpload(sketchAuto);
+    assertSketchStatusTransition(sketchAuto.status, SURVEY_SKETCH_STATUS.ASSIGNED);
+    sketchAuto.status = SURVEY_SKETCH_STATUS.ASSIGNED;
+    await sketchAuto.save();
 
     await markSuccess(uploadId, {
       attemptNo,

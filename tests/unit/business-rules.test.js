@@ -17,6 +17,13 @@ describe("H-08 business rules", () => {
     assert.equal(r.governmentClaims.allowed, false);
     assert.equal(r.refundPolicy.customerRefundEntitled, false);
     assert.equal(r.refundPolicy.selfServiceRefundEnabled, false);
+    assert.ok(String(r.refundPolicy.title || "").length > 0);
+    assert.ok(String(r.refundPolicy.summary || "").toLowerCase().includes("non-refundable"));
+    assert.equal(typeof r.revisionPaise, "number");
+    assert.equal(r.revisionRupees, r.revisionPaise / 100);
+    assert.equal(r.pricing.revision.payableRupees, r.revisionRupees);
+    assert.equal(r.pricing.revision.paise, r.revisionPaise);
+    assert.equal(r.revisionRupees, r.sketchOrderPricing.revisionRupees);
     assert.ok(r.supportContact);
     assert.equal(typeof r.supportContact.configured, "boolean");
   });
